@@ -1,0 +1,13 @@
+name = "EnvelopeApproximation"
+uuid = "1ba6c2d5-ef53-4bc8-94cc-97c6a05de2d5"
+authors = ["Ben Hatzofe"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
