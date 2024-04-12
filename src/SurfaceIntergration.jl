@@ -1,5 +1,6 @@
 module SurfaceIntegration
-using ..BubblesIntegration
+using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BubblesIntegration
 import Base.*
 import Base.+
 import Distances.Euclidean

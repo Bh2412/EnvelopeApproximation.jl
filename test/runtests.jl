@@ -1,6 +1,7 @@
 using EnvelopeApproximation
 using EnvelopeApproximation.BubblesIntegration
 using Test
+using EnvelopeApproximation.BubbleBasics
 import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration as SI
 import EnvelopeApproximation.BubblesIntegration.VolumeIntegration as VI
 import EnvelopeApproximation.GravitationalPotentials as GP
@@ -72,4 +73,4 @@ end
 end
 
 
-end
+end;

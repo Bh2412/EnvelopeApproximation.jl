@@ -1,13 +1,14 @@
 module VolumeIntegration
 
-using ..BubblesIntegration
-import ..BubblesIntegration.SurfaceIntegration.n
-import ..BubblesIntegration.SurfaceIntegration.middle
-import ..BubblesIntegration.SurfaceIntegration.*
-import ..BubblesIntegration.SurfaceIntegration.+
-import ..BubblesIntegration.SurfaceIntegration.unit_sphere_point
-import ..BubblesIntegration.SurfaceIntegration.euc
-import ..BubblesIntegration.SurfaceIntegration.BubblePoint
+using EnvelopeApproximation.BubblesIntegration
+using EnvelopeApproximation.BubbleBasics
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.n
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.middle
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.*
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.+
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.unit_sphere_point
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.euc
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration.BubblePoint
 using Distances
 
 ns(v_resoluiton:: Float64, ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{Int} = n.([(1. /3, v_resoluiton), (2π, ϕ_resolution), (2., μ_resolution)])
