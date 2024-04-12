@@ -1,5 +1,11 @@
 module EnvelopeApproximation
 
-# Write your package code here.
+import Meshes.Point3
+
+export Point3
+
+include("BubblesIntegration.jl")
+
+include("GravitationalPotentials.jl")
 
 end

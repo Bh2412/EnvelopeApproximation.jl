@@ -3,6 +3,12 @@ uuid = "1ba6c2d5-ef53-4bc8-94cc-97c6a05de2d5"
 authors = ["Ben Hatzofe"]
 version = "1.0.0-DEV"
 
+[deps]
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+Meshes = "eacbb407-ea5a-433e-ab97-5258b1ca43fa"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
 [compat]
 julia = "1"
 
