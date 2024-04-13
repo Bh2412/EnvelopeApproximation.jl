@@ -17,6 +17,7 @@ function pulse_response_matrix(times:: Vector{Float64}):: Matrix{Float64}
     earlier_times = times[1:end-1] |> x -> reshape(x, (1, n - 1))
     later_times = times[2:end] |> x -> reshape(x, (1, n - 1))
     mat = ((1 / 2) * (later_times - earlier_times)) .* (2 * times .- (earlier_times + later_times))
+    # The response to source pulses that arrive later is null.
     mat[times .< later_times] .= 0.
     return mat
 end

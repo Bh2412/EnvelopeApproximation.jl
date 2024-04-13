@@ -3,6 +3,7 @@ module BubblesEvolution
 using EnvelopeApproximation.BubbleBasics
 import Meshes.Point3
 import Meshes.Vec3
+import Meshes.coordinates
 import Random.AbstractRNG
 using StatsBase
 import StatsBase.sample
@@ -11,7 +12,6 @@ import Distances.pairwise
 import Base.∈
 using Distributions
 import Base.isless
-using Intervals
 
 Nucleation = NamedTuple{(:time, :site)}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
@@ -35,7 +35,7 @@ function evolve(snap:: BubblesSnapshot, nucleations:: Vector{Nucleation}, Δt:: 
     return BubblesSnapshot([snap.nucleations..., nucleations...], snap.t + Δt, snap.radial_profile)
 end
 
-function current_bubbles(snap:: BubblesSnapshot, t:: {Float64, Nothing} = nothing):: Bubbles
+function current_bubbles(snap:: BubblesSnapshot, t:: Union{Float64, Nothing} = nothing):: Bubbles
     if t ≡ nothing
         t = snap.t
     end
@@ -53,12 +53,7 @@ struct BallSpace
     center:: Point3
 end
 
-function unit_sphere_point(ϕ:: Float64, μ:: Float64):: Point3
-    s = sqrt((1. - μ ^2))
-    return Point3(s * cos(ϕ), s * sin(ϕ), μ)
-end
-
-function sample(rng:: AbstactRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
+function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
     # r^3 is distributed uniformly over (0, 1)
     r = rand(rng, Uniform(0., 1.), n) .^ (1. / 3)
     # ϕ is distributed uniformly over (0, 2π)
@@ -76,12 +71,7 @@ euclidean = Euclidean()
 euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
 ∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) <= bubble.radius
 
-function potential_sites(rng:: AbstractRNG, mean_nucleations:: Float64, space:: AbstractSpace)::
-    n = rand(rng, Poisson(mean_nucleations))
-    return sample(rng, n, space)
-end
-
-function fv_filter(existing_bubbles:: Bubbles):: Vector{Point3}
+function fv_filter(existing_bubbles:: Bubbles):: Function
     return filter(s -> !any(s ∈ bubble for bubble in existing_bubbles))
 end
 
@@ -101,29 +91,23 @@ function sample_nucleations(Δt:: Float64,
 end
 
 abstract type NucleationLaw end
-
-Base.start(nl:: NucleationLaw) = throw("Not Implemented for $(typeof(nl))")
-Base.done(nl:: NucleationLaw) = throw("Not Implemented for $(typeof(nl))")
-Base.next(nl:: NucleationLaw) = throw("Not Implemented for $(typeof(nl))")
-
+                                                                                            
 function evolve(nucleation_law:: NucleationLaw, space:: AbstractSpace, 
                 initial_state:: BubblesSnapshot = BubblesSnapShot(), 
                 rng:: Union{AbstractRNG, Nothing} = nothing,
-                termination_strategy:: Function = (_, _) -> false)
+                termination_strategy:: Function = (_, _, _) -> false)
     if rng ≡ nothing
         rng = Random.default_rng()
     end
     state = initial_state
     for (Δt, λ) in nucleation_law
         bubbles = current_bubbles(state)
-        new_nucs = sample_nucleations(Δt, λ, space, bubbles, state.t, rng)
+        new_nucs, fv_ratio = sample_nucleations(Δt, λ, space, bubbles, state.t, rng)
         state = evolve(state, new_nucs, Δt)
-        if termination_strategy(state, space)
+        if termination_strategy(state, space, fv_ratio)
             break
         end
     end                    
-end
-
 end
 
 end

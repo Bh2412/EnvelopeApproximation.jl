@@ -3,8 +3,7 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesIntegration
 import Base.*
 import Base.+
-import Distances.Euclidean
-import Distances.pairwise
+import EnvelopeApproximation.BubblesEvolution.euc
 import Meshes.coordinates
 
 n(range:: Float64, resolution:: Float64):: Int64 = ceil(Int64, range / resolution)
@@ -32,8 +31,7 @@ end
 
 *(point:: Point3, r:: Float64):: Point3 = Point3(r .* point.coords)
 +(point1:: Point3, point2:: Point3):: Point3 = Point3(point1.coords + point2.coords)
-euclidean = Euclidean()
-euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
+
 
 function _preliminary_surface_points(us_points:: Vector{Point3}, bubbles:: Bubbles):: Array{Point3, 2}
     return (reshape(us_points, (length(us_points), 1)) .* reshape(radii(bubbles), (1, length(bubbles)))) .+ reshape(centers(bubbles), (1, length(bubbles)))
