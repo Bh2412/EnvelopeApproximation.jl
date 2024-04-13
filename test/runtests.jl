@@ -6,6 +6,15 @@ import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration as SI
 import EnvelopeApproximation.BubblesIntegration.VolumeIntegration as VI
 import EnvelopeApproximation.GravitationalPotentials as GP
 
+@testset "BubblesEvolution.jl" begin
+    using EnvelopeApproximation.BubblesEvolution
+    bs = BallSpace(1., Point3(0., 0., 0.))
+    eg = ExponentialGrowth(1., 1.)
+    ts = (_, _, fv) -> fv < 0.1
+    res = evolve(eg, bs, termination_strategy=ts)
+    println(res)
+end
+
 @testset "BubblesIntegration.jl" begin
     
 

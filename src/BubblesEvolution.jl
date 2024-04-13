@@ -12,35 +12,46 @@ import Distances.pairwise
 import Base.∈
 using Distributions
 import Base.isless
+import Random
 
 Nucleation = NamedTuple{(:time, :site)}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
 
-struct BubblesSnapshot
+struct BubblesSnapShot
     nucleations:: Vector{Nucleation}
     t:: Float64
     radial_profile:: Function
 end
 
+export BubblesSnapShot
+
 speed_of_light_profile(t:: Float64, c:: Float64 = 1.):: Float64 = c * t 
 
 BubblesSnapShot() = BubblesSnapShot(Vector{Nucleation}(), 0., speed_of_light_profile)
 
-function at_earlier_time(snap:: BubblesSnapshot, t:: Float64):: BubblesSnapshot
+export BubblesSnapShot
+
+function at_earlier_time(snap:: BubblesSnapShot, t:: Float64):: BubblesSnapShot
     nucleations = filter(nuc -> nuc[:time] <= t, snap.nucleations)
-    return BubblesSnapshot(nucleations, t, snap.radial_profile)
+    return BubblesSnapShot(nucleations, t, snap.radial_profile)
 end
 
-function evolve(snap:: BubblesSnapshot, nucleations:: Vector{Nucleation}, Δt:: Float64)
-    return BubblesSnapshot([snap.nucleations..., nucleations...], snap.t + Δt, snap.radial_profile)
+export at_earlier_time
+
+function evolve(snap:: BubblesSnapShot, nucleations:: Vector{Nucleation}, Δt:: Float64)
+    return BubblesSnapShot([snap.nucleations..., nucleations...], snap.t + Δt, snap.radial_profile)
 end
 
-function current_bubbles(snap:: BubblesSnapshot, t:: Union{Float64, Nothing} = nothing):: Bubbles
+export evolve
+
+function current_bubbles(snap:: BubblesSnapShot, t:: Union{Float64, Nothing} = nothing):: Bubbles
     if t ≡ nothing
         t = snap.t
     end
     return Bubbles([Bubble(nuc[:site], snap.radial_profile(t - nuc[:time])) for nuc in snap.nucleations])
 end
+
+export current_bubbles
 
 abstract type AbstractSpace end
 
@@ -48,10 +59,12 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: AbstractSpace):: Vector{Po
     throw("Cant sample from abstract space $space")
 end
 
-struct BallSpace
+struct BallSpace <: AbstractSpace
     radius:: Float64
     center:: Point3
 end
+
+export BallSpace
 
 function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
     # r^3 is distributed uniformly over (0, 1)
@@ -91,11 +104,13 @@ function sample_nucleations(Δt:: Float64,
 end
 
 abstract type NucleationLaw end
+
+include("ExponentialGrowth.jl")
                                                                                             
-function evolve(nucleation_law:: NucleationLaw, space:: AbstractSpace, 
-                initial_state:: BubblesSnapshot = BubblesSnapShot(), 
+function evolve(nucleation_law:: NL, space:: S;
+                initial_state:: BubblesSnapShot = BubblesSnapShot(), 
                 rng:: Union{AbstractRNG, Nothing} = nothing,
-                termination_strategy:: Function = (_, _, _) -> false)
+                termination_strategy:: Function = (_, _, _) -> false) where {NL <: NucleationLaw, S <: AbstractSpace}
     if rng ≡ nothing
         rng = Random.default_rng()
     end
@@ -107,7 +122,10 @@ function evolve(nucleation_law:: NucleationLaw, space:: AbstractSpace,
         if termination_strategy(state, space, fv_ratio)
             break
         end
-    end                    
+    end 
+    return state                   
 end
+
+export evolve
 
 end

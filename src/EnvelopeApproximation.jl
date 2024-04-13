@@ -35,6 +35,14 @@ end
 
 export length
 
+function Base.iterate(bs:: Bubbles)
+    return Base.iterate(bs.bubbles)
+end
+
+function Base.iterate(bs:: Bubbles, state)
+    return Base.iterate(bs.bubbles, state)
+end
+
 function radii(bubbles:: Bubbles):: Vector{Float64}
     return [bubble.radius for bubble in bubbles.bubbles]
 end
