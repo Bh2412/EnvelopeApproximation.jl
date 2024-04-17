@@ -68,7 +68,7 @@ export BallSpace
 
 function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
     # r^3 is distributed uniformly over (0, 1)
-    r = rand(rng, Uniform(0., 1.), n) .^ (1. / 3)
+    r = rand(rng, Uniform(0., space.radius ^ 3), n) .^ (1. / 3)
     # ϕ is distributed uniformly over (0, 2π)
     ϕ = rand(rng, Uniform(0., 2π) , n)
     # μ is distributed uniformly over (-1., 1.) 
@@ -95,8 +95,10 @@ function sample_nucleations(Δt:: Float64,
                             t0:: Float64,
                             rng:: AbstractRNG):: Tuple{Vector{Nucleation}, Float64}
     n = rand(rng, Poisson(mean_nucleations))
+    @debug "A total of $n nucleations was sampled in accordance with the expected mean of $mean_nucleations"
     new_sites = sample(rng, n, space) |> fv_filter(existing_bubbles)
     fv_ratio = length(new_sites) / n
+    @debug "$(fv_ratio * 100)% of the sampled sites are within the true vacuum"
     nucleation_times = rand(rng, Uniform(t0, t0 + Δt), length(new_sites))
     nucleations = [Nucleation((time=t, site=p)) for (t, p) in zip(nucleation_times, new_sites)]
     sort!(nucleations)
@@ -115,6 +117,7 @@ function evolve(nucleation_law:: NL, space:: S;
         rng = Random.default_rng()
     end
     state = initial_state
+    @info "Initiating PT of $state"
     for (Δt, λ) in nucleation_law
         bubbles = current_bubbles(state)
         new_nucs, fv_ratio = sample_nucleations(Δt, λ, space, bubbles, state.t, rng)

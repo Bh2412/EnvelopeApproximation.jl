@@ -25,7 +25,7 @@ struct ExponentialGrowth <: NucleationLaw
     Γ_0:: Float64
     t_0:: Float64
 
-    function ExponentialGrowth(β:: Float64, Δt:: Float64, 
+    function ExponentialGrowth(β:: Float64, Δt:: Float64;
                                Γ_0:: Union{Float64, Nothing} = nothing, 
                                t_0:: Float64 = 0.)
         if Γ_0 ≡ nothing

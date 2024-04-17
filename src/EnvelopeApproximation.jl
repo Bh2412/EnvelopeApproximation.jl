@@ -6,8 +6,10 @@ export Point3
 
 module BubbleBasics
 
+using Distances
 import Meshes.Point3
 import Base.length
+import Base.∈
 
 struct Bubble
     center:: Point3
@@ -43,6 +45,16 @@ function Base.iterate(bs:: Bubbles, state)
     return Base.iterate(bs.bubbles, state)
 end
 
+euclidean = Euclidean()
+euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
+
+export euc
+
+∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) <= bubble.radius
+∈(point:: Point3, bubbles:: Bubbles):: Bool = any(point .∈ bubbles.bubbles)
+
+export ∈
+
 function radii(bubbles:: Bubbles):: Vector{Float64}
     return [bubble.radius for bubble in bubbles.bubbles]
 end
@@ -62,5 +74,7 @@ include("BubblesEvolution.jl")
 include("BubblesIntegration.jl")
 
 include("GravitationalPotentials.jl")
+
+include("Visualization.jl")
 
 end

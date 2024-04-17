@@ -63,4 +63,9 @@ function volume_integral(f:: Function, bubbles:: Bubbles,
                for (p, weight) in zip(ps, _weights))
 end
 
+function volume_integral(f:: Function, bubbles:: Bubbles, 
+                         n_v:: Int, n_ϕ:: Int, n_μ:: Int)
+    return volume_integral(f, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2 / n_μ)
+end
+
 end

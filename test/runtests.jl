@@ -12,7 +12,6 @@ import EnvelopeApproximation.GravitationalPotentials as GP
     eg = ExponentialGrowth(1., 1.)
     ts = (_, _, fv) -> fv < 0.1
     res = evolve(eg, bs, termination_strategy=ts)
-    println(res)
 end
 
 @testset "BubblesIntegration.jl" begin
