@@ -30,7 +30,7 @@ _exp(p:: BubblePoint, k:: Point3) = exp(-im * (p ⋅ k))
 
 
 function surface_integrand(ks:: Vector{Point3}, tensor_directions:: Vector, 
-                           tv_energy:: Float64 = 1.)
+                           tv_energy:: Float64 = 1.):: Array{ComplexF64, 2}
     ks = reshape(ks, (length(ks), 1))
     _td_integrand = reshape(td_integrand.(tensor_directions), (1, length(tensor_directions)))
     function _integrand(p:: BubblePoint):: Array{Complex, 2}
@@ -45,7 +45,7 @@ function surface_integral(ks:: Vector{Point3},
                           tensor_directions:: Vector,
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
-                          tv_energy:: Float64 = 1.)
+                          tv_energy:: Float64 = 1.):: Array{ComplexF64, 2}
     integrand = surface_integrand(ks, tensor_directions, tv_energy)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
