@@ -80,5 +80,14 @@ end
 end
 end
 
+end
 
+@testset "StressEnergyTensor" begin
+    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp
+    bubbles = Bubbles([Bubble(Point3(0., 0., 0.), 1.)])
+    ks = [Point3(0., 0., z) for z in LinRange(0., 10., 11)]
+    tensor_directions = [:trace, (:x, :x), (:y, :y), (:z, :z)]
+    si = surface_integral(ks, bubbles, tensor_directions, 10, 10)
+    print(max(abs.(si[:, 1])))
+    @test reshape(si[:, 1], length(ks)) ≈ sum(si[:, 2:4], dims=2) |> x -> reshape(x, length(ks))
 end;

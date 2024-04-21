@@ -7,7 +7,7 @@ export Point3
 module BubbleBasics
 
 using Distances
-import Meshes.Point3
+import Meshes: Point3, coordinates
 import Base.length
 import Base.∈
 
@@ -72,6 +72,8 @@ end
 include("BubblesEvolution.jl")
 
 include("BubblesIntegration.jl")
+
+include("StressEnergyTensor.jl")
 
 include("GravitationalPotentials.jl")
 

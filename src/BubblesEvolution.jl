@@ -7,7 +7,6 @@ import Meshes.coordinates
 import Random.AbstractRNG
 using StatsBase
 import StatsBase.sample
-import Distances.Euclidean
 import Distances.pairwise
 import Base.∈
 using Distributions
@@ -80,10 +79,6 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
     return space.center .+ v
 end
     
-euclidean = Euclidean()
-euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
-∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) <= bubble.radius
-
 function fv_filter(existing_bubbles:: Bubbles):: Function
     return filter(s -> !any(s ∈ bubble for bubble in existing_bubbles))
 end

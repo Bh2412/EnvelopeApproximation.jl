@@ -5,6 +5,7 @@ import Base.*
 import Base.+
 import EnvelopeApproximation.BubblesEvolution.euc
 import Meshes.coordinates
+import Distances.pairwise
 
 n(range:: Float64, resolution:: Float64):: Int64 = ceil(Int64, range / resolution)
 n(t:: Tuple{Float64, Float64}):: Int64 = n(t[1], t[2])
@@ -42,6 +43,10 @@ struct BubblePoint
     bubble_index:: Int
 end
 
+coordinates(p:: BubblePoint) = coordinates(p.point)
+
+export coordinates
+
 function preliminary_surface_points(us_points:: Vector{Point3}, bubbles:: Bubbles):: Vector{BubblePoint}
     _psp = _preliminary_surface_points(us_points, bubbles)
     return reshape([BubblePoint(p, i[2]) for (i, p) in pairs(_psp)], length(bubbles) * length(us_points))
@@ -71,7 +76,9 @@ function surface_integral(f:: Function, bubbles:: Bubbles, ϕ_resolution:: Float
         N = prod(ns(ϕ_resolution, μ_resolution))
         surface_areas ./ N
     end
-    return sum(f(p) * section_areas[p.bubble_index] for p in ps)
+    return sum(f(p) .* section_areas[p.bubble_index] for p in ps)
 end
+
+surface_integral(f:: Function, bubbles:: Bubbles, n_ϕ:: Int64, n_μ:: Int64) = surface_integral(f, bubbles, 2π / n_ϕ, 2. / n_μ)
 
 end
