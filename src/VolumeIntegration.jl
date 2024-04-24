@@ -59,7 +59,7 @@ function volume_integral(f:: Function, bubbles:: Bubbles,
         N = prod(ns(v_resolution, ϕ_resolution, μ_resolution))
         volumes ./ N
     end
-    return sum(f(p.point) * weight * section_volumes[p.bubble_index]
+    return sum(f(p) * weight * section_volumes[p.bubble_index]
                for (p, weight) in zip(ps, _weights))
 end
 

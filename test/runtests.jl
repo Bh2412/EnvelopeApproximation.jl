@@ -36,6 +36,9 @@ end
     @test all(psps[:, 1] .≈ [Point3(-sqrt(3. / 4), 0., -1. / 2), Point3(-sqrt(3. /4), 0., 1. / 2)])
     @test all(psps[:, 2] .≈ [Point3(-sqrt(3.), 0., -0.), Point3(-sqrt(3.), 0., 2.)])
 end
+    r = 2.
+    bubbles = Bubbles([Point3(0., 0., 0.)], [r])
+    @test SI.surface_integral(z -> 1., bubbles, 10, 10) ≈ 4π * (r^2)
 end
 
 
@@ -83,11 +86,16 @@ end
 end
 
 @testset "StressEnergyTensor" begin
-    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp
+    using EnvelopeApproximation
+    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_μν
     bubbles = Bubbles([Bubble(Point3(0., 0., 0.), 1.)])
     ks = [Point3(0., 0., z) for z in LinRange(0., 10., 11)]
     tensor_directions = [:trace, (:x, :x), (:y, :y), (:z, :z)]
     si = surface_integral(ks, bubbles, tensor_directions, 10, 10)
-    print(max(abs.(si[:, 1])))
+    @test size(si) == (length(ks), length(tensor_directions))
+    @test si[:, 2] ≈ si[:, 2]
     @test reshape(si[:, 1], length(ks)) ≈ sum(si[:, 2:4], dims=2) |> x -> reshape(x, length(ks))
+    vi = volume_integral(ks, bubbles, 10, 10, 10)
+    T = T_μν(ks, bubbles, 10, 10, 10)
+    print(T)
 end;

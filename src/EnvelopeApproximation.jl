@@ -45,6 +45,8 @@ function Base.iterate(bs:: Bubbles, state)
     return Base.iterate(bs.bubbles, state)
 end
 
+Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
+
 euclidean = Euclidean()
 euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
 
