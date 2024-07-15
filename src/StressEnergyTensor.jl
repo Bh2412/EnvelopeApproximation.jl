@@ -3,12 +3,14 @@ using EnvelopeApproximation
 using EnvelopeApproximation.BubblesIntegration
 using EnvelopeApproximation.BubbleBasics
 using Base.Iterators
-import Meshes: Vec, Point3, coordinates, ⋅
+import Meshes: Vec, Point3, coordinates, ⋅, -
 import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubblePoint
 import EnvelopeApproximation.BubblesIntegration.VolumeIntegration: volume_integral
 using LinearAlgebra
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
+
+-(p1:: BubblePoint, p2:: Point3) = Point3((p1.point - p2)...)
 
 function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where T <: TensorDirection
     if tensor_direction ≡ :trace
@@ -18,7 +20,7 @@ function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where 
     try
         indices:: Vector{Int64} = indexin(tensor_direction, CARTESIAN_DIRECTIONS)
         N = length(indices)
-        return (p:: BubblePoint -> prod(coordinates(p)[indices]) / (bubbles[p.bubble_index].radius ^ N))
+        return (p:: BubblePoint -> prod(coordinates(p - bubbles[p.bubble_index].center)[indices]) / (bubbles[p.bubble_index].radius ^ N))
     catch e
         if e isa MethodError
             throw(e("All directions must be elements of $CARTESIAN_DIRECTIONS"))
@@ -62,6 +64,8 @@ function surface_integral(ks:: Vector{Point3},
                             2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
+export surface_integral
+
 function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = 1.)
     function integrand(p:: BubblePoint):: Vector{ComplexF64}
         return @. _exp((p, ), ks) * ΔV
@@ -83,6 +87,8 @@ function volume_integral(ks:: Vector{Point3}, bubbles:: Bubbles,
                          ΔV:: Float64 = 1.)
     return volume_integral(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
+
+export volume_integral
 
 P(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.((1. / 3) * T_ii - V)
 
