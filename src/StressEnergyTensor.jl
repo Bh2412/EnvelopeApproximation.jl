@@ -118,7 +118,49 @@ function N_φ(ks:: Vector{Point3}, Π_μν:: Array{ComplexF64, 2},
     return reshape(res, length(ks))
 end
 
-function T_μν(ks:: Vector{Point3}, 
+function T_ij(ks:: Vector{Point3}, 
+              bubbles:: Bubbles, 
+              v_resolution:: Float64,
+              ϕ_resolution:: Float64,
+              μ_resolution:: Float64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{TensorDirection, Nothing} = nothing):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
+    isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
+    si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
+                          μ_resolution, ΔV)
+    T = Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}()
+    T[:k] = ks
+    for (i, td) in enumerate(tensor_directions)
+        T[td] = reshape(si[:, i], length(ks))
+    end
+     # Based on the following:
+    ```math
+    T_ij = ∂_iϕ∂_jϕ - δ_ij⋅L ≈ ∂_iϕ∂_jϕ - δ_ij V
+    ```         
+    if any(td in tensor_directions for td in diagonal)
+        vi = volume_integral(ks, bubbles, v_resolution, ϕ_resolution, 
+                             μ_resolution, ΔV)
+        for td in tensor_directions
+            if td in diagonal
+                T[td] -= vi
+            end
+        end
+    end
+    return T
+end
+
+function T_ij(ks:: Vector{Point3}, 
+              bubbles:: Bubbles, 
+              n_v:: Int64,
+              n_ϕ:: Int64,
+              n_μ:: Int64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{TensorDirection, Nothing} = nothing):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
+    return T_ij(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions)
+end
+
+
+function state_parameters(ks:: Vector{Point3}, 
               bubbles:: Bubbles, 
               v_resolution:: Float64,
               ϕ_resolution:: Float64,
@@ -144,15 +186,17 @@ function T_μν(ks:: Vector{Point3},
     return T
 end
 
-export T_μν
+export state_parameters
    
-function T_μν(ks:: Vector{Point3}, 
+function state_parameters(ks:: Vector{Point3}, 
               bubbles:: Bubbles, 
               n_v:: Int64,
               n_ϕ:: Int64,
               n_μ:: Int64,
               ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
-    return T_μν(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
+    return state_parameters(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
+
+export state_parameters
 
 end

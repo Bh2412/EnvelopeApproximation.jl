@@ -91,7 +91,7 @@ end
     using EnvelopeApproximation
     import EnvelopeApproximation.BubbleBasics: Bubble, Bubbles
     import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubblePoint
-    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_μν
+    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_ij
     using Plots
     
     R = 3.
@@ -109,6 +109,7 @@ end
     @test size(si) == (length(ks), length(tensor_directions))
     @test reshape(si[:, 1], length(ks)) ≈ sum(si[:, 2:4], dims=2) |> x -> reshape(x, length(ks))
     vi = volume_integral(ks, bubbles, 10, 10, 10)
-    T = T_μν(ks, bubbles, 10, 10, 10)
+    T = T_ij(ks, bubbles, 10, 10, 10)
+    print(T)
 end;
 
