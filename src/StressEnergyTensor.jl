@@ -34,7 +34,7 @@ _exp(p:: BubblePoint, k:: Point3) = exp(-im * (p ⋅ k))
 
 
 function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
-                           ΔV:: Float64 = 1.)
+                           ΔV:: Float64 = -1.)
     ks = reshape(ks, (length(ks), 1))
     _td_integrand = reshape(td_integrand.(tensor_directions, (bubbles, )), (1, length(tensor_directions)))
     function _integrand(p:: BubblePoint):: Array{Complex, 2}
@@ -49,7 +49,7 @@ function surface_integral(ks:: Vector{Point3},
                           tensor_directions:: Vector,
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
-                          ΔV:: Float64 = 1.):: Array{ComplexF64, 2}
+                          ΔV:: Float64 = -1.):: Array{ComplexF64, 2}
     integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
@@ -59,14 +59,16 @@ function surface_integral(ks:: Vector{Point3},
                           tensor_directions:: Vector,
                           n_ϕ:: Int64, 
                           n_μ:: Int64,
-                          ΔV:: Float64 = 1.)
+                          ΔV:: Float64 = -1.)
     return surface_integral(ks, bubbles, tensor_directions, 
                             2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
 export surface_integral
 
-function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = 1.)
+function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = -1.)
+    # Assuming here the potential is $\Delta V$ inside the true vacuum
+    # and zero elsewhere. Thus, ΔV is expected to be negative
     function integrand(p:: BubblePoint):: Vector{ComplexF64}
         return @. _exp((p, ), ks) * ΔV
     end
@@ -76,7 +78,7 @@ function volume_integral(ks:: Vector{Point3}, bubbles:: Bubbles,
                          v_resolution:: Float64, 
                          ϕ_resolution:: Float64, 
                          μ_resolution:: Float64, 
-                         ΔV:: Float64 = 1.) 
+                         ΔV:: Float64 = -1.) 
     return volume_integral(volume_integrand(ks, ΔV), bubbles, v_resolution, ϕ_resolution, μ_resolution)
 end
 
@@ -84,7 +86,7 @@ function volume_integral(ks:: Vector{Point3}, bubbles:: Bubbles,
                          n_v:: Int64, 
                          n_ϕ:: Int64, 
                          n_μ:: Int64, 
-                         ΔV:: Float64 = 1.)
+                         ΔV:: Float64 = -1.)
     return volume_integral(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
@@ -123,7 +125,7 @@ function T_ij(ks:: Vector{Point3},
               v_resolution:: Float64,
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
-              ΔV:: Float64 = 1., 
+              ΔV:: Float64 = -1., 
               tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
     isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
     si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
@@ -154,7 +156,7 @@ function T_ij(ks:: Vector{Point3},
               n_v:: Int64,
               n_ϕ:: Int64,
               n_μ:: Int64,
-              ΔV:: Float64 = 1., 
+              ΔV:: Float64 = -1., 
               tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
     return T_ij(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions)
 end
@@ -166,7 +168,7 @@ function state_parameters(ks:: Vector{Point3},
               v_resolution:: Float64,
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
-              ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
+              ΔV:: Float64 = -1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
     tds = vcat([:trace], upper_right)
     si = surface_integral(ks, bubbles, tds, ϕ_resolution,
                           μ_resolution, ΔV)
@@ -194,7 +196,7 @@ function state_parameters(ks:: Vector{Point3},
               n_v:: Int64,
               n_ϕ:: Int64,
               n_μ:: Int64,
-              ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
+              ΔV:: Float64 = -1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
     return state_parameters(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
