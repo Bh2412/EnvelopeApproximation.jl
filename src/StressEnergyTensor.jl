@@ -28,7 +28,9 @@ function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where 
     end
 end
 
-⋅(p1:: BubblePoint, p2:: Point3) = ⋅(coordinates.([p1, p2])...)
+⋅(p1:: Point3, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
+⋅(p1:: BubblePoint, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
+/(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
 
 _exp(p:: BubblePoint, k:: Point3) = exp(-im * (p ⋅ k))
 
@@ -66,9 +68,48 @@ end
 
 export surface_integral
 
-function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = 1.)
+function element_projection(ks:: Vector{Point3}, 
+                            bubbles:: Bubbles):: Function
+    return p -> ((p - bubbles[p.bubble_index].center) / bubbles[p.bubble_index].radius) .⋅ ks
+end
+
+function potential_integrand(ks:: Vector{Point3}, 
+                             bubbles:: Bubbles, 
+                             ΔV:: Float64 = 1.)
+    projection = element_projection(ks, bubbles)
+    #=
+    This assumes that the potential is negative within the true vacuum
+    and zero outside of it.
+    =#
     function integrand(p:: BubblePoint):: Vector{ComplexF64}
-        return @. _exp((p, ), ks) * ΔV
+        return @. _exp((p, ), ks) * (-ΔV) * (im / (ks ⋅ ks)) * $projection(p)
+    end
+end
+
+function potential_integral(ks:: Vector{Point3}, 
+                            bubbles:: Bubbles, 
+                            ϕ_resolution:: Float64, 
+                            μ_resolution:: Float64, 
+                            ΔV:: Float64 = 1.)
+    integrand = potential_integrand(ks, bubbles, ΔV)
+    return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
+end
+
+function potential_integral(ks:: Vector{Point3}, 
+                            bubbles:: Bubbles, 
+                            n_ϕ:: Int64, 
+                            n_μ:: Int64, 
+                            ΔV:: Float64 = 1.)
+    return potential_integral(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
+end
+
+function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = 1.)
+    #=
+    This assumes that the potential is negative within the true vacuum
+    and zero outside of it.
+    =#
+    function integrand(p:: BubblePoint):: Vector{ComplexF64}
+        return @. _exp((p, ), ks) * (-ΔV)
     end
 end
 
