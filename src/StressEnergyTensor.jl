@@ -3,6 +3,7 @@ using EnvelopeApproximation
 using EnvelopeApproximation.BubblesIntegration
 using EnvelopeApproximation.BubbleBasics
 using Base.Iterators
+import Base./
 import Meshes: Vec, Point3, coordinates, ⋅, -
 import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubblePoint
 import EnvelopeApproximation.BubblesIntegration.VolumeIntegration: volume_integral
@@ -103,33 +104,7 @@ function potential_integral(ks:: Vector{Point3},
     return potential_integral(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
-function volume_integrand(ks:: Vector{Point3}, ΔV:: Float64 = 1.)
-    #=
-    This assumes that the potential is negative within the true vacuum
-    and zero outside of it.
-    =#
-    function integrand(p:: BubblePoint):: Vector{ComplexF64}
-        return @. _exp((p, ), ks) * (-ΔV)
-    end
-end
-
-function volume_integral(ks:: Vector{Point3}, bubbles:: Bubbles, 
-                         v_resolution:: Float64, 
-                         ϕ_resolution:: Float64, 
-                         μ_resolution:: Float64, 
-                         ΔV:: Float64 = 1.) 
-    return volume_integral(volume_integrand(ks, ΔV), bubbles, v_resolution, ϕ_resolution, μ_resolution)
-end
-
-function volume_integral(ks:: Vector{Point3}, bubbles:: Bubbles, 
-                         n_v:: Int64, 
-                         n_ϕ:: Int64, 
-                         n_μ:: Int64, 
-                         ΔV:: Float64 = 1.)
-    return volume_integral(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
-end
-
-export volume_integral
+export potential_integral
 
 P(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.((1. / 3) * T_ii - V)
 
@@ -139,6 +114,47 @@ CARTESIAN_DIRECTIONS = [:x, :y, :z]
 diagonal = [(s, s) for s in CARTESIAN_DIRECTIONS]
 above_diagonal = [(:x, :y), (:x, :z), (:y, :z)]
 upper_right = vcat(diagonal, above_diagonal)
+
+function T_ij(ks:: Vector{Point3}, 
+              bubbles:: Bubbles, 
+              ϕ_resolution:: Float64,
+              μ_resolution:: Float64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
+    isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
+    si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
+                          μ_resolution, ΔV)
+    T = Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}()
+    T[:k] = ks
+    for (i, td) in enumerate(tensor_directions)
+        T[td] = reshape(si[:, i], length(ks))
+    end
+     # Based on the following:
+    ```math
+    T_ij = ∂_iϕ∂_jϕ - δ_ij⋅L ≈ ∂_iϕ∂_jϕ - δ_ij V
+    ```         
+    if any(td in tensor_directions for td in diagonal)
+        vi = potential_integral(ks, bubbles, ϕ_resolution, 
+                                μ_resolution, ΔV)
+        for td in tensor_directions
+            if td in diagonal
+                T[td] -= vi
+            end
+        end
+    end
+    return T
+end
+
+function T_ij(ks:: Vector{Point3}, 
+              bubbles:: Bubbles, 
+              n_ϕ:: Int64,
+              n_μ:: Int64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
+    return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions)
+end
+
+export T_ij
 
 function auto_outer_product(ks:: Vector{Point3}, td:: TensorDirection):: Vector{Float64}
     indices = indexin(td, [:x, :y, :z])
@@ -159,60 +175,16 @@ function N_φ(ks:: Vector{Point3}, Π_μν:: Array{ComplexF64, 2},
     return reshape(res, length(ks))
 end
 
-function T_ij(ks:: Vector{Point3}, 
-              bubbles:: Bubbles, 
-              v_resolution:: Float64,
-              ϕ_resolution:: Float64,
-              μ_resolution:: Float64,
-              ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
-    isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
-    si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
-                          μ_resolution, ΔV)
-    T = Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}()
-    T[:k] = ks
-    for (i, td) in enumerate(tensor_directions)
-        T[td] = reshape(si[:, i], length(ks))
-    end
-     # Based on the following:
-    ```math
-    T_ij = ∂_iϕ∂_jϕ - δ_ij⋅L ≈ ∂_iϕ∂_jϕ - δ_ij V
-    ```         
-    if any(td in tensor_directions for td in diagonal)
-        vi = volume_integral(ks, bubbles, v_resolution, ϕ_resolution, 
-                             μ_resolution, ΔV)
-        for td in tensor_directions
-            if td in diagonal
-                T[td] -= vi
-            end
-        end
-    end
-    return T
-end
-
-function T_ij(ks:: Vector{Point3}, 
-              bubbles:: Bubbles, 
-              n_v:: Int64,
-              n_ϕ:: Int64,
-              n_μ:: Int64,
-              ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
-    return T_ij(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions)
-end
-
-export T_ij
-
 function state_parameters(ks:: Vector{Point3}, 
-              bubbles:: Bubbles, 
-              v_resolution:: Float64,
-              ϕ_resolution:: Float64,
-              μ_resolution:: Float64,
-              ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
+                          bubbles:: Bubbles, 
+                          ϕ_resolution:: Float64,
+                          μ_resolution:: Float64,
+                          ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
     tds = vcat([:trace], upper_right)
     si = surface_integral(ks, bubbles, tds, ϕ_resolution,
                           μ_resolution, ΔV)
-    V = volume_integral(ks, bubbles, v_resolution, ϕ_resolution, 
-                        μ_resolution, ΔV)
+    V = potential_integral(ks, bubbles, ϕ_resolution, 
+                           μ_resolution, ΔV)
     T_ii = reshape(si[:, 1], length(ks))
     T = Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}()
     T[:k] = ks
@@ -231,12 +203,11 @@ end
 export state_parameters
    
 function state_parameters(ks:: Vector{Point3}, 
-              bubbles:: Bubbles, 
-              n_v:: Int64,
-              n_ϕ:: Int64,
-              n_μ:: Int64,
-              ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
-    return state_parameters(ks, bubbles, (1. / 3) / n_v, 2π / n_ϕ, 2. / n_μ, ΔV)
+                          bubbles:: Bubbles, 
+                          n_ϕ:: Int64,
+                          n_μ:: Int64,
+                          ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
+    return state_parameters(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
 export state_parameters
