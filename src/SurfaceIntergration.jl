@@ -13,64 +13,78 @@ ns(ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{Int} = n.([(2π, �
 
 middle(bounds:: LinRange{Float64}):: LinRange{Float64} = (bounds[2:end] + bounds[1:(end - 1)]) / 2
 
-function unit_sphere_tesselation(ϕ_resolution:: Float64, μ_resolution:: Float64):: Tuple{LinRange{Float64}, LinRange{Float64}}
+struct Section
+    c:: Float64
+    d:: Float64
+end
+
+function unit_sphere_tesselation(ϕ_resolution:: Float64, μ_resolution:: Float64):: Tuple{Vector{Section}, Vector{Section}}
     n_ϕ, n_μ = ns(ϕ_resolution, μ_resolution)
     ϕ = middle(LinRange(0., 2π, n_ϕ + 1))
     μ = middle(LinRange(-1., 1., n_μ + 1))
-    return ϕ, μ
-end
-
-function unit_sphere_point(ϕ:: Float64, μ:: Float64):: Point3
-    s = sqrt((1. - μ ^2))
-    return Point3(s * cos(ϕ), s * sin(ϕ), μ)
-end
-
-function unit_sphere_points(ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{Point3}
-    ϕ, μ = unit_sphere_tesselation(ϕ_resolution, μ_resolution)
-    return [unit_sphere_point(_ϕ, _μ) for _ϕ in ϕ for _μ in μ]
+    return Section.(ϕ, (2π / n_ϕ, )), Section.(μ, (2 / n_μ, ))
 end
 
 *(point:: Point3, r:: Float64):: Point3 = Point3(r .* point.coords)
 +(point1:: Point3, point2:: Point3):: Point3 = Point3(point1.coords + point2.coords)
 
-
-function _preliminary_surface_points(us_points:: Vector{Point3}, bubbles:: Bubbles):: Array{Point3, 2}
-    return (reshape(us_points, (length(us_points), 1)) .* reshape(radii(bubbles), (1, length(bubbles)))) .+ reshape(centers(bubbles), (1, length(bubbles)))
+function unit_sphere_point(ϕ:: Section, μ:: Section):: Point3
+    s = sqrt((1. - μ.c ^ 2))
+    return Point3(s * cos(ϕ.c), s * sin(ϕ.c), μ.c)
 end
 
-struct BubblePoint
+export unit_sphere_point
+
+struct UnitSphereSection
+    ϕ:: Section 
+    μ:: Section
+    point:: Point3
+    
+    function UnitSphereSection(ϕ:: Section, μ:: Section)
+        p = unit_sphere_point(ϕ, μ)
+        return new(ϕ, μ, p)
+    end
+end
+
+struct BubbleSection
+    ϕ:: Section 
+    μ:: Section
     point:: Point3
     bubble_index:: Int
 end
 
-coordinates(p:: BubblePoint) = coordinates(p.point)
-
 export coordinates
 
-function preliminary_surface_points(us_points:: Vector{Point3}, bubbles:: Bubbles):: Vector{BubblePoint}
-    _psp = _preliminary_surface_points(us_points, bubbles)
-    return reshape([BubblePoint(p, i[2]) for (i, p) in pairs(_psp)], length(bubbles) * length(us_points))
+function unit_sphere_sections(ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{UnitSphereSection}
+    ϕ, μ = unit_sphere_tesselation(ϕ_resolution, μ_resolution)
+    return [UnitSphereSection(_ϕ, _μ) for _ϕ in ϕ for _μ in μ]
 end
 
-function preliminary_surface_points(ϕ_resolution:: Float64, μ_resolution:: Float64, bubbles:: Bubbles):: Vector{BubblePoint}
-    return preliminary_surface_points(unit_sphere_points(ϕ_resolution, μ_resolution), bubbles)
+function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int, bubbles:: Bubbles)
+    return BubbleSection(sphere_s.ϕ, sphere_s.μ, sphere_s.point * bubbles[bubble_index].radius + bubbles[bubble_index].center, bubble_index)
 end
 
-euc(point:: Point3, bubble_point:: BubblePoint):: Float64 = euc(point, bubble_point.point)
+coordinates(p:: BubbleSection) = coordinates(p.point)
 
-function surface_points(us_points:: Vector{Point3}, bubbles:: Bubbles):: Vector{BubblePoint}
-    psp =  preliminary_surface_points(us_points, bubbles)
-    dm = pairwise(euc, centers(bubbles), psp)
+function preliminary_surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles)
+    return [BubbleSection(sphere_s, i, bubbles) for sphere_s in us_sections for i in eachindex(bubbles)]
+end
+
+euc(point:: Point3, bubble_section:: BubbleSection):: Float64 = euc(point, bubble_section.point)
+
+function surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles):: Vector{BubbleSection}
+    pss = preliminary_surface_sections(us_sections, bubbles)
+    dm = pairwise(euc, centers(bubbles), pss)
     filt = sum((dm .≤ reshape(radii(bubbles), (length(bubbles), 1))), dims=1) .<= 1
-    return [p for (i, p) in enumerate(psp) if filt[i]]
+    return [p for (i, p) in enumerate(pss) if filt[i]]
 end
 
-function surface_points(ϕ_resolution:: Float64, μ_resolution:: Float64, bubbles:: Bubbles)::  Vector{BubblePoint}
-    return surface_points(unit_sphere_points(ϕ_resolution, μ_resolution), bubbles)
+function surface_sections(ϕ_resolution:: Float64, μ_resolution:: Float64, bubbles:: Bubbles)::  Vector{BubbleSection}
+    return surface_sections(unit_sphere_sections(ϕ_resolution, μ_resolution), bubbles)
 end
 
 function surface_integral(f:: Function, bubbles:: Bubbles, ϕ_resolution:: Float64, μ_resolution:: Float64)
-    ps = surface_points(ϕ_resolution, μ_resolution, bubbles)
+    ps = surface_sections(ϕ_resolution, μ_resolution, bubbles)
     section_areas = begin 
         surface_areas = 4π * (radii(bubbles) .^ 2)
         N = prod(ns(ϕ_resolution, μ_resolution))
