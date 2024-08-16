@@ -5,23 +5,21 @@ using EnvelopeApproximation.BubbleBasics
 using Base.Iterators
 import Base./
 import Meshes: Vec, Point3, coordinates, ⋅, -
-import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubblePoint
-import EnvelopeApproximation.BubblesIntegration.VolumeIntegration: volume_integral
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubbleSection, unit_sphere_point
 using LinearAlgebra
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
 
--(p1:: BubblePoint, p2:: Point3) = Point3((p1.point - p2)...)
+-(p1:: BubbleSection, p2:: Point3) = Point3((p1.point - p2)...)
 
 function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where T <: TensorDirection
     if tensor_direction ≡ :trace
-        return (p:: BubblePoint -> 1.)
+        return (p:: BubbleSection -> 1.)
     end
     CARTESIAN_DIRECTIONS = [:x, :y, :z]
     try
         indices:: Vector{Int64} = indexin(tensor_direction, CARTESIAN_DIRECTIONS)
-        N = length(indices)
-        return (p:: BubblePoint -> prod(coordinates(p - bubbles[p.bubble_index].center)[indices]) / (bubbles[p.bubble_index].radius ^ N))
+        return (p:: BubbleSection -> prod(coordinates(unit_sphere_point(p.ϕ, p.μ))[indices]))
     catch e
         if e isa MethodError
             throw(e("All directions must be elements of $CARTESIAN_DIRECTIONS"))
@@ -30,22 +28,20 @@ function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where 
 end
 
 ⋅(p1:: Point3, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
-⋅(p1:: BubblePoint, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
+⋅(p1:: BubbleSection, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
-
-_exp(p:: BubblePoint, k:: Point3) = exp(-im * (p ⋅ k))
+_exp(p:: BubbleSection, k:: Point3) = exp(-im * (p ⋅ k))
 
 
 function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
                            ΔV:: Float64 = 1.)
     ks = reshape(ks, (length(ks), 1))
     _td_integrand = reshape(td_integrand.(tensor_directions, (bubbles, )), (1, length(tensor_directions)))
-    function _integrand(p:: BubblePoint):: Array{Complex, 2}
+    function _integrand(p:: BubbleSection):: Array{Complex, 2}
         return @. _exp((p, ), ks) * ((p, ) |> _td_integrand) * (ΔV * bubbles[p.bubble_index].radius / 3)
     end
     return _integrand
 end
-
 
 function surface_integral(ks:: Vector{Point3}, 
                           bubbles:: Bubbles, 
@@ -69,20 +65,20 @@ end
 
 export surface_integral
 
-function element_projection(ks:: Vector{Point3}, 
-                            bubbles:: Bubbles):: Function
-    return p -> ((p - bubbles[p.bubble_index].center) / bubbles[p.bubble_index].radius) .⋅ ks
+unit_sphere_point(p:: BubbleSection) = unit_sphere_point(p.ϕ, p.μ)
+
+function element_projection(ks:: Vector{Point3}):: Function
+    return p:: BubbleSection -> unit_sphere_point(p) .⋅ ks
 end
 
 function potential_integrand(ks:: Vector{Point3}, 
-                             bubbles:: Bubbles, 
                              ΔV:: Float64 = 1.)
-    projection = element_projection(ks, bubbles)
+    projection = element_projection(ks)
     #=
     This assumes that the potential is negative within the true vacuum
     and zero outside of it.
     =#
-    function integrand(p:: BubblePoint):: Vector{ComplexF64}
+    function integrand(p:: BubbleSection):: Vector{ComplexF64}
         return @. _exp((p, ), ks) * (-ΔV) * (im / (ks ⋅ ks)) * $projection(p)
     end
 end
@@ -92,7 +88,7 @@ function potential_integral(ks:: Vector{Point3},
                             ϕ_resolution:: Float64, 
                             μ_resolution:: Float64, 
                             ΔV:: Float64 = 1.)
-    integrand = potential_integrand(ks, bubbles, ΔV)
+    integrand = potential_integrand(ks, ΔV)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 

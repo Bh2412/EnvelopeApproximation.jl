@@ -10,6 +10,7 @@ using Distances
 import Meshes: Point3, coordinates
 import Base.length
 import Base.∈
+import Base.keys
 
 struct Bubble
     center:: Point3
@@ -44,6 +45,8 @@ end
 function Base.iterate(bs:: Bubbles, state)
     return Base.iterate(bs.bubbles, state)
 end
+
+keys(bs:: Bubbles) = keys(bs.bubbles)
 
 Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 

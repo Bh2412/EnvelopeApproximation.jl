@@ -22,7 +22,7 @@ function unit_sphere_tesselation(ϕ_resolution:: Float64, μ_resolution:: Float6
     n_ϕ, n_μ = ns(ϕ_resolution, μ_resolution)
     ϕ = middle(LinRange(0., 2π, n_ϕ + 1))
     μ = middle(LinRange(-1., 1., n_μ + 1))
-    return Section.(ϕ, (2π / n_ϕ, )), Section.(μ, (2 / n_μ, ))
+    return Section.(ϕ, (2π / n_ϕ, )), Section.(μ, (2. / n_μ, ))
 end
 
 *(point:: Point3, r:: Float64):: Point3 = Point3(r .* point.coords)
