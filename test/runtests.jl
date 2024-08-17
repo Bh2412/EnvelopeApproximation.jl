@@ -90,7 +90,7 @@ end
     import Meshes.+
     using EnvelopeApproximation
     import EnvelopeApproximation.BubbleBasics: Bubble, Bubbles
-    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubblePoint
+    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubbleSection
     import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_ij
     using Plots
     
@@ -100,7 +100,7 @@ end
     μs = LinRange(-1., 1., 100)
     xx_td_integrand = td_integrand((:x, :x), bubbles)
     zz_td_integrand = td_integrand((:z, :z), bubbles)
-    ps = [BubblePoint(bubble_center + Point3(R * (1 - μ ^ 2) ^ (1/2), 0., R * μ), 1) for μ in LinRange(-1., 1., 100)]
+    ps = [BubbleSection(bubble_center + Point3(R * (1 - μ ^ 2) ^ (1/2), 0., R * μ), 1) for μ in LinRange(-1., 1., 100)]
     @test xx_td_integrand.(ps) ≈ 1 .- μs .^ 2
     @test zz_td_integrand.(ps) ≈ μs .^ 2 
     ks = [Point3(0., 0., z) for z in LinRange(0., 10., 11)]
