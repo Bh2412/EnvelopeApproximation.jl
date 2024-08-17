@@ -145,7 +145,7 @@ function T_ij(ks:: Vector{Point3},
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
+              tensor_directions:: Union{Vector, Nothing} = nothing; 
               kwargs...):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
     isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
     si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
@@ -176,7 +176,7 @@ function T_ij(ks:: Vector{Point3},
               n_ϕ:: Int64,
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
+              tensor_directions:: Union{Vector, Nothing} = nothing; 
               kwargs...):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
     return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
