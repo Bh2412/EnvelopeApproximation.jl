@@ -47,11 +47,13 @@ function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_direct
     return _integrand
 end
 
+size(p:: BubbleSection) = p.ϕ.d * p.μ.d
+
 function section_average(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
-                         ΔV:: Float64 = 1.)
+                         ΔV:: Float64 = 1.; kwargs...)
     integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
     function _section_average(p:: BubbleSection):: Array{Complex, 2}
-        return hcubature(x -> integrand(x, p.bubble_index), [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2])[1]
+        return (1 / size(p)) * hcubature(x -> integrand(x, p.bubble_index), [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2]; kwargs...)[1]
     end 
     return _section_average
 end
@@ -61,8 +63,8 @@ function surface_integral(ks:: Vector{Point3},
                           tensor_directions:: Vector,
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
-                          ΔV:: Float64 = 1.):: Array{ComplexF64, 2}
-    integrand = section_average(ks, bubbles, tensor_directions, ΔV)
+                          ΔV:: Float64 = 1.; kwargs...):: Array{ComplexF64, 2}
+    integrand = section_average(ks, bubbles, tensor_directions, ΔV; kwargs...)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 
@@ -71,9 +73,9 @@ function surface_integral(ks:: Vector{Point3},
                           tensor_directions:: Vector,
                           n_ϕ:: Int64, 
                           n_μ:: Int64,
-                          ΔV:: Float64 = 1.)
+                          ΔV:: Float64 = 1.; kwargs...)
     return surface_integral(ks, bubbles, tensor_directions, 
-                            2π / n_ϕ, 2. / n_μ, ΔV)
+                            2π / n_ϕ, 2. / n_μ, ΔV; kwargs...)
 end
 
 export surface_integral
