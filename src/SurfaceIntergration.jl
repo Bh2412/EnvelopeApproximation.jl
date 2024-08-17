@@ -1,8 +1,8 @@
 module SurfaceIntegration
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesIntegration
-import Base.*
-import Base.+
+import Base
+import Base: *, +, ≲
 import EnvelopeApproximation.BubblesEvolution.euc
 import Meshes.coordinates
 import Distances.pairwise
@@ -88,10 +88,14 @@ end
 
 euc(point:: Point3, bubble_section:: BubbleSection):: Float64 = euc(point, bubble_section.point)
 
+function ≲(a:: Float64, b:: Float64):: Bool
+    return (a <= b) | (a ≈ b)
+end
+
 function surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles):: Vector{BubbleSection}
     pss = preliminary_surface_sections(us_sections, bubbles)
     dm = pairwise(euc, centers(bubbles), pss)
-    filt = sum((dm .≤ reshape(radii(bubbles), (length(bubbles), 1))), dims=1) .<= 1
+    filt = sum((dm .≲ reshape(radii(bubbles), (length(bubbles), 1))), dims=1) .<= 1
     return [p for (i, p) in enumerate(pss) if filt[i]]
 end
 
