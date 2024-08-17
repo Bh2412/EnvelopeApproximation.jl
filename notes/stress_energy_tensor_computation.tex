@@ -1,0 +1,187 @@
+
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage[toc,page]{appendix}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usetikzlibrary{shapes.geometric, arrows}
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm,text centered, draw=black, fill=white]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+
+\title{stress energy tensor computation notes}
+\author{Ben Hatzofe }
+\date{March 2024}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+A late dark matter first order phase transition may leave a trace on the observed CMB radiation. The ISW effect would induce that trace. The ISW effect, is the gravitational redshift of the last-scattering photons due to gravitational field gradients along their trajectory. 
+Explicitly, the contribution of the ISW to the temperature fluctuations of the CMB is given by:
+\begin{equation} \label{eq:1}
+\frac{\delta T}{T} = \int_{\eta_r}^{\eta_0} (\phi' - \psi') d\eta
+\end{equation}
+
+Where $\frac{\delta T}{T}$ is the temperature fluctuation of the CMB from a specific direction, $\phi$ and $\psi$ are gravitational potentials (See next chapters for conventions), tags indicate derivative by conformal time. The integral is taken along the Photon's trajectory, $\eta$ is used as its parameter and it is assumed the Photon was emitted at $\eta_r$ and measured at $\eta_0$.
+
+Under the assumption of linear evolution, the PT's direct contribution can be computed by plugging the gravitational potential perturbations induced by the PT to Eq. \ref{eq:1}. This note aims to demonstrate how this is done. 
+
+Schematically, this computation contains 3 major steps:
+\begin{enumerate}
+    \item Simulating the PT
+    \item Computing the corresponding stress-energy tensor
+    \item Computing the metric fluctuations sourced by the stress-energy tensor
+\end{enumerate}
+The following chapters will expand on each step. 
+
+
+\section{Simulating the PT}
+Since this work aims to probe the effect of a possible first-order phase transition (FOPT), a basic model is a good first step, and perhaps is entirely sufficient. The basic case considered in this work is of a single self-interacting scalar field, whose Lagrangian is given by: 
+
+\begin{equation} \label{scalar_field_lagrangian}
+    \mathcal{L}(\varphi) = \frac{1}{2}\partial_\mu\varphi\partial^\mu\varphi - V(\varphi)
+\end{equation}
+
+And the potential:
+
+\begin{equation} \label{FOPT_potential}
+    V(\varphi) = \frac{\lambda}{8}(\varphi ^2 - \varphi_0 ^2) ^ 2 - \epsilon\lambda\varphi_0^3(\varphi + \varphi_0)
+\end{equation}
+
+
+
+Analysis of an FOPT emerging from this model is performed in \cite{coleman}. This analysis yields important conclusions:
+\begin{enumerate}
+    \item The bubble has an $O(4)$ symmetry (in imaginary time).
+    \item  The bubble wall speed of expansion reaches the speed of light in a time corresponding to its small initial radius.
+    \item The released energy resides in the bubble's wall, and as a result of \item[1], is split evenly between kinetic and gradient energy.
+\end{enumerate}
+These properties yield a concrete picture of a single bubble's evolution. For a full treatment of an FOPT though, an accompanying picture of the bubble collisions is important. A fundamental approach would use the Klein Gordon's equations for the bubble's propagation. Instead, the approach carried out in this work takes after \cite{kosowsky}, and the envelope approximation is used. 
+
+The collision of 2 vacuum bubbles creates a region in which the field's value oscillates rapidly. In the envelope approximation the oscillations within this region are neglected.
+
+\section{Stress-Energy Tensor}
+Our goal is to compute the components of the stress energy tensor, $T_{\mu\nu}$
+as a function of time during the FoPT. For that, we follow and expand on the 
+same computation as in \cite{kosowsky_envelope_approximation}.
+First, we derive the relations between the energy density, pressure and anisotropic stress
+that are sourced by the scalar field. Then, we write an approximate formula for their computation in momentum space
+which may be implemented numerically.
+
+\subsection{Components}
+The stress energy tensor of a scalar field with the Lagrangian in Eq. \ref{scalar_field_lagrangian}
+is given by:
+
+\begin{equation} \label{Stress-Energy-Tensor}
+    T_{\mu\nu} = \partial_\mu \varphi \partial_\nu \varphi - g_{\mu\nu}\mathcal{L}(\varphi)
+\end{equation}
+
+From it, we extract the energy density, $\rho$, pressure, $P$ and anisotropic stress tensor, $\Pi^i_j$:
+
+\begin{equation} \label{energy density}
+    \rho = T^0_0 = \frac{1}{2}(\partial_t\varphi)^2 + \frac{1}{2}\partial_i\varphi\partial_i\varphi + V(\varphi)
+\end{equation}
+\begin{equation} \label{pressure}
+    P = T^i_i = \frac{1}{2}(\partial_t \varphi) ^2 - \frac{1}{6}\partial_i\varphi\partial_i\varphi - V(\varphi)
+\end{equation}
+\begin{equation}\label{anisotropic stress}
+    \Pi^i_j=-T^i_j-P\delta^i_j=\partial_i\varphi \partial_j\varphi-\frac{1}{3}\delta^i_j\partial_k\varphi\partial_k\varphi
+\end{equation}
+
+Since we are interested in the scalar fluctuations, we extract the scalar
+part of the anisotropic stress tensor, which is given by:
+
+\begin{equation} \label{scalar part of anisotropic stress tensor}
+    {\Pi^{(s)}}^i_j = (\partial^i\partial_j-\frac{1}{3}\delta^i_j\nabla^2)\mathcal{N}_\varphi
+\end{equation}
+
+where $\mathcal{N}_\varphi$ is the scalar anisotropic stress potential.
+Up to a function $\lambda$ s.t $\nabla^4\lambda = 0$, Eq. \ref{scalar part of anisotropic stress tensor} can be inverted to give:
+\begin{equation}
+    \mathcal{N}_\varphi =\frac{1}{\nabla^4}(\frac{3}{2}\partial^j\partial_i\Pi^i_j)
+\end{equation}
+
+\subsection{Momentum Space Formula}
+As a step towards numerical computation, we consider the 
+stress energy tensor in momentum space (i.e the fourier transform) which we denote by a $\sim$.
+As is apparent from equations \ref{energy density}, \ref{pressure} and \ref{anisotropic stress} (and will be clarified below)
+the building blocks for this computation are integrals of the form:
+
+\begin{equation}\label{Basic Momentum Space integral}
+    \widetilde{\partial_i\varphi\partial_j\varphi}(\overrightarrow{k}, t) = \int_{R^3}\partial_i\varphi\partial_j\varphi e^{-i\overrightarrow{k}\cdot\overrightarrow{x}}d^3x
+\end{equation}
+
+\begin{equation}\label{Basic Volume Momentum Space integral}
+    \widetilde{V}(\varphi)(\overrightarrow{k}, t) = \int_{R^3}V(\varphi)(\overrightarrow{x}, t) e^{-i\overrightarrow{k}\cdot\overrightarrow{x}}d^3x
+\end{equation}
+Where $\overrightarrow{k}$ is the momentum.
+
+We start with Eq. \ref{Basic Momentum Space integral}. By decomposing it to a sum over single bubble contributions, we get:
+
+\begin{equation} \label{decomposition of bubbles}
+    \int_{R^3} d^3x=\sum_n \int_{V_n}d^3x
+\end{equation}
+Where the index $n$ runs over all bubbles and $V_n$ is the region of the $n$th bubble.
+
+As is demonstrated in \cite{coleman}, a single bubble's field configuration obeys $O(4)$ symmetry in imaginary time. Thus, we assume that within the region $V_n$ 
+one can write:
+$\varphi(\overrightarrow{x}, t) = \varphi(r, t)$
+where $r$ is the radial parameter around the bubble's nucleation site.
+As a consequence, the expression for the scalar field derivative simplifies to:
+
+\begin{equation} \label{spherical symmetri}
+    \partial_i\varphi = \frac{dr}{dx^i} \frac{d\varphi}{dr} = \hat{x_i} \frac{d\varphi}{dr}
+\end{equation}
+
+Plugging Eqs. \ref{decomposition of bubbles} and \ref{spherical symmetri} into Eq. \ref{Basic Momentum Space integral} yields:
+
+\begin{equation} \label{intermediate momentum space integral}
+    \begin{aligned}
+        \widetilde{\partial_i\varphi\partial_j\varphi}(\overrightarrow{k}, t) &= \sum_n \int_{V_n}\hat{{x}}^{(n)}_i\hat{x}^{(n)}_j{(\frac{d\varphi}{dr^{(n)}})}^2 e^{-i\overrightarrow{k}\cdot\overrightarrow{x}}d^3x\\
+        & \approx \sum_n e^{-i\overrightarrow{k}\cdot\overrightarrow{x}^{(n)}} \int_{S^{(n)}(t)} \hat{x}_i^{(n)}\hat{x}_j^{(n)}\int_0^{R^{(n)}(t)}{(\frac{d\varphi}{dr^{(n)}})}^2 e^{-ikr^{(n)}cos(\theta^{(n)})} (r^{(n)})^2 dr^{(n)}d^2\Omega^{(n)}\\
+        & \approx \sum_n e^{-i\overrightarrow{k}\cdot\overrightarrow{x}^{(n)}} \int_{S^{(n)}(t)} \hat{x}_i^{(n)}\hat{x}_j^{(n)} e^{-ikR^{(n)} cos(\theta^{(n)})} \int_0^{R^{(n)}(t)}{(\frac{d\varphi}{dr^{(n)}})}^2 (r^{(n)})^2dr^{(n)}d^2\Omega^{(n)}
+    \end{aligned}   
+\end{equation}
+
+Where a super script of $(n)$ denotes bubble dependence, $k = |\overrightarrow{k}|$, $R$ is the bubble radius, $r$ is the
+radial coordinate, $\theta$ is the axial angle, $\overrightarrow{x}^{(n)}$ is the vector pointing to the bubble's center, and $d^2\Omega$ is a unit sphere surface element. In the last line, we used the approximation that the bubble width is small with respect to the bubble radius (i.e $\frac{d\varphi}{dr}$ is nonzero only at $r=R(t)$). 
+In the second equality, we limited the region of integration to $S^{(n)}(t)$, the region on the bubble's surface that remains uncollided at time $t$. In doing so, we neglected the contribution of the bubble collisions to the stress energy tensor.
+
+An important simplification to Eq. \ref{intermediate momentum space integral} is achieved by noting the relation between the 
+integral over the field's squared derivative, and the vacuum energy liberated by the bubble expansion.
+As demonstrated in \cite{kosowsky_envelope_approximation}, for $t \gg R_0$ where $R_0$ is the
+bubble's radius at nucleation, the bubble's energy is distributed evenly between its potential and kinetic energy.
+Thus, we have:
+\begin{equation}
+    \begin{aligned}
+        & E_p(t) = 4\pi \int_0^{R(t)}\frac{1}{2} {(\frac{d\varphi}{dr})}^2r^2dr\\
+        & E_k(t) = 4\pi \int_0^{R(t)}\frac{1}{2}{(\frac{d\varphi}{dt})}^2 r^2 dr\\
+        & E_p(t)\approx E_k(t) \approx \frac{1}{2}E(t)=\frac{1}{2}\cdot \frac{4\pi}{3} R^3(t) \cdot \rho_{vac}
+    \end{aligned}
+\end{equation}
+Upon insertion to Eq. \ref{intermediate momentum space integral}, we get:
+\begin{equation} \label{Simplified momentum space surface integral}
+    \widetilde{\partial_i\varphi\partial_j\varphi}(\overrightarrow{k}, t) \approx \sum_n \frac{E^{(n)}(t)e^{-i\overrightarrow{k}\cdot\overrightarrow{x}^{(n)}}}{4\pi}\int_{S^{(n)}(t)} \hat{x}_i^{(n)}\hat{x}_j^{(n)} e^{-ikR^{(n)} \mu^{(n)}} d^2 \Omega^{(n)}
+\end{equation}
+Eq. \ref{Simplified momentum space surface integral} may be readily computed using numerical methods on a simulated bubble configuration.
+In conclusion, for intergrals of the form of Eq. \ref{Basic Momentum Space integral}, Eq. \ref{Simplified momentum space surface integral} is used, whereas
+Eq. \ref{Basic Volume Momentum Space integral} may be computed directly using numerical methods.
+
+\section{Metric Fluctuations}
+
+\appendix
+\section{Conventions}
+
+%beginning of Diagram code
+%\begin{tikzpicture}[node distance=2cm] \label{Strategy Diagram}
+%\node (first step) [startstop] {PT Simulation}
+%\node (second step) [startstop, below of=first step] {$T^{\mu\nu}$}
+%\node (third step) [start]
+%\draw [arrow] (start) -- (in1);
+%\end{tikzpicture}
+\bibliographystyle{plain}
+\bibliography{bib}
+\end{document}
