@@ -12,7 +12,7 @@ TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
 
 -(p1:: BubbleSection, p2:: Point3) = Point3((p1.point - p2)...)
 
-function td_integrand(tensor_direction:: T, bubbles:: Bubbles):: Function where T <: TensorDirection
+function td_integrand(tensor_direction:: T):: Function where T <: TensorDirection
     if tensor_direction ≡ :trace
         return (p:: BubbleSection -> 1.)
     end
@@ -36,7 +36,7 @@ _exp(p:: BubbleSection, k:: Point3) = exp(-im * (p ⋅ k))
 function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
                            ΔV:: Float64 = 1.)
     ks = reshape(ks, (length(ks), 1))
-    _td_integrand = reshape(td_integrand.(tensor_directions, (bubbles, )), (1, length(tensor_directions)))
+    _td_integrand = reshape(td_integrand.(tensor_directions), (1, length(tensor_directions)))
     function _integrand(p:: BubbleSection):: Array{Complex, 2}
         return @. _exp((p, ), ks) * ((p, ) |> _td_integrand) * (ΔV * bubbles[p.bubble_index].radius / 3)
     end

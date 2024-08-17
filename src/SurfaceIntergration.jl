@@ -53,6 +53,12 @@ struct BubbleSection
     bubble_index:: Int
 end
 
+function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int, bubbles:: Bubbles)
+    return BubbleSection(sphere_s.ϕ, sphere_s.μ, sphere_s.point * bubbles[bubble_index].radius + bubbles[bubble_index].center, bubble_index)
+end
+
+coordinates(p:: BubbleSection) = coordinates(p.point)
+
 export coordinates
 
 function unit_sphere_sections(ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{UnitSphereSection}
@@ -60,11 +66,6 @@ function unit_sphere_sections(ϕ_resolution:: Float64, μ_resolution:: Float64):
     return [UnitSphereSection(_ϕ, _μ) for _ϕ in ϕ for _μ in μ]
 end
 
-function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int, bubbles:: Bubbles)
-    return BubbleSection(sphere_s.ϕ, sphere_s.μ, sphere_s.point * bubbles[bubble_index].radius + bubbles[bubble_index].center, bubble_index)
-end
-
-coordinates(p:: BubbleSection) = coordinates(p.point)
 
 function preliminary_surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles)
     return [BubbleSection(sphere_s, i, bubbles) for sphere_s in us_sections for i in eachindex(bubbles)]
