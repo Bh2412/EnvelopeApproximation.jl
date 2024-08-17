@@ -5,21 +5,21 @@ using EnvelopeApproximation.BubbleBasics
 using Base.Iterators
 import Base./
 import Meshes: Vec, Point3, coordinates, ⋅, -
-import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubbleSection, unit_sphere_point
+import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_integral, BubbleSection, unit_sphere_point, bubble_point
 using LinearAlgebra
+using StaticArrays
+using HCubature
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
 
--(p1:: BubbleSection, p2:: Point3) = Point3((p1.point - p2)...)
-
-function td_integrand(tensor_direction:: T):: Function where T <: TensorDirection
+function td_integrand(x:: SVector{2, Float64}, tensor_direction):: Float64 
     if tensor_direction ≡ :trace
-        return (p:: BubbleSection -> 1.)
+        return 1.
     end
     CARTESIAN_DIRECTIONS = [:x, :y, :z]
     try
         indices:: Vector{Int64} = indexin(tensor_direction, CARTESIAN_DIRECTIONS)
-        return (p:: BubbleSection -> prod(coordinates(unit_sphere_point(p.ϕ, p.μ))[indices]))
+        return prod(coordinates(unit_sphere_point(x...))[indices])
     catch e
         if e isa MethodError
             throw(e("All directions must be elements of $CARTESIAN_DIRECTIONS"))
@@ -27,20 +27,33 @@ function td_integrand(tensor_direction:: T):: Function where T <: TensorDirectio
     end
 end
 
+function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Vector):: Vector{Float64}
+    return td_integrand.((x, ), tensor_directions)
+end
+
 ⋅(p1:: Point3, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
 ⋅(p1:: BubbleSection, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
-_exp(p:: BubbleSection, k:: Point3) = exp(-im * (p ⋅ k))
-
+_exp(p:: Point3, k:: Point3) = exp(-im * (p ⋅ k))
 
 function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
                            ΔV:: Float64 = 1.)
     ks = reshape(ks, (length(ks), 1))
-    _td_integrand = reshape(td_integrand.(tensor_directions), (1, length(tensor_directions)))
-    function _integrand(p:: BubbleSection):: Array{Complex, 2}
-        return @. _exp((p, ), ks) * ((p, ) |> _td_integrand) * (ΔV * bubbles[p.bubble_index].radius / 3)
-    end
+    _td_integrand = (a -> reshape(a, (1, length(tensor_directions)))) ∘ (x -> td_integrand(x, tensor_directions)) 
+    function _integrand(x:: SVector{2, Float64}, bubble_index:: Int):: Array{Complex, 2}
+        p = bubble_point(x..., bubble_index, bubbles)
+        return @. (_exp((p, ), ks)) * ($_td_integrand(x) * (ΔV * bubbles[bubble_index].radius / 3))
+    end>
     return _integrand
+end
+
+function section_average(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
+                         ΔV:: Float64 = 1.)
+    integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
+    function _section_average(p:: BubbleSection):: Array{Complex, 2}
+        return hcubature(x -> integrand(x, p.bubble_index), [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2])[1]
+    end 
+    return _section_average
 end
 
 function surface_integral(ks:: Vector{Point3}, 
@@ -49,7 +62,7 @@ function surface_integral(ks:: Vector{Point3},
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
                           ΔV:: Float64 = 1.):: Array{ComplexF64, 2}
-    integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
+    integrand = section_average(ks, bubbles, tensor_directions, ΔV)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 

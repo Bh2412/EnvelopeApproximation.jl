@@ -28,10 +28,12 @@ end
 *(point:: Point3, r:: Float64):: Point3 = Point3(r .* point.coords)
 +(point1:: Point3, point2:: Point3):: Point3 = Point3(point1.coords + point2.coords)
 
-function unit_sphere_point(ϕ:: Section, μ:: Section):: Point3
-    s = sqrt((1. - μ.c ^ 2))
-    return Point3(s * cos(ϕ.c), s * sin(ϕ.c), μ.c)
+function unit_sphere_point(ϕ:: Float64, μ:: Float64):: Point3
+    s = sqrt((1. - μ ^ 2))
+    return Point3(s * cos(ϕ), s * sin(ϕ), μ)
 end
+
+unit_sphere_point(ϕ:: Section, μ:: Section) = unit_sphere_point(ϕ.c, μ.c)
 
 export unit_sphere_point
 
@@ -46,6 +48,19 @@ struct UnitSphereSection
     end
 end
 
+function bubble_point(ϕ:: Float64, μ:: Float64, bubble:: Bubble):: Point3
+    usp = unit_sphere_point(ϕ, μ)
+    return usp * bubble.radius + bubble.center
+end
+
+bubble_point(ϕ:: Section, μ:: Section, bubble:: Bubble) = bubble_point(ϕ.c, μ.c, bubble)
+
+function bubble_point(ϕ:: Float64, μ:: Float64, bubble_index:: Int, bubbles:: Bubbles):: Point3
+    return bubble_point(ϕ, μ, bubbles[bubble_index])
+end
+
+bubble_point(ϕ:: Section, μ:: Section, bubble_index:: Int, bubbles:: Bubbles) = bubble_point(ϕ.c, μ.c, bubbles[bubble_index])
+
 struct BubbleSection
     ϕ:: Section 
     μ:: Section
@@ -54,7 +69,7 @@ struct BubbleSection
 end
 
 function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int, bubbles:: Bubbles)
-    return BubbleSection(sphere_s.ϕ, sphere_s.μ, sphere_s.point * bubbles[bubble_index].radius + bubbles[bubble_index].center, bubble_index)
+    return BubbleSection(sphere_s.ϕ, sphere_s.μ, bubble_point(sphere_s.ϕ, sphere_s.μ, bubble_index, bubbles), bubble_index)
 end
 
 coordinates(p:: BubbleSection) = coordinates(p.point)
