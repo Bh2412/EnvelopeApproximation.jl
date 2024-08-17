@@ -9,6 +9,7 @@ import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: surface_inte
 using LinearAlgebra
 using StaticArrays
 using HCubature
+import HCubature: hcubature
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
 
@@ -40,20 +41,22 @@ function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_direct
                            ΔV:: Float64 = 1.)
     ks = reshape(ks, (length(ks), 1))
     _td_integrand = (a -> reshape(a, (1, length(tensor_directions)))) ∘ (x -> td_integrand(x, tensor_directions)) 
+    c = (ΔV / 3)
     function _integrand(x:: SVector{2, Float64}, bubble_index:: Int):: Array{Complex, 2}
         p = bubble_point(x..., bubble_index, bubbles)
-        return @. (_exp((p, ), ks)) * ($_td_integrand(x) * (ΔV * bubbles[bubble_index].radius / 3))
+        return @. (_exp((p, ), ks)) * ($_td_integrand(x) * (bubbles[bubble_index].radius * c))
     end>
     return _integrand
 end
 
-size(p:: BubbleSection) = p.ϕ.d * p.μ.d
+measure(p:: BubbleSection) = p.ϕ.d * p.μ.d
+hcubature(f, p:: BubbleSection; kwargs...) = hcubature(f, [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2]; kwargs...)
 
-function section_average(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
-                         ΔV:: Float64 = 1.; kwargs...)
+function surface_section_average(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
+                                 ΔV:: Float64 = 1.; kwargs...)
     integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
     function _section_average(p:: BubbleSection):: Array{Complex, 2}
-        return (1 / size(p)) * hcubature(x -> integrand(x, p.bubble_index), [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2]; kwargs...)[1]
+        return (1 / measure(p)) * hcubature(x -> integrand(x, p.bubble_index), p; kwargs...)[1]
     end 
     return _section_average
 end
@@ -64,7 +67,7 @@ function surface_integral(ks:: Vector{Point3},
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
                           ΔV:: Float64 = 1.; kwargs...):: Array{ComplexF64, 2}
-    integrand = section_average(ks, bubbles, tensor_directions, ΔV; kwargs...)
+    integrand = surface_section_average(ks, bubbles, tensor_directions, ΔV; kwargs...)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 
@@ -82,28 +85,39 @@ export surface_integral
 
 unit_sphere_point(p:: BubbleSection) = unit_sphere_point(p.ϕ, p.μ)
 
-function element_projection(ks:: Vector{Point3}):: Function
-    return p:: BubbleSection -> unit_sphere_point(p) .⋅ ks
+function element_projection(x:: SVector{2, Float64}, ks:: Vector{Point3}):: Vector{Float64}
+    return unit_sphere_point(x...) .⋅ ks
 end
 
-function potential_integrand(ks:: Vector{Point3}, 
+function potential_integrand(ks:: Vector{Point3}, bubbles:: Bubbles,
                              ΔV:: Float64 = 1.)
-    projection = element_projection(ks)
+    projection = x -> element_projection(x, ks)
     #=
     This assumes that the potential is negative within the true vacuum
     and zero outside of it.
     =#
-    function integrand(p:: BubbleSection):: Vector{ComplexF64}
-        return @. _exp((p, ), ks) * (-ΔV) * (im / (ks ⋅ ks)) * $projection(p)
+    c = @. im * ((-ΔV) / (ks ⋅ ks))
+    function integrand(x:: SVector{2, Float64}, bubble_index:: Int):: Vector{ComplexF64}
+        p = bubble_point(x..., bubble_index, bubbles)
+        return @. _exp((p, ), ks) * $projection(x) * c
     end
+end
+
+function potential_section_average(ks:: Vector{Point3}, bubbles:: Bubbles,
+                                   ΔV:: Float64 = 1.; kwargs...)
+    integrand = potential_integrand(ks, bubbles, ΔV)
+    function _section_average(p:: BubbleSection):: Vector{ComplexF64}
+        return (1 / measure(p)) * hcubature(x -> integrand(x, p.bubble_index), p; kwargs...)[1]
+    end 
+    return _section_average
 end
 
 function potential_integral(ks:: Vector{Point3}, 
                             bubbles:: Bubbles, 
                             ϕ_resolution:: Float64, 
                             μ_resolution:: Float64, 
-                            ΔV:: Float64 = 1.)
-    integrand = potential_integrand(ks, ΔV)
+                            ΔV:: Float64 = 1.; kwargs...)
+    integrand = potential_section_average(ks, bubbles, ΔV; kwargs...)
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 
@@ -111,8 +125,8 @@ function potential_integral(ks:: Vector{Point3},
                             bubbles:: Bubbles, 
                             n_ϕ:: Int64, 
                             n_μ:: Int64, 
-                            ΔV:: Float64 = 1.)
-    return potential_integral(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
+                            ΔV:: Float64 = 1.; kwargs...)
+    return potential_integral(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV; kwargs...)
 end
 
 export potential_integral
@@ -131,10 +145,11 @@ function T_ij(ks:: Vector{Point3},
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
+              kwargs...):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
     isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
     si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
-                          μ_resolution, ΔV)
+                          μ_resolution, ΔV; kwargs...)
     T = Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}()
     T[:k] = ks
     for (i, td) in enumerate(tensor_directions)
@@ -146,7 +161,7 @@ function T_ij(ks:: Vector{Point3},
     ```         
     if any(td in tensor_directions for td in diagonal)
         vi = potential_integral(ks, bubbles, ϕ_resolution, 
-                                μ_resolution, ΔV)
+                                μ_resolution, ΔV; kwargs...)
         for td in tensor_directions
             if td in diagonal
                 T[td] -= vi
@@ -161,8 +176,9 @@ function T_ij(ks:: Vector{Point3},
               n_ϕ:: Int64,
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
-    return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions)
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
+              kwargs...):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
+    return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
 export T_ij
