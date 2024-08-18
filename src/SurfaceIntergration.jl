@@ -40,12 +40,6 @@ export unit_sphere_point
 struct UnitSphereSection
     ϕ:: Section 
     μ:: Section
-    point:: Point3
-    
-    function UnitSphereSection(ϕ:: Section, μ:: Section)
-        p = unit_sphere_point(ϕ, μ)
-        return new(ϕ, μ, p)
-    end
 end
 
 function bubble_point(ϕ:: Float64, μ:: Float64, bubble:: Bubble):: Point3
@@ -54,27 +48,21 @@ function bubble_point(ϕ:: Float64, μ:: Float64, bubble:: Bubble):: Point3
 end
 
 bubble_point(ϕ:: Section, μ:: Section, bubble:: Bubble) = bubble_point(ϕ.c, μ.c, bubble)
-
-function bubble_point(ϕ:: Float64, μ:: Float64, bubble_index:: Int, bubbles:: Bubbles):: Point3
-    return bubble_point(ϕ, μ, bubbles[bubble_index])
-end
-
+bubble_point(ϕ:: Float64, μ:: Float64, bubble_index:: Int, bubbles:: Bubbles) = bubble_point(ϕ, μ, bubbles[bubble_index])
 bubble_point(ϕ:: Section, μ:: Section, bubble_index:: Int, bubbles:: Bubbles) = bubble_point(ϕ.c, μ.c, bubbles[bubble_index])
 
 struct BubbleSection
     ϕ:: Section 
     μ:: Section
-    point:: Point3
     bubble_index:: Int
 end
 
-function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int, bubbles:: Bubbles)
-    return BubbleSection(sphere_s.ϕ, sphere_s.μ, bubble_point(sphere_s.ϕ, sphere_s.μ, bubble_index, bubbles), bubble_index)
+function BubbleSection(sphere_s:: UnitSphereSection, bubble_index:: Int)
+    return BubbleSection(sphere_s.ϕ, sphere_s.μ, bubble_index)
 end
 
-coordinates(p:: BubbleSection) = coordinates(p.point)
-
-export coordinates
+bubble_point(bubble_section:: BubbleSection, bubbles:: Bubbles) = bubble_point(bubble_section.ϕ, bubble_section.μ, 
+                                                                               bubble_section.bubble_index, bubbles)
 
 function unit_sphere_sections(ϕ_resolution:: Float64, μ_resolution:: Float64):: Vector{UnitSphereSection}
     ϕ, μ = unit_sphere_tesselation(ϕ_resolution, μ_resolution)
@@ -83,10 +71,8 @@ end
 
 
 function preliminary_surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles)
-    return [BubbleSection(sphere_s, i, bubbles) for sphere_s in us_sections for i in eachindex(bubbles)]
+    return [BubbleSection(sphere_s, i) for sphere_s in us_sections for i in eachindex(bubbles)]
 end
-
-euc(point:: Point3, bubble_section:: BubbleSection):: Float64 = euc(point, bubble_section.point)
 
 function ≲(a:: Float64, b:: Float64):: Bool
     return (a <= b) | (a ≈ b)
@@ -94,7 +80,7 @@ end
 
 function surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles):: Vector{BubbleSection}
     pss = preliminary_surface_sections(us_sections, bubbles)
-    dm = pairwise(euc, centers(bubbles), pss)
+    dm = pairwise(euc, centers(bubbles), bubble_point.(pss, (bubbles, )))
     filt = sum((dm .≲ reshape(radii(bubbles), (length(bubbles), 1))), dims=1) .<= 1
     return [p for (i, p) in enumerate(pss) if filt[i]]
 end

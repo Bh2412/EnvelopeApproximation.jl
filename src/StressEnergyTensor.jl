@@ -12,6 +12,7 @@ using HCubature
 import HCubature: hcubature
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
+unit_sphere_point(x:: SVector{2, Float64}) = unit_sphere_point(x...)
 
 function td_integrand(x:: SVector{2, Float64}, tensor_direction):: Float64 
     if tensor_direction ≡ :trace
@@ -20,10 +21,12 @@ function td_integrand(x:: SVector{2, Float64}, tensor_direction):: Float64
     CARTESIAN_DIRECTIONS = [:x, :y, :z]
     try
         indices:: Vector{Int64} = indexin(tensor_direction, CARTESIAN_DIRECTIONS)
-        return prod(coordinates(unit_sphere_point(x...))[indices])
+        return prod(coordinates(unit_sphere_point(x))[indices])
     catch e
         if e isa MethodError
             throw(e("All directions must be elements of $CARTESIAN_DIRECTIONS"))
+        else
+            throw(e)
         end
     end
 end
@@ -33,7 +36,6 @@ function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Vector):: Vec
 end
 
 ⋅(p1:: Point3, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
-⋅(p1:: BubbleSection, p2:: Point3):: Float64 = ⋅(coordinates.([p1, p2])...)
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
 _exp(p:: Point3, k:: Point3) = exp(-im * (p ⋅ k))
 
@@ -86,11 +88,11 @@ export surface_integral
 unit_sphere_point(p:: BubbleSection) = unit_sphere_point(p.ϕ, p.μ)
 
 function element_projection(x:: SVector{2, Float64}, ks:: Vector{Point3}):: Vector{Float64}
-    return unit_sphere_point(x...) .⋅ ks
+    return unit_sphere_point(x) .⋅ ks
 end
 
 function potential_integrand(ks:: Vector{Point3}, bubbles:: Bubbles,
-                             ΔV:: Float64 = 1.)
+                             ΔV:: Float64 = 1.):: Function
     projection = x -> element_projection(x, ks)
     #=
     This assumes that the potential is negative within the true vacuum
