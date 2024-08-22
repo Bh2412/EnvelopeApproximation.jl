@@ -3,7 +3,6 @@ using EnvelopeApproximation.BubblesIntegration
 using Test
 using EnvelopeApproximation.BubbleBasics
 import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration as SI
-import EnvelopeApproximation.BubblesIntegration.VolumeIntegration as VI
 import EnvelopeApproximation.GravitationalPotentials as GP
 using Meshes
 
@@ -75,12 +74,23 @@ using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 end
 @testset "cosine_source" begin
     frequency = 2π / 5
-    times = LinRange(0., π / 2, 1000)
+    times = LinRange(0., π / 2, 1000) |> collect
     s_vals = -(frequency ^ 2) * cos.(frequency * times)
     s = Source(times, s_vals)
     numerical_solution = ode_solution(s)
     exact_solution = cos.(frequency * times) .- 1
+    println(max(abs.(numerical_solution - exact_solution)...))
     @test isapprox(numerical_solution, exact_solution, atol=1e-4)
+end
+@testset "MultiDimensional cosine_source" begin
+    frequencies = [2π / i for i in 2:17] |> x -> reshape(x, 1, 4, 4)
+    times = LinRange(0., π / 2, 1000) |> collect |> x -> reshape(x, :, 1, 1)
+    s_vals = @. -(frequencies ^ 2) * cos(frequencies * times)
+    s = Source(times |> x -> reshape(x, :), s_vals)
+    numerical_solution = ode_solution(s)
+    exact_solution = @. cos(frequencies * times) - 1
+    println(max(abs.(numerical_solution - exact_solution)...))
+    @test isapprox(numerical_solution, exact_solution, atol=1e-3)
 end
 end
 

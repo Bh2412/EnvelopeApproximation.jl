@@ -2,7 +2,7 @@ module SurfaceIntegration
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesIntegration
 import Base
-import Base: *, +, ≲
+import Base: *, +
 import EnvelopeApproximation.BubblesEvolution.euc
 import Meshes.coordinates
 import Distances.pairwise
