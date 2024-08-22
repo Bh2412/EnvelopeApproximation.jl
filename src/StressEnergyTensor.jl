@@ -2,6 +2,7 @@ module StressEnergyTensor
 using EnvelopeApproximation
 using EnvelopeApproximation.BubblesIntegration
 using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BubblesEvolution
 using Base.Iterators
 import Base./
 import Meshes: Vec, Point3, coordinates, ⋅, -
@@ -133,10 +134,6 @@ end
 
 export potential_integral
 
-P(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.((1. / 3) * T_ii - V)
-
-ρ(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.(T_ii + V)
-
 CARTESIAN_DIRECTIONS = [:x, :y, :z]
 diagonal = [(s, s) for s in CARTESIAN_DIRECTIONS]
 above_diagonal = [(:x, :y), (:x, :z), (:y, :z)]
@@ -183,7 +180,17 @@ function T_ij(ks:: Vector{Point3},
     return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
+function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, args...; kwargs...)
+    _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
+    return [T_ij(ks, _bubbles(t), args...; kwargs...) for t in times] 
+end
+
 export T_ij
+
+P(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.((1. / 3) * T_ii - V)
+
+ρ(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.(T_ii + V)
+
 
 function auto_outer_product(ks:: Vector{Point3}, td:: TensorDirection):: Vector{Float64}
     indices = indexin(td, [:x, :y, :z])
@@ -237,6 +244,13 @@ function state_parameters(ks:: Vector{Point3},
                           n_μ:: Int64,
                           ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
     return state_parameters(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
+end
+
+function state_parameters(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, 
+                          times:: Vector{Float64}, args...; kwargs...)
+    _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
+    return [state_parameters(ks, _bubbles(t), args...; kwargs...) 
+            for t in times]
 end
 
 export state_parameters
