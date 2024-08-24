@@ -43,11 +43,13 @@ end
 
 export evolve
 
-function current_bubbles(snap:: BubblesSnapShot, t:: Union{Float64, Nothing} = nothing):: Bubbles
-    if t ≡ nothing
-        t = snap.t
-    end
-    return Bubbles([Bubble(nuc[:site], snap.radial_profile(t - nuc[:time])) for nuc in snap.nucleations])
+function current_bubbles(snap:: BubblesSnapShot):: Bubbles
+    t = snap.t
+    Bubbles([Bubble(nuc[:site], snap.radial_profile(t - nuc[:time])) for nuc in snap.nucleations])
+end
+
+function current_bubbles(snap:: BubblesSnapShot, t:: Float64):: Bubbles
+    return current_bubbles(at_earlier_time(snap, t))
 end
 
 export current_bubbles
