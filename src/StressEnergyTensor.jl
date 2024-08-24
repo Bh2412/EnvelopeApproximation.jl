@@ -145,15 +145,10 @@ function T_ij(ks:: Vector{Point3},
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}
+              kwargs...):: Array{2, ComplexF64}
     isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
-    si = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
-                          μ_resolution, ΔV; kwargs...)
-    T = Dict{Union{TensorDirection, Symbol}, Union{Vector{ComplexF64}, Vector{Point3}}}()
-    T[:k] = ks
-    for (i, td) in enumerate(tensor_directions)
-        T[td] = reshape(si[:, i], length(ks))
-    end
+    T = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
+                         μ_resolution, ΔV; kwargs...)
      # Based on the following:
     ```math
     T_ij = ∂_iϕ∂_jϕ - δ_ij⋅L ≈ ∂_iϕ∂_jϕ - δ_ij V
@@ -161,9 +156,9 @@ function T_ij(ks:: Vector{Point3},
     if any(td in tensor_directions for td in diagonal)
         vi = potential_integral(ks, bubbles, ϕ_resolution, 
                                 μ_resolution, ΔV; kwargs...)
-        for td in tensor_directions
+        for (i, td) in enumerate(tensor_directions)
             if td in diagonal
-                T[td] -= vi
+                T[:, i] .-= vi
             end
         end
     end
@@ -176,83 +171,34 @@ function T_ij(ks:: Vector{Point3},
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Dict{TensorDirection, Union{Vector{ComplexF64}, Vector{Point3}}}
+              kwargs...):: Array{2, ComplexF64}
     return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
-function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, args...; kwargs...)
+function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
+              ϕ_resolution:: Float64,
+              μ_resolution:: Float64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{Vector, Nothing} = nothing; 
+              kwargs...):: Array{3, ComplexF64}
     _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
-    return [T_ij(ks, _bubbles(t), args...; kwargs...) for t in times] 
+    M = Array{ComplexF64, 3}(undef, length(times), length(ks), length(tensor_directions))
+    for (i, t) in enumerate(times)
+        bs = _bubbles(t)
+        M[i, :, :] .= T_ij(ks, bs, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
+    end 
+    return M
+end
+
+function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
+              n_ϕ:: Int64,
+              n_μ:: Int64,
+              ΔV:: Float64 = 1., 
+              tensor_directions:: Union{Vector, Nothing} = nothing; 
+              kwargs...):: Array{3, ComplexF64}
+    return T_ij(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
 export T_ij
-
-P(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.((1. / 3) * T_ii - V)
-
-ρ(T_ii:: Array{ComplexF64}, V:: Array{ComplexF64}) = @.(T_ii + V)
-
-
-function auto_outer_product(ks:: Vector{Point3}, td:: TensorDirection):: Vector{Float64}
-    indices = indexin(td, [:x, :y, :z])
-    return map(k -> prod(coordinates(k)[indices]), ks)
-end
-
-function auto_outer_product(ks:: Vector{Point3}, tds:: Vector):: Array{Float64, 2}
-    return map(td -> auto_outer_product(ks, td), tds) |> x -> hcat(x...)
-end
-
-function N_φ(ks:: Vector{Point3}, Π_μν:: Array{ComplexF64, 2}, 
-             tds:: Vector):: Vector{ComplexF64}
-    aop = auto_outer_product(ks, tds)
-    res = @. (-3. / 2) * Π_μν * aop
-    adi = indexin(above_diagonal, tds)
-    di = indexin(diagonal, tds)
-    res = 2 .* (sum(res[:, adi], dims=2)) .+ sum(res[:, di], dims=2)
-    return reshape(res, length(ks))
-end
-
-function state_parameters(ks:: Vector{Point3}, 
-                          bubbles:: Bubbles, 
-                          ϕ_resolution:: Float64,
-                          μ_resolution:: Float64,
-                          ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
-    tds = vcat([:trace], upper_right)
-    si = surface_integral(ks, bubbles, tds, ϕ_resolution,
-                          μ_resolution, ΔV)
-    V = potential_integral(ks, bubbles, ϕ_resolution, 
-                           μ_resolution, ΔV)
-    T_ii = reshape(si[:, 1], length(ks))
-    T = Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}()
-    T[:k] = ks
-    T[:ρ] = ρ(T_ii, V)
-    T[:P] = P(T_ii, V)
-    Π_μν, _tds = begin
-        t = indexin((:trace, ), tds)
-        d = @. si[:, $indexin(diagonal, tds)] - (1. / 3) * si[:, t]
-        ad = si[:, indexin(above_diagonal, tds)]
-        hcat(d, ad), vcat(diagonal, above_diagonal)
-    end
-    T[:N_φ] = N_φ(ks, Π_μν, _tds)  
-    return T
-end
-
-export state_parameters
-   
-function state_parameters(ks:: Vector{Point3}, 
-                          bubbles:: Bubbles, 
-                          n_ϕ:: Int64,
-                          n_μ:: Int64,
-                          ΔV:: Float64 = 1.):: Dict{Symbol, Union{Vector{ComplexF64}, Vector{Point3}}}
-    return state_parameters(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
-end
-
-function state_parameters(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, 
-                          times:: Vector{Float64}, args...; kwargs...)
-    _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
-    return [state_parameters(ks, _bubbles(t), args...; kwargs...) 
-            for t in times]
-end
-
-export state_parameters
 
 end
