@@ -28,7 +28,7 @@ function source_values(source:: Source{Vector{Float64}}):: Vector{Float64}
     return (source.values[1:end-1] + source.values[2:end]) / 2
 end
 
-function source_values(source:: Source{Array{Float64, 2}}):: Array{Float64, 2}
+function source_values(source:: Source{T}):: T where T <: Matrix
     return (source.values[1:end-1, :] + source.values[2:end, :]) / 2
 end
 
@@ -43,7 +43,7 @@ function ode_solution(source:: Source{Vector{Float64}}):: Vector{Float64}
     return v
 end
 
-function ode_solution(source:: Source{Array{Float64, 2}}):: Array{Float64, 2}
+function ode_solution(source:: Source{T}):: T where T <: Matrix
     pr_matrix = pulse_response_matrix(source.times)
     sv = source_values(source)
     @tullio M[i, j] := pr_matrix[i, l] * sv[l, j]
@@ -66,7 +66,7 @@ using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.StressEnergyTensor
-import Meshes: coordinates
+import Meshes: Point3, coordinates, Vec3
 import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_diagonal
 import LinearAlgebra: norm
 
@@ -76,7 +76,7 @@ end
 
 function normalized_auto_outer_product(k:: Vec3, td:: TensorDirection)
     ```math
-    \hat{k_i}\hat{k_j}
+    k_ik_j / k^2
     ```        
     indices = indexin(td, [:x, :y, :z])
     return prod(k[indices])
@@ -88,7 +88,7 @@ end
 
 function ψ_source(ks:: Vector{Point3}, 
                   T:: Matrix{ComplexF64}, 
-                  tensor_directions:: Vector{TensorDirection}, 
+                  tensor_directions:: Vector, 
                   a = 1., 
                   G = 1.):: Vector{ComplexF64}
     ```math
@@ -98,9 +98,9 @@ function ψ_source(ks:: Vector{Point3},
     V = Vector{ComplexF64}(undef, length(ks))
     for (i, td) in enumerate(tensor_directions)
         if td in above_diagonal
-            V += (2 * k_ik_j[:, i]) * T[:, i]
+            V += (2 * k_ik_j[:, i]) .* T[:, i]
         elseif td in diagonal
-            V += k_ik_j[:, i] * T[:, i] 
+            V += k_ik_j[:, i] .* T[:, i] 
         end
     end
     return (4π * a^2 * G) * V  
@@ -168,7 +168,9 @@ function ψ(ks:: Vector{Point3},
            G:: Float64 = 1.; 
            kwargs...)
     return ψ(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, 
-             ΔV, a, g)
+             ΔV, a, G)
 end
+
+export ψ
 
 end

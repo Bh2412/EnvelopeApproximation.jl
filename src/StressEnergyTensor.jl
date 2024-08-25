@@ -13,6 +13,9 @@ using HCubature
 import HCubature: hcubature
 
 TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
+
+export TensorDirection
+
 unit_sphere_point(x:: SVector{2, Float64}) = unit_sphere_point(x...)
 
 function td_integrand(x:: SVector{2, Float64}, tensor_direction):: Float64 
@@ -145,7 +148,7 @@ function T_ij(ks:: Vector{Point3},
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Array{2, ComplexF64}
+              kwargs...):: Array{ComplexF64, 2}
     isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
     T = surface_integral(ks, bubbles, tensor_directions, ϕ_resolution,
                          μ_resolution, ΔV; kwargs...)
@@ -171,7 +174,7 @@ function T_ij(ks:: Vector{Point3},
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Array{2, ComplexF64}
+              kwargs...):: Array{ComplexF64, 2}
     return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
@@ -180,7 +183,7 @@ function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Fl
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Array{3, ComplexF64}
+              kwargs...):: Array{ComplexF64, 3}
     _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
     M = Array{ComplexF64, 3}(undef, length(times), length(ks), length(tensor_directions))
     for (i, t) in enumerate(times)
@@ -195,7 +198,7 @@ function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Fl
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
               tensor_directions:: Union{Vector, Nothing} = nothing; 
-              kwargs...):: Array{3, ComplexF64}
+              kwargs...):: Array{ComplexF64, 3}
     return T_ij(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
