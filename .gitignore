@@ -54,3 +54,4 @@ notebooks/evolution_ensemble.jld2
 scripts/benchmarks/comparison_to_Maya/unified_Tij_comparison.png
 scripts/benchmarks/comparison_to_Maya/varying_eta_constant_k_data.json
 scripts/benchmarks/comparison_to_Maya/varying_eta_constant_k.png
+scripts/gravitational_potentials/gravitational_potential.png

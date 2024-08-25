@@ -13,7 +13,7 @@ using Distributions
 import Base.isless
 import Random
 
-Nucleation = NamedTuple{(:time, :site)}
+Nucleation = @NamedTuple{time:: Float64, site:: Point3}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
 
 struct BubblesSnapShot
@@ -26,6 +26,7 @@ export BubblesSnapShot
 
 speed_of_light_profile(t:: Float64, c:: Float64 = 1.):: Float64 = c * t 
 
+BubblesSnapShot(nucleations:: Vector{Nucleation}, t:: Float64) = BubblesSnapShot(nucleations, t, speed_of_light_profile)
 BubblesSnapShot() = BubblesSnapShot(Vector{Nucleation}(), 0., speed_of_light_profile)
 
 export BubblesSnapShot
