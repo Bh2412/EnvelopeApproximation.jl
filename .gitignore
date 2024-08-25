@@ -55,3 +55,9 @@ scripts/benchmarks/comparison_to_Maya/unified_Tij_comparison.png
 scripts/benchmarks/comparison_to_Maya/varying_eta_constant_k_data.json
 scripts/benchmarks/comparison_to_Maya/varying_eta_constant_k.png
 scripts/gravitational_potentials/gravitational_potential.png
+scripts/gravitational_potentials/double_bubble.ipynb
+.gitignore
+scripts/studying_performance/gravitational_potential_profiling.jl
+scripts/studying_performance/profiling.jl
+scripts/gravitational_potentials/gravitational_potential_fixed_k_varying_eta.json
+.gitignore

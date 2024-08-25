@@ -18,21 +18,20 @@ export TensorDirection
 
 unit_sphere_point(x:: SVector{2, Float64}) = unit_sphere_point(x...)
 
-function td_integrand(x:: SVector{2, Float64}, tensor_direction):: Float64 
-    if tensor_direction ≡ :trace
+function td_integrand(x:: SVector{2, Float64}, s:: Symbol):: Float64
+    if s ≡ :trace
         return 1.
+    elseif s ≡ :x
+        return cos(x[1]) * √(1 - x[2] ^ 2)
+    elseif s ≡ :y
+        return sin(x[1]) * √(1 - x[2] ^ 2)
+    elseif s ≡ :z
+        return x[2]
     end
-    CARTESIAN_DIRECTIONS = [:x, :y, :z]
-    try
-        indices:: Vector{Int64} = indexin(tensor_direction, CARTESIAN_DIRECTIONS)
-        return prod(coordinates(unit_sphere_point(x))[indices])
-    catch e
-        if e isa MethodError
-            throw(e("All directions must be elements of $CARTESIAN_DIRECTIONS"))
-        else
-            throw(e)
-        end
-    end
+end
+
+function td_integrand(x:: SVector{2, Float64}, tensor_direction:: Tuple{Symbol, Symbol}):: Float64 
+    return td_integrand(x, tensor_direction[1]) * td_integrand(x, tensor_direction[2])
 end
 
 function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Vector):: Vector{Float64}
