@@ -81,6 +81,8 @@ function surface_sections(ϕ_resolution:: Float64, μ_resolution:: Float64, bubb
     return surface_sections(unit_sphere_sections(ϕ_resolution, μ_resolution), bubbles)
 end
 
+surface_sections(n_ϕ:: Int64, n_μ:: Int64, bubbles:: Bubbles):: Vector{BubbleSection} = surface_sections(2π / n_ϕ, 2. / n_μ, bubbles)
+
 export surface_sections
 
 function surface_integral(f:: Function, bubbles:: Bubbles, ϕ_resolution:: Float64, μ_resolution:: Float64)
