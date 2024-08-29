@@ -99,26 +99,15 @@ end
     import Meshes.+
     using EnvelopeApproximation
     import EnvelopeApproximation.BubbleBasics: Bubble, Bubbles
-    import EnvelopeApproximation.SurfaceIntegration: BubbleSection
-    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_ij
+    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubbleSection, Section, surface_sections
+    import EnvelopeApproximation.StressEnergyTensor: coordinate_transformation
+    using StaticArrays
     using Plots
     
     R = 3.
     bubble_center = Point3(0., 0., 1.)
     bubbles = Bubbles([Bubble(bubble_center, R)])
-    μs = LinRange(-1., 1., 100)
-    xx_td_integrand = td_integrand((:x, :x), bubbles)
-    zz_td_integrand = td_integrand((:z, :z), bubbles)
-    ps = [BubbleSection(bubble_center + Point3(R * (1 - μ ^ 2) ^ (1/2), 0., R * μ), 1) for μ in LinRange(-1., 1., 100)]
-    @test xx_td_integrand.(ps) ≈ 1 .- μs .^ 2
-    @test zz_td_integrand.(ps) ≈ μs .^ 2 
-    ks = [Point3(0., 0., z) for z in LinRange(0., 10., 11)]
-    tensor_directions = [:trace, (:x, :x), (:y, :y), (:z, :z)]
-    si = surface_integral(ks, bubbles, tensor_directions, 10, 10)
-    @test size(si) == (length(ks), length(tensor_directions))
-    @test reshape(si[:, 1], length(ks)) ≈ sum(si[:, 2:4], dims=2) |> x -> reshape(x, length(ks))
-    vi = volume_integral(ks, bubbles, 10, 10, 10)
-    T = T_ij(ks, bubbles, 10, 10, 10)
-    print(T)
+    sections = surface_sections(2, 2, bubbles)
+    @show coordinate_transformation(SVector{2, Float64}(0., 0.), sections[1])
 end;
 
