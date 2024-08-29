@@ -49,7 +49,7 @@ function coordinate_transformation(x:: SVector{2, Float64}, s:: BubbleSection)::
     """
     The integration over each section is performed between (0., 2π), (-1., 1.), this transformation makes sure of that
     """
-    return (x .* (s.ϕ.d / 2π, s.μ.d / 2)) .+ (s.ϕ.c + s.ϕ.d / 2 - π, s.μ.c)
+    return @. (x * (s.ϕ.d / 2π, s.μ.d / 2)) + (s.ϕ.c + s.ϕ.d / 2 - π, s.μ.c)
 end
 
 measure(s:: BubbleSection) = s.ϕ.d * s.μ.d
