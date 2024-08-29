@@ -29,8 +29,12 @@ function td_integrand(x:: SVector{2, Float64}, s:: Symbol):: Float64
     end
 end
 
-function td_integrand(x:: SVector{2, Float64}, tensor_direction:: Tuple{Symbol, Symbol}):: Float64 
-    return td_integrand(x, tensor_direction[1]) * td_integrand(x, tensor_direction[2])
+function td_integrand(x:: SVector{2, Float64}, td:: Tuple{Symbol, Symbol}):: Float64 
+    td ≡ (:x, :x) && return cos(x[1]) ^ 2 * (1 - x[2] ^ 2)
+    td ≡ (:y, :y) && return sin(x[1]) ^ 2 * (1 - x[2] ^ 2)
+    td ≡ (:z, :z) && return x[2] ^ 2
+    ((td ≡ (:x, :y)) | (td ≡ (:y, :x))) && return cos(x[1]) * sin(x[1]) * (1 - x[2] ^ 2)
+    return td_integrand(x, td[1]) * td_integrand(x, td[2])
 end
 
 function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Matrix):: Matrix{Float64}
