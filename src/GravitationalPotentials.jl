@@ -66,7 +66,7 @@ using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.StressEnergyTensor
-import Meshes: Point3, coordinates, Vec3
+import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
 import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_diagonal
 import LinearAlgebra: norm
 
@@ -74,7 +74,7 @@ function hat(v:: Point3):: Vec3
     return coordinates(v) / norm(v)
 end
 
-function normalized_auto_outer_product(k:: Vec3, td:: TensorDirection)
+function normalized_auto_outer_product(k:: Vec3, td:: Tuple{Symbol, Symbol})
     ```math
     k_ik_j / k^2
     ```        

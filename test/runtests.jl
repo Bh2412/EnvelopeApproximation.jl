@@ -1,8 +1,7 @@
 using EnvelopeApproximation
-using EnvelopeApproximation.BubblesIntegration
 using Test
 using EnvelopeApproximation.BubbleBasics
-import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration as SI
+import EnvelopeApproximation.SurfaceIntegration as SI
 import EnvelopeApproximation.GravitationalPotentials as GP
 using Meshes
 
@@ -100,7 +99,7 @@ end
     import Meshes.+
     using EnvelopeApproximation
     import EnvelopeApproximation.BubbleBasics: Bubble, Bubbles
-    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubbleSection
+    import EnvelopeApproximation.SurfaceIntegration: BubbleSection
     import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_ij
     using Plots
     

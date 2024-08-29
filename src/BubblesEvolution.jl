@@ -1,9 +1,7 @@
 module BubblesEvolution
 
 using EnvelopeApproximation.BubbleBasics
-import Meshes.Point3
-import Meshes.Vec3
-import Meshes.coordinates
+import EnvelopeApproximation.BubbleBasics: Vec3, Point3, coordinates
 import Random.AbstractRNG
 using StatsBase
 import StatsBase.sample
@@ -77,7 +75,7 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
     μ = rand(rng, Uniform(-1., 1.), n)
     v = begin
         s = (x -> sqrt(1 - x^2)).(μ)
-        Vec3.(r .* s .* cos.(ϕ), r .* s .* sin.(ϕ), r .* μ)
+        @. Vec3(r * s * cos(ϕ), r * s * sin(ϕ), r * μ)
     end
     return space.center .+ v
 end

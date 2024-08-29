@@ -1,10 +1,7 @@
 module SurfaceIntegration
 using EnvelopeApproximation.BubbleBasics
-using EnvelopeApproximation.BubblesIntegration
 import Base
 import Base: *, +
-import EnvelopeApproximation.BubblesEvolution.euc
-import Meshes.coordinates
 import Distances.pairwise
 
 n(range:: Float64, resolution:: Float64):: Int64 = ceil(Int64, range / resolution)
@@ -25,8 +22,8 @@ function unit_sphere_tesselation(ϕ_resolution:: Float64, μ_resolution:: Float6
     return Section.(ϕ, (2π / n_ϕ, )), Section.(μ, (2. / n_μ, ))
 end
 
-*(point:: Point3, r:: Float64):: Point3 = Point3(r .* point.coords)
-+(point1:: Point3, point2:: Point3):: Point3 = Point3(point1.coords + point2.coords)
+*(point:: Point3, r:: Float64):: Point3 = Point3(r .* coordinates(point))
++(point1:: Point3, point2:: Point3):: Point3 = Point3(coordinates(point1) + coordinates(point2))
 
 function unit_sphere_point(ϕ:: Float64, μ:: Float64):: Point3
     s = sqrt((1. - μ ^ 2))
@@ -74,14 +71,9 @@ function preliminary_surface_sections(us_sections:: Vector{UnitSphereSection}, b
     return [BubbleSection(sphere_s, i) for sphere_s in us_sections for i in eachindex(bubbles)]
 end
 
-function ≲(a:: Float64, b:: Float64):: Bool
-    return (a <= b) | (a ≈ b)
-end
-
 function surface_sections(us_sections:: Vector{UnitSphereSection}, bubbles:: Bubbles):: Vector{BubbleSection}
     pss = preliminary_surface_sections(us_sections, bubbles)
-    dm = pairwise(euc, centers(bubbles), bubble_point.(pss, (bubbles, )))
-    filt = sum((dm .≲ reshape(radii(bubbles), (length(bubbles), 1))), dims=1) .<= 1
+    filt = sum(reshape(bubbles.bubbles, :, 1) .∋ reshape(bubble_point.(pss, (bubbles, )), 1, :), dims=1) .<= 1
     return [p for (i, p) in enumerate(pss) if filt[i]]
 end
 

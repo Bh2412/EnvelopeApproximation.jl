@@ -1,16 +1,36 @@
 module EnvelopeApproximation
 
-import Meshes.Point3
-
-export Point3
-
 module BubbleBasics
 
 using Distances
-import Meshes: Point3, coordinates
 import Base.length
 import Base.∈
 import Base.keys
+using StaticArrays
+import LinearAlgebra: norm, ⋅
+import Base: +, -
+
+Vec3 = SVector{3, Float64}
+
+export Vec3, ⋅
+
+struct Point3
+    coordinates:: SVector{3, Float64}
+end
+
+Point3(args...) = Point3(Vec3(args...))
+
+export Point3
+
+coordinates(p:: Point3):: SVector{3, Float64} = p.coordinates
+
+export coordinates
+
++(p:: Point3, v:: Vec3):: Point3 = Point3(coordinates(p) .+ v)
+-(p1:: Point3, v:: Vec3):: Point3 = Point3(coordinates(p) .- v)
+-(p1:: Point3, p2:: Point3):: Vec3 = coordinates(p1) .- coordinates(p2)
+
+export +, -
 
 struct Bubble
     center:: Point3
@@ -50,13 +70,19 @@ keys(bs:: Bubbles) = keys(bs.bubbles)
 
 Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 
-euclidean = Euclidean()
-euc(point1:: Point3, point2:: Point3):: Float64 = euclidean(coordinates.([point1, point2])...)
+euc(v1:: Vec3, v2:: Vec3):: Float64 = norm(v1 - v2)
+euc(p1:: Point3, p2:: Point3):: Float64 = euc(coordinates(p1), coordinates(p2))
 
 export euc
 
-∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) <= bubble.radius
-∈(point:: Point3, bubbles:: Bubbles):: Bool = any(point .∈ bubbles.bubbles)
+function ≲(a:: Float64, b:: Float64):: Bool
+    return (a <= b) | (a ≈ b)
+end
+
+export ≲
+
+∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) ≲ bubble.radius
+∈(point:: Point3, bubbles:: Bubbles):: Bool = any(point in b for b in bubbles.bubbles)
 
 export ∈
 
@@ -76,7 +102,7 @@ end
 
 include("BubblesEvolution.jl")
 
-include("BubblesIntegration.jl")
+include("SurfaceIntergration.jl")
 
 include("StressEnergyTensor.jl")
 
