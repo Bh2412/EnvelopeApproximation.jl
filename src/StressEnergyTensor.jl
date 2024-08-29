@@ -50,7 +50,7 @@ function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_direct
     function _integrand(x:: SVector{2, Float64}, bubble_index:: Int):: Array{Complex, 2}
         p = bubble_point(x..., bubble_index, bubbles)
         return @. (_exp((p, ), ks)) * ($_td_integrand(x) * (bubbles[bubble_index].radius * c))
-    end>
+    end
     return _integrand
 end
 
