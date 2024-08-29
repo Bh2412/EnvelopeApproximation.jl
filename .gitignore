@@ -62,3 +62,5 @@ scripts/studying_performance/profiling.jl
 scripts/gravitational_potentials/gravitational_potential_fixed_k_varying_eta.json
 .gitignore
 scripts/studying_performance/profiling copy.jl
+scripts/studying_performance/profiling potential_integral.jl
+scripts/studying_performance/profiling surface_integral.jl

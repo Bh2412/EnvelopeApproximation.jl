@@ -113,7 +113,7 @@ end
 
 export surface_integral
 
-unit_sphere_point(p:: BubbleSection):: Point3 = unit_sphere_point(p.ϕ, p.μ)
+unit_sphere_point(p:: BubbleSection):: Point3 = unit_sphere_point(p.ϕ.c, p.μ.c)
 
 function element_projection(x:: SVector{2, Float64}, k:: Vec3):: Float64
     return unit_sphere_point(x) ⋅ k
@@ -132,7 +132,8 @@ function add_potential_section_contribution!(V:: Vector{ComplexF64},
     px = coordinate_transformation(x, s)
     p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 2) * measure(s) / 4π
-    @. V += exp((p, ), ks) * element_projection((px, ), ks) * c
+    usp = unit_sphere_point(s)
+    @. V += exp((p, ), ks) * ((usp, ) ⋅ ks) * c
 end
 
 function potential_integrand(x:: SVector{2, Float64}, 
