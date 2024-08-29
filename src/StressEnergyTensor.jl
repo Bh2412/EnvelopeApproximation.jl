@@ -9,8 +9,9 @@ import EnvelopeApproximation.SurfaceIntegration: surface_integral, BubbleSection
 using StaticArrays
 using HCubature
 import HCubature: hcubature
+using Tullio
 
-TensorDirection{N} = Union{Symbol, NTuple{N, Symbol}} where N
+TensorDirection = Union{Symbol, Tuple{Symbol, Symbol}}
 
 export TensorDirection
 
@@ -32,46 +33,61 @@ function td_integrand(x:: SVector{2, Float64}, tensor_direction:: Tuple{Symbol, 
     return td_integrand(x, tensor_direction[1]) * td_integrand(x, tensor_direction[2])
 end
 
-function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Vector):: Vector{Float64}
+function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Matrix):: Matrix{Float64}
     return td_integrand.((x, ), tensor_directions)
 end
 
 ⋅(p1:: Point3, p2:: Point3):: Float64 = coordinates(p1) ⋅ coordinates(p2)
+⋅(p1:: Point3, p2:: Point3):: Float64 = coordinates(p1) ⋅ coordinates(p2)
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
-_exp(p:: Point3, k:: Point3) = exp(-im * (p ⋅ k))
 
-function surface_integrand(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
-                           ΔV:: Float64 = 1.)
-    ks = reshape(ks, (length(ks), 1))
-    _td_integrand = (a -> reshape(a, (1, length(tensor_directions)))) ∘ (x -> td_integrand(x, tensor_directions)) 
-    c = (ΔV / 3)
-    function _integrand(x:: SVector{2, Float64}, bubble_index:: Int):: Array{Complex, 2}
-        p = bubble_point(x..., bubble_index, bubbles)
-        return @. (_exp((p, ), ks)) * ($_td_integrand(x) * (bubbles[bubble_index].radius * c))
-    end
-    return _integrand
+function _exp(p:: Point3, k:: Point3):: SVector{2, Float64}
+    d = p ⋅ k
+    return SVector{2, Float64}(cos(d), -sin(d))
 end
 
-measure(p:: BubbleSection) = p.ϕ.d * p.μ.d
-hcubature(f, p:: BubbleSection; kwargs...) = hcubature(f, [p.ϕ.c - p.ϕ.d / 2, p.μ.c - p.μ.d / 2], [p.ϕ.c + p.ϕ.d / 2, p.μ.c + p.μ.d / 2]; kwargs...)
+function coordinate_transformation(x:: SVector{2, Float64}, s:: BbleSection):: SVector{2, Float64}
+    """
+    The integration over each section is performed between (0., 2π), (-1., 1.), this transformation makes sure of that
+    """
+    return (x .* (s.ϕ.d / 2π, s.μ.d / 2)) .+ (s.ϕ.c + s.ϕ.d / 2 - π, s.μ.c)
+end
 
-function surface_section_average(ks:: Vector{Point3}, bubbles:: Bubbles, tensor_directions:: Vector, 
-                                 ΔV:: Float64 = 1.; kwargs...)
-    integrand = surface_integrand(ks, bubbles, tensor_directions, ΔV)
-    function _section_average(p:: BubbleSection):: Array{Complex, 2}
-        return (1 / measure(p)) * hcubature(x -> integrand(x, p.bubble_index), p; kwargs...)[1]
-    end 
-    return _section_average
+measure(s:: BubbleSection) = s.ϕ.d * s.μ.d
+
+function add_section_contribution!(V:: Array{Float64, 3}, x:: SVector{2, Float64}, s:: BubbleSection, ks:: Vector{Point3}, 
+                                   bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64)
+    px = coordinate_transformation(x, s)
+    p = bubble_point(px..., bubble)
+    c = (bubble.radius ^ 3 * (ΔV * measure(s) / 4π))
+    @inbounds @simd for i in 1:2
+        for (j, k) in enumerate(ks)
+            for (l, td) in enumerate(tensor_directions)
+                V[i, j, l] += _exp(p, k)[i] * td_integrand(px, td) * c
+            end
+        end
+    end
+end
+
+function surface_integrand(x:: SVector{2, Float64}, surface_sections:: Vector{BubbleSection}, ks:: Vector{Point3}, 
+                           bubbles:: Bubbles, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64):: Array{Float64, 3}
+    V = Array{Float64, 3}(undef, 2, length(ks), length(tensor_directions))
+    for section in surface_sections
+        add_section_contribution!(V, x, section, ks, bubbles[section.bubble_index], tensor_directions, ΔV)
+    end
+    return V
 end
 
 function surface_integral(ks:: Vector{Point3}, 
                           bubbles:: Bubbles, 
-                          tensor_directions:: Vector,
+                          tensor_directions:: Vector{TensorDirection},
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
-                          ΔV:: Float64 = 1.; kwargs...):: Array{ComplexF64, 2}
-    integrand = surface_section_average(ks, bubbles, tensor_directions, ΔV; kwargs...)
-    return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
+                          ΔV:: Float64 = 1.; kwargs...):: Array{Float64, 3}
+    sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
+    integrand(x:: SVector{2, Float64}):: Array{Float64, 3} = surface_integrand(x, sections, ks, bubbles, tensor_directions, ΔV)
+    x0, xf = SVector{2, Float64}(0., -1.), SVector{2, Float64}(2π, 1.)
+    return hcubature(integrand, x0, xf; kwargs...)[1]
 end
 
 function surface_integral(ks:: Vector{Point3}, 
