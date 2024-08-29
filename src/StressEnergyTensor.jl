@@ -37,10 +37,10 @@ function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Matrix):: Mat
     return td_integrand.((x, ), tensor_directions)
 end
 
-⋅(p1:: Point3, p2:: Point3):: Float64 = coordinates(p1) ⋅ coordinates(p2)
+⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
 
-function _exp(p:: Point3, k:: Point3):: SVector{2, Float64}
+function _exp(p:: Point3, k:: Vec3):: SVector{2, Float64}
     d = p ⋅ k
     return SVector{2, Float64}(cos(d), -sin(d))
 end
@@ -54,7 +54,7 @@ end
 
 measure(s:: BubbleSection) = s.ϕ.d * s.μ.d
 
-function add_section_contribution!(V:: Array{Float64, 3}, x:: SVector{2, Float64}, s:: BubbleSection, ks:: Vector{Point3}, 
+function add_section_contribution!(V:: Array{Float64, 3}, x:: SVector{2, Float64}, s:: BubbleSection, ks:: Vector{Vec3}, 
                                    bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64)
     px = coordinate_transformation(x, s)
     p = bubble_point(px..., bubble)
@@ -64,7 +64,7 @@ function add_section_contribution!(V:: Array{Float64, 3}, x:: SVector{2, Float64
     end
 end
 
-function surface_integrand(x:: SVector{2, Float64}, surface_sections:: Vector{BubbleSection}, ks:: Vector{Point3}, 
+function surface_integrand(x:: SVector{2, Float64}, surface_sections:: Vector{BubbleSection}, ks:: Vector{Vec3}, 
                            bubbles:: Bubbles, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64):: Array{Float64, 3}
     V = zeros(Float64, 2, length(ks), length(tensor_directions))
     for section in surface_sections
@@ -73,7 +73,7 @@ function surface_integrand(x:: SVector{2, Float64}, surface_sections:: Vector{Bu
     return V
 end
 
-function surface_integral(ks:: Vector{Point3}, 
+function surface_integral(ks:: Vector{Vec3}, 
                           bubbles:: Bubbles, 
                           tensor_directions:: Vector{TensorDirection},
                           ϕ_resolution:: Float64,
@@ -86,7 +86,7 @@ function surface_integral(ks:: Vector{Point3},
     return reshape(reinterpret(ComplexF64, V), length(ks), length(tensor_directions))
 end
 
-function surface_integral(ks:: Vector{Point3}, 
+function surface_integral(ks:: Vector{Vec3}, 
                           bubbles:: Bubbles, 
                           tensor_directions:: Vector,
                           n_ϕ:: Int64, 
@@ -100,11 +100,11 @@ export surface_integral
 
 unit_sphere_point(p:: BubbleSection) = unit_sphere_point(p.ϕ, p.μ)
 
-function element_projection(x:: SVector{2, Float64}, ks:: Vector{Point3}):: Vector{Float64}
+function element_projection(x:: SVector{2, Float64}, ks:: Vector{Vec3}):: Vector{Float64}
     return unit_sphere_point(x) .⋅ ks
 end
 
-function potential_integrand(ks:: Vector{Point3}, bubbles:: Bubbles,
+function potential_integrand(ks:: Vector{Vec3}, bubbles:: Bubbles,
                              ΔV:: Float64 = 1.):: Function
     projection = x -> element_projection(x, ks)
     #=
@@ -118,7 +118,7 @@ function potential_integrand(ks:: Vector{Point3}, bubbles:: Bubbles,
     end
 end
 
-function potential_section_average(ks:: Vector{Point3}, bubbles:: Bubbles,
+function potential_section_average(ks:: Vector{Vec3}, bubbles:: Bubbles,
                                    ΔV:: Float64 = 1.; kwargs...)
     integrand = potential_integrand(ks, bubbles, ΔV)
     function _section_average(p:: BubbleSection):: Vector{ComplexF64}
@@ -127,7 +127,7 @@ function potential_section_average(ks:: Vector{Point3}, bubbles:: Bubbles,
     return _section_average
 end
 
-function potential_integral(ks:: Vector{Point3}, 
+function potential_integral(ks:: Vector{Vec3}, 
                             bubbles:: Bubbles, 
                             ϕ_resolution:: Float64, 
                             μ_resolution:: Float64, 
@@ -136,7 +136,7 @@ function potential_integral(ks:: Vector{Point3},
     return surface_integral(integrand, bubbles, ϕ_resolution, μ_resolution)
 end
 
-function potential_integral(ks:: Vector{Point3}, 
+function potential_integral(ks:: Vector{Vec3}, 
                             bubbles:: Bubbles, 
                             n_ϕ:: Int64, 
                             n_μ:: Int64, 
@@ -151,7 +151,7 @@ diagonal = [(s, s) for s in CARTESIAN_DIRECTIONS]
 above_diagonal = [(:x, :y), (:x, :z), (:y, :z)]
 upper_right = vcat(diagonal, above_diagonal)
 
-function T_ij(ks:: Vector{Point3}, 
+function T_ij(ks:: Vector{Vec3}, 
               bubbles:: Bubbles, 
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
@@ -177,7 +177,7 @@ function T_ij(ks:: Vector{Point3},
     return T
 end
 
-function T_ij(ks:: Vector{Point3}, 
+function T_ij(ks:: Vector{Vec3}, 
               bubbles:: Bubbles, 
               n_ϕ:: Int64,
               n_μ:: Int64,
@@ -187,7 +187,7 @@ function T_ij(ks:: Vector{Point3},
     return T_ij(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
 
-function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
+function T_ij(ks:: Vector{Vec3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
@@ -202,7 +202,7 @@ function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Fl
     return M
 end
 
-function T_ij(ks:: Vector{Point3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
+function T_ij(ks:: Vector{Vec3}, snapshot:: BubblesSnapShot, times:: Vector{Float64}, 
               n_ϕ:: Int64,
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
