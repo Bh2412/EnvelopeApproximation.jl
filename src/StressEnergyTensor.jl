@@ -5,7 +5,7 @@ import EnvelopeApproximation.BubbleBasics: ⋅
 using EnvelopeApproximation.BubblesEvolution
 using Base.Iterators
 import Base./
-import EnvelopeApproximation.SurfaceIntegration: surface_integral, BubbleSection, unit_sphere_point, bubble_point
+import EnvelopeApproximation.SurfaceIntegration: surface_sections, BubbleSection, unit_sphere_point, bubble_point
 using StaticArrays
 using HCubature
 import HCubature: hcubature
@@ -37,7 +37,6 @@ function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Matrix):: Mat
     return td_integrand.((x, ), tensor_directions)
 end
 
-⋅(p1:: Point3, p2:: Point3):: Float64 = coordinates(p1) ⋅ coordinates(p2)
 ⋅(p1:: Point3, p2:: Point3):: Float64 = coordinates(p1) ⋅ coordinates(p2)
 /(p:: Point3, d:: Float64):: Point3 = Point3((coordinates(p) / d)...)
 
