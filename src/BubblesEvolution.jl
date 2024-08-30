@@ -1,9 +1,7 @@
 module BubblesEvolution
 
 using EnvelopeApproximation.BubbleBasics
-import Meshes.Point3
-import Meshes.Vec3
-import Meshes.coordinates
+import EnvelopeApproximation.BubbleBasics: Vec3, Point3, coordinates
 import Random.AbstractRNG
 using StatsBase
 import StatsBase.sample
@@ -13,7 +11,7 @@ using Distributions
 import Base.isless
 import Random
 
-Nucleation = NamedTuple{(:time, :site)}
+Nucleation = @NamedTuple{time:: Float64, site:: Point3}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
 
 struct BubblesSnapShot
@@ -26,6 +24,7 @@ export BubblesSnapShot
 
 speed_of_light_profile(t:: Float64, c:: Float64 = 1.):: Float64 = c * t 
 
+BubblesSnapShot(nucleations:: Vector{Nucleation}, t:: Float64) = BubblesSnapShot(nucleations, t, speed_of_light_profile)
 BubblesSnapShot() = BubblesSnapShot(Vector{Nucleation}(), 0., speed_of_light_profile)
 
 export BubblesSnapShot
@@ -43,11 +42,13 @@ end
 
 export evolve
 
-function current_bubbles(snap:: BubblesSnapShot, t:: Union{Float64, Nothing} = nothing):: Bubbles
-    if t ≡ nothing
-        t = snap.t
-    end
-    return Bubbles([Bubble(nuc[:site], snap.radial_profile(t - nuc[:time])) for nuc in snap.nucleations])
+function current_bubbles(snap:: BubblesSnapShot):: Bubbles
+    t = snap.t
+    Bubbles([Bubble(nuc[:site], snap.radial_profile(t - nuc[:time])) for nuc in snap.nucleations])
+end
+
+function current_bubbles(snap:: BubblesSnapShot, t:: Float64):: Bubbles
+    return current_bubbles(at_earlier_time(snap, t))
 end
 
 export current_bubbles
@@ -74,7 +75,7 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
     μ = rand(rng, Uniform(-1., 1.), n)
     v = begin
         s = (x -> sqrt(1 - x^2)).(μ)
-        Vec3.(r .* s .* cos.(ϕ), r .* s .* sin.(ϕ), r .* μ)
+        @. Vec3(r * s * cos(ϕ), r * s * sin(ϕ), r * μ)
     end
     return space.center .+ v
 end

@@ -1,9 +1,7 @@
 using EnvelopeApproximation
-using EnvelopeApproximation.BubblesIntegration
 using Test
 using EnvelopeApproximation.BubbleBasics
-import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration as SI
-import EnvelopeApproximation.BubblesIntegration.VolumeIntegration as VI
+import EnvelopeApproximation.SurfaceIntegration as SI
 import EnvelopeApproximation.GravitationalPotentials as GP
 using Meshes
 
@@ -75,12 +73,23 @@ using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 end
 @testset "cosine_source" begin
     frequency = 2π / 5
-    times = LinRange(0., π / 2, 1000)
+    times = LinRange(0., π / 2, 1000) |> collect
     s_vals = -(frequency ^ 2) * cos.(frequency * times)
     s = Source(times, s_vals)
     numerical_solution = ode_solution(s)
     exact_solution = cos.(frequency * times) .- 1
+    println(max(abs.(numerical_solution - exact_solution)...))
     @test isapprox(numerical_solution, exact_solution, atol=1e-4)
+end
+@testset "MultiDimensional cosine_source" begin
+    frequencies = [2π / i for i in 2:17] |> x -> reshape(x, 1, 4, 4)
+    times = LinRange(0., π / 2, 1000) |> collect |> x -> reshape(x, :, 1, 1)
+    s_vals = @. -(frequencies ^ 2) * cos(frequencies * times)
+    s = Source(times |> x -> reshape(x, :), s_vals)
+    numerical_solution = ode_solution(s)
+    exact_solution = @. cos(frequencies * times) - 1
+    println(max(abs.(numerical_solution - exact_solution)...))
+    @test isapprox(numerical_solution, exact_solution, atol=1e-3)
 end
 end
 
@@ -90,26 +99,15 @@ end
     import Meshes.+
     using EnvelopeApproximation
     import EnvelopeApproximation.BubbleBasics: Bubble, Bubbles
-    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubblePoint
-    import EnvelopeApproximation.StressEnergyTensor: surface_integral, td_integrand, _exp, volume_integral, T_ij
+    import EnvelopeApproximation.BubblesIntegration.SurfaceIntegration: BubbleSection, Section, surface_sections
+    import EnvelopeApproximation.StressEnergyTensor: coordinate_transformation
+    using StaticArrays
     using Plots
     
     R = 3.
     bubble_center = Point3(0., 0., 1.)
     bubbles = Bubbles([Bubble(bubble_center, R)])
-    μs = LinRange(-1., 1., 100)
-    xx_td_integrand = td_integrand((:x, :x), bubbles)
-    zz_td_integrand = td_integrand((:z, :z), bubbles)
-    ps = [BubblePoint(bubble_center + Point3(R * (1 - μ ^ 2) ^ (1/2), 0., R * μ), 1) for μ in LinRange(-1., 1., 100)]
-    @test xx_td_integrand.(ps) ≈ 1 .- μs .^ 2
-    @test zz_td_integrand.(ps) ≈ μs .^ 2 
-    ks = [Point3(0., 0., z) for z in LinRange(0., 10., 11)]
-    tensor_directions = [:trace, (:x, :x), (:y, :y), (:z, :z)]
-    si = surface_integral(ks, bubbles, tensor_directions, 10, 10)
-    @test size(si) == (length(ks), length(tensor_directions))
-    @test reshape(si[:, 1], length(ks)) ≈ sum(si[:, 2:4], dims=2) |> x -> reshape(x, length(ks))
-    vi = volume_integral(ks, bubbles, 10, 10, 10)
-    T = T_ij(ks, bubbles, 10, 10, 10)
-    print(T)
+    sections = surface_sections(2, 2, bubbles)
+    @show coordinate_transformation(SVector{2, Float64}(0., 0.), sections[1])
 end;
 
