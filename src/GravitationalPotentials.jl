@@ -39,15 +39,13 @@ end
 function ode_solution(source:: Source{Vector{Float64}}):: Vector{Float64}
     pr_matrix = pulse_response_matrix(source.times)
     sv = source_values(source)
-    @tullio v[j] := pr_matrix[j, l] * sv[l]
-    return v
+    return pr_matrix * sv
 end
 
 function ode_solution(source:: Source{T}):: T where T <: Matrix
     pr_matrix = pulse_response_matrix(source.times)
     sv = source_values(source)
-    @tullio M[i, j] := pr_matrix[i, l] * sv[l, j]
-    return M
+    return pr_matrix * sv
 end
 
 function ode_solution(source:: Source{Array{Float64, 3}}):: Array{Float64, 3}
@@ -70,8 +68,8 @@ import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
 import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_diagonal
 import LinearAlgebra: norm
 
-function hat(v:: Point3):: Vec3
-    return coordinates(v) / norm(v)
+function hat(v:: Vec3):: Vec3
+    return v ./ norm(v)
 end
 
 function normalized_auto_outer_product(k:: Vec3, td:: Tuple{Symbol, Symbol})
@@ -82,11 +80,11 @@ function normalized_auto_outer_product(k:: Vec3, td:: Tuple{Symbol, Symbol})
     return prod(k[indices])
 end
 
-function normalized_auto_outer_product(ks:: Vector{Point3}, tds:: Vector):: Array{Float64, 2}
+function normalized_auto_outer_product(ks:: Vector{Vec3}, tds:: Vector):: Array{Float64, 2}
     return normalized_auto_outer_product.(reshape(hat.(ks), :, 1), reshape(tds, 1, :))
 end
 
-function ψ_source(ks:: Vector{Point3}, 
+function ψ_source(ks:: Vector{Vec3}, 
                   T:: Matrix{ComplexF64}, 
                   tensor_directions:: Vector, 
                   a = 1., 
@@ -95,18 +93,18 @@ function ψ_source(ks:: Vector{Point3},
     ψ'' = 4πG_N a^2 
     ```        
     k_ik_j = normalized_auto_outer_product(ks, tensor_directions)
-    V = Vector{ComplexF64}(undef, length(ks))
+    V = zeros(ComplexF64, length(ks))
     for (i, td) in enumerate(tensor_directions)
         if td in above_diagonal
-            V += (2 * k_ik_j[:, i]) .* T[:, i]
+            @. V += (2 * k_ik_j[:, i]) * T[:, i]
         elseif td in diagonal
-            V += k_ik_j[:, i] .* T[:, i] 
+            @. V += k_ik_j[:, i] * T[:, i] 
         end
     end
     return (4π * a^2 * G) * V  
 end
 
-function ψ_source(ks:: Vector{Point3}, 
+function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
                   times:: Vector{Float64}, 
                   ϕ_resolution:: Float64,
@@ -115,7 +113,7 @@ function ψ_source(ks:: Vector{Point3},
                   a:: Float64 = 1., 
                   G:: Float64 = 1.; 
                   kwargs...):: Matrix{ComplexF64}
-    tensor_directions = upper_right
+    tensor_directions = Vector{TensorDirection}(upper_right)
     S = Matrix{ComplexF64}(undef, length(times), length(ks))
     for (i, t) in enumerate(times)
         bubbles = current_bubbles(snapshot, t)
@@ -125,7 +123,7 @@ function ψ_source(ks:: Vector{Point3},
     return S
 end
 
-function ψ_source(ks:: Vector{Point3}, 
+function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
                   times:: Vector{Float64}, 
                   n_ϕ:: Int64,
@@ -144,7 +142,7 @@ function ψ(times:: Vector{Float64},
     return ode_solution(source)
 end
 
-function ψ(ks:: Vector{Point3}, 
+function ψ(ks:: Vector{Vec3}, 
            snapshot:: BubblesSnapShot, 
            times:: Vector{Float64}, 
            ϕ_resolution:: Float64, 
@@ -158,7 +156,7 @@ function ψ(ks:: Vector{Point3},
     return ψ(times, S)
 end
 
-function ψ(ks:: Vector{Point3}, 
+function ψ(ks:: Vector{Vec3}, 
            snapshot:: BubblesSnapShot, 
            times:: Vector{Float64}, 
            n_ϕ:: Int64, 
