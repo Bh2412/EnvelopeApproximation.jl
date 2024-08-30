@@ -43,11 +43,6 @@ end
 
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 
-function real_exp(p:: Point3, k:: Vec3):: SVector{2, Float64}
-    d = p ⋅ k
-    return SVector{2, Float64}(cos(d), -sin(d))
-end
-
 exp(p:: Point3, k:: Vec3):: ComplexF64 = begin
     d = p ⋅ k
     return cos(d) - im * sin(d)
@@ -120,12 +115,6 @@ end
 
 export surface_integral
 
-unit_sphere_point(p:: BubbleSection):: Point3 = unit_sphere_point(p.ϕ.c, p.μ.c)
-
-function element_projection(x:: SVector{2, Float64}, k:: Vec3):: Float64
-    return unit_sphere_point(x) ⋅ k
-end
-
 
 function add_potential_section_contribution!(V:: Vector{ComplexF64}, 
                                              x:: SVector{2, Float64},
@@ -135,7 +124,7 @@ function add_potential_section_contribution!(V:: Vector{ComplexF64},
     px = coordinate_transformation(x, s)
     p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 2) * measure(s) / 4π
-    usp = unit_sphere_point(s)
+    usp = unit_sphere_point(px)
     @. V += exp((p, ), ks) * ((usp, ) ⋅ ks) * c
 end
 
