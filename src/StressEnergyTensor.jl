@@ -183,9 +183,9 @@ function T_ij(ks:: Vector{Vec3},
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector, Nothing} = nothing; 
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
               kwargs...):: Array{ComplexF64, 2}
-    isnothing(tensor_directions) && (tensor_directions = vcat([:trace], upper_right))
+    isnothing(tensor_directions) && (tensor_directions = Vector{TensorDirection}(vcat([:trace], upper_right)))
     sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
     T = surface_integral(ks, bubbles, tensor_directions, sections, 
                          ΔV; kwargs...)
@@ -218,7 +218,7 @@ function T_ij(ks:: Vector{Vec3}, snapshot:: BubblesSnapShot, times:: Vector{Floa
               ϕ_resolution:: Float64,
               μ_resolution:: Float64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector, Nothing} = nothing; 
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
               kwargs...):: Array{ComplexF64, 3}
     _bubbles(t) = current_bubbles(at_earlier_time(snapshot, t))
     M = Array{ComplexF64, 3}(undef, length(times), length(ks), length(tensor_directions))
@@ -233,7 +233,7 @@ function T_ij(ks:: Vector{Vec3}, snapshot:: BubblesSnapShot, times:: Vector{Floa
               n_ϕ:: Int64,
               n_μ:: Int64,
               ΔV:: Float64 = 1., 
-              tensor_directions:: Union{Vector, Nothing} = nothing; 
+              tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
               kwargs...):: Array{ComplexF64, 3}
     return T_ij(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, ΔV, tensor_directions; kwargs...)
 end
