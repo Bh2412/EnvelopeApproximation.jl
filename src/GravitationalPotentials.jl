@@ -66,6 +66,7 @@ using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.StressEnergyTensor
 import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
 import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_diagonal
+using HCubature
 import LinearAlgebra: norm
 
 function hat(v:: Vec3):: Vec3
@@ -106,6 +107,21 @@ end
 
 function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
+                  t:: Float64, 
+                  ϕ_resolution:: Float64,
+                  μ_resolution:: Float64,
+                  ΔV:: Float64 = 1., 
+                  a:: Float64 = 1., 
+                  G:: Float64 = 1.; 
+                  kwargs...):: Vector{ComplexF64}
+    tensor_directions = Vector{TensorDirection}(upper_right)
+    bubbles = current_bubbles(snapshot, t)
+    T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
+    return ψ_source(ks, T, tensor_directions, a, G)
+end
+
+function ψ_source(ks:: Vector{Vec3}, 
+                  snapshot:: BubblesSnapShot, 
                   times:: Vector{Float64}, 
                   ϕ_resolution:: Float64,
                   μ_resolution:: Float64,
@@ -114,7 +130,7 @@ function ψ_source(ks:: Vector{Vec3},
                   G:: Float64 = 1.; 
                   kwargs...):: Matrix{ComplexF64}
     tensor_directions = Vector{TensorDirection}(upper_right)
-    S = Matrix{ComplexF64}(undef, length(times), length(ks))
+    S = zeros(ComplexF64, length(times), length(ks))
     for (i, t) in enumerate(times)
         bubbles = current_bubbles(snapshot, t)
         T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
@@ -134,6 +150,32 @@ function ψ_source(ks:: Vector{Vec3},
                   kwargs...):: Matrix{ComplexF64}
     return ψ_source(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, 
                     ΔV, a, G; kwargs...)
+end
+
+function quad_ψ(ks:: Vector{Vec3}, 
+                snapshot:: BubblesSnapShot, 
+                t:: Float64, 
+                ϕ_resolution:: Float64,
+                μ_resolution:: Float64,
+                ΔV:: Float64 = 1., 
+                a:: Float64 = 1., 
+                G:: Float64 = 1.; 
+                kwargs...)
+    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ, ϕ_resolution, μ_resolution, 
+                                                   ΔV, a, G; kwargs...) * (t - τ)
+    return hquadrature(f, 0., t; kwargs...)[1]
+end
+
+function quad_ψ(ks:: Vector{Vec3}, 
+                snapshot:: BubblesSnapShot, 
+                t:: Float64, 
+                n_ϕ:: Int64,
+                n_μ:: Int64,
+                ΔV:: Float64 = 1., 
+                a:: Float64 = 1., 
+                G:: Float64 = 1.; 
+                kwargs...)
+    return quad_ψ(ks, snapshot, t, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
 end
 
 function ψ(times:: Vector{Float64}, 

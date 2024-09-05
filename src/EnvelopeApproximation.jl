@@ -70,8 +70,7 @@ keys(bs:: Bubbles) = keys(bs.bubbles)
 
 Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 
-euc(v1:: Vec3, v2:: Vec3):: Float64 = norm(v1 - v2)
-euc(p1:: Point3, p2:: Point3):: Float64 = euc(coordinates(p1), coordinates(p2))
+euc(p1:: Point3, p2:: Point3):: Float64 = norm(coordinates(p1) - coordinates(p2))
 
 export euc
 
