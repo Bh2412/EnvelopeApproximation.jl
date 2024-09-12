@@ -30,7 +30,7 @@ function Ylm_decomposition!(V:: Matrix{Float64}, f:: Function, n:: Int)
     Θ, Φ = sph_points(n)
     Θ = reshape(Θ, :, 1)
     Φ = reshape(Φ, 1, :)
-    V .= f.(Θ, Φ)
+    @. V = f(Θ, Φ)
     sph_transform!(V)
 end
 
@@ -140,6 +140,7 @@ end
 using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.StressEnergyTensor
+using Plots
 
 R = 1.
 bubbles = Bubbles([Bubble(Point3(0., 0., 0.), R)])
