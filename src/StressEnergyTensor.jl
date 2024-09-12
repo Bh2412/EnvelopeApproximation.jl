@@ -4,11 +4,10 @@ using EnvelopeApproximation.BubbleBasics
 import EnvelopeApproximation.BubbleBasics: ⋅
 using EnvelopeApproximation.BubblesEvolution
 using Base.Iterators
-import EnvelopeApproximation.SurfaceIntegration: surface_sections, BubbleSection, unit_sphere_point, bubble_point
+import EnvelopeApproximation.SurfaceTesselation: surface_sections, BubbleSection, unit_sphere_point, bubble_point
 using StaticArrays
 using HCubature
 import HCubature: hcubature
-using Tullio
 import Base: exp
 
 TensorDirection = Union{Symbol, Tuple{Symbol, Symbol}}

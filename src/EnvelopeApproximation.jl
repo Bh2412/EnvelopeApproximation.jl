@@ -101,7 +101,7 @@ end
 
 include("BubblesEvolution.jl")
 
-include("SurfaceIntergration.jl")
+include("SurfaceTesselation.jl")
 
 include("StressEnergyTensor.jl")
 

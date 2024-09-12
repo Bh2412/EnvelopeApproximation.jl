@@ -1,4 +1,4 @@
-module SurfaceIntegration
+module SurfaceTesselation
 using EnvelopeApproximation.BubbleBasics
 import Base
 import Base: *, +, ∈, push!
@@ -21,6 +21,7 @@ struct Section
 end
 
 function unit_sphere_tesselation(ϕ_resolution:: Float64, μ_resolution:: Float64):: Tuple{Vector{Section}, Vector{Section}}
+    n_ϕ, n_μ = ns(ϕ_resolution, μ_resolution)
     ϕ, μ = middle.(bounds(ϕ_resolution, μ_resolution))
     return Section.(ϕ, (2π / n_ϕ, )), Section.(μ, (2. / n_μ, ))
 end
