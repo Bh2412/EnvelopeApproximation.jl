@@ -6,23 +6,23 @@ using SphericalHarmonics
 
 # For a single bubble
 
-function td_integrand(ϕ:: Float64, μ:: Float64, s:: Symbol):: Float64
+function td_integrand(θ:: Float64, ϕ:: Float64, s:: Symbol):: Float64
     if s ≡ :trace
         return 1.
     elseif s ≡ :x
-        return cos(ϕ) * √(1 - μ ^ 2)
+        return cos(ϕ) * sin(θ)
     elseif s ≡ :y
-        return sin(ϕ) * √(1 - μ ^ 2)
+        return sin(ϕ) * sin(θ)
     elseif s ≡ :z
-        return μ
+        return cos(θ)
     end
 end
 
-function td_integrand(ϕ:: Float64, μ:: Float64, td:: Tuple{Symbol, Symbol}):: Float64 
-    td ≡ (:x, :x) && return cos(ϕ) ^ 2 * (1 - μ ^ 2)
-    td ≡ (:y, :y) && return sin(ϕ) ^ 2 * (1 - μ ^ 2)
+function td_integrand(θ:: Float64, ϕ:: Float64, td:: Tuple{Symbol, Symbol}):: Float64 
+    td ≡ (:x, :x) && return cos(ϕ) ^ 2 * (sin(θ) ^ 2)
+    td ≡ (:y, :y) && return sin(ϕ) ^ 2 * (sin(θ) ^ 2)
     td ≡ (:z, :z) && return μ ^ 2
-    ((td ≡ (:x, :y)) | (td ≡ (:y, :x))) && return cos(ϕ) * sin(ϕ) * (1 - μ ^ 2)
+    ((td ≡ (:x, :y)) | (td ≡ (:y, :x))) && return cos(ϕ) * sin(ϕ) * (sin(θ) ^ 2)
     return td_integrand(ϕ, μ, td[1]) * td_integrand(ϕ, μ, td[2])
 end
 
@@ -136,4 +136,33 @@ function spherical_planewave_decomposition(f:: Function, n:: Int64, k_r:: StepRa
     return @. $sph_sum(V * KM)
 end
 
+
+using EnvelopeApproximation
+using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.StressEnergyTensor
+
+R = 1.
+bubbles = Bubbles([Bubble(Point3(0., 0., 0.), R)])
+
+k_0 = 2π / R
+ks = (k_0 / 10):(k_0 / 10):(k_0 * 10)
+k_vecs = (x -> Vec3(0., 0., x)).(ks)
+
+function integrand(θ:: Float64, ϕ:: Float64, tensor_direction:: TensorDirection)
+    return td_integrand(θ, ϕ, tensor_direction) * (ΔV / 3. * R ^ 3)
+end
+
+ΔV = 1.
+analytic_T_ii = @. ((ΔV * 4π / 3) * (R ^ 3)) * sin(ks * R) / (ks * R)  
+plot(ks, analytic_T_ii)
+sph_T_ii = spherical_planewave_decomposition((θ, ϕ) -> integrand(θ, ϕ, :trace), 
+                                             10, ks, 0.:0., 0.:0.) .|> real
+@time spherical_planewave_decomposition((θ, ϕ) -> integrand(θ, ϕ, :trace), 
+50, ks, 0.:0., 0.:0.) .|> real
+@time numerical_T_ii = surface_integral(k_vecs, bubbles, Vector{TensorDirection}([:trace]), 50, 50, ΔV)
+
+analytic_T_xx = @. 4π / 3 * ΔV  / (ks ^ 3) * (sin(ks * R) - (ks * R) * cos(ks * R))
+@time sph_T_xx = spherical_planewave_decomposition((θ, ϕ) -> integrand(θ, ϕ, (:x, :x)), 
+10, ks, 0.:0., 0.:0.) .|> real |> x -> reshape(x, :)
+@time numeric_T_xx = surface_integral(k_vecs, bubbles, Vector{TensorDirection}([(:x, :x)]), 50, 50, ΔV)
 
