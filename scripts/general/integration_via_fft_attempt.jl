@@ -21,9 +21,9 @@ end
 function td_integrand(θ:: Float64, ϕ:: Float64, td:: Tuple{Symbol, Symbol}):: Float64 
     td ≡ (:x, :x) && return cos(ϕ) ^ 2 * (sin(θ) ^ 2)
     td ≡ (:y, :y) && return sin(ϕ) ^ 2 * (sin(θ) ^ 2)
-    td ≡ (:z, :z) && return μ ^ 2
+    td ≡ (:z, :z) && return cos(θ) ^ 2
     ((td ≡ (:x, :y)) | (td ≡ (:y, :x))) && return cos(ϕ) * sin(ϕ) * (sin(θ) ^ 2)
-    return td_integrand(ϕ, μ, td[1]) * td_integrand(ϕ, μ, td[2])
+    return td_integrand(θ, ϕ, td[1]) * td_integrand(θ, ϕ, td[2])
 end
 
 function Ylm_decomposition!(V:: Matrix{Float64}, f:: Function, n:: Int)
@@ -166,3 +166,6 @@ analytic_T_xx = @. 4π / 3 * ΔV  / (ks ^ 3) * (sin(ks * R) - (ks * R) * cos(ks 
 10, ks, 0.:0., 0.:0.) .|> real |> x -> reshape(x, :)
 @time numeric_T_xx = surface_integral(k_vecs, bubbles, Vector{TensorDirection}([(:x, :x)]), 50, 50, ΔV)
 
+analytic_T_zz = @.(4π / 3 * ΔV * (1 / (ks ^ 3)) * (2 * ks * R * cos(ks * R) + (R^2 * ks^2 - 2) * sin(ks * R)))
+@time sph_T_zz = spherical_planewave_decomposition((θ, ϕ) -> integrand(θ, ϕ, (:z, :z)), 100, 
+ks, 0.:0., 0.:0.) .|> real |> x -> reshape(x, :)
