@@ -1,7 +1,7 @@
 module SurfaceTesselation
 using EnvelopeApproximation.BubbleBasics
 import Base
-import Base: *, +, ∈, push!
+import Base: *, +, ∈, ∉, push!
 import Distances.pairwise
 
 n(range:: Float64, resolution:: Float64):: Int64 = ceil(Int64, range / resolution)
@@ -97,9 +97,11 @@ struct BubbleIntersection
     
     function BubbleIntersection(μ:: AbstractVector{Float64}, ϕ:: AbstractVector{Float64}, bubble_index:: Int, included:: Union{Set{CartesianIndex{2}}, Nothing} = nothing)
         included ≡ nothing && (included = Set{CartesianIndex{2}}())
-        return new(sort(μ), sort(ϕ), included)
+        return new(sort(μ), sort(ϕ), bubble_index, included)
     end
 end
+
+export BubbleIntersection
 
 push!(bi:: BubbleIntersection, ind:: CartesianIndex{2}) = push!(bi.included, ind)
 
@@ -117,6 +119,12 @@ function ∈(μ:: Float64, ϕ:: Float64, bi:: BubbleIntersection):: Bool
     return idx(μ, ϕ, bi) ∈ bi.included
 end
 
+function ∉(μ:: Float64, ϕ:: Float64, bi:: BubbleIntersection):: Bool
+    return idx(μ, ϕ, bi) ∉ bi.included
+end
+
+export ∈, ∉
+
 function bubble_intersections(ϕ_resolution:: Float64, μ_resolution:: Float64, bubbles:: Bubbles):: Dict{Int64, BubbleIntersection}
     sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
     ϕ_limits, μ_limits = bounds(ϕ_resolution, μ_resolution)
@@ -125,9 +133,15 @@ function bubble_intersections(ϕ_resolution:: Float64, μ_resolution:: Float64, 
         if section.bubble_index ∉ keys(d)
             d[section.bubble_index] = BubbleIntersection(μ_limits, ϕ_limits, section.bubble_index)
         end
-        push!(d[section.bubble_index], idx(s, μ_limits, ϕ_limits))
+        push!(d[section.bubble_index], idx(section, μ_limits, ϕ_limits))
     end
     return d
 end
+
+function bubble_intersections(n_ϕ:: Int64, n_μ:: Int64, bubbles:: Bubbles):: Dict{Int64, BubbleIntersection}
+    return bubble_intersections(2π / n_ϕ, 2. / n_μ, bubbles)
+end
+
+export bubble_intersections
 
 end

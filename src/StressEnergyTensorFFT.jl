@@ -1,5 +1,6 @@
 module StressEnergyTensorFFT
 using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.SurfaceTesselation
 using FastSphericalHarmonics
 using StaticArrays
 using SpecialFunctions
@@ -64,12 +65,12 @@ function Ylm_decomposition!(V:: Array{Float64, 3}, f:: SphericalIntegrand{SVecto
         V[l, m, :] = f(θ, ϕ)
     end
     @inbounds for k in 1:K
-        @views sph_transform!(V[:, :, k])
+        V[:, :, k] .= sph_transform(V[:, :, k])
     end
 end
 
 function Ylm_decomposition(f:: SphericalIntegrand{SVector{K, Float64}}, n:: Int):: Array{Float64, 3} where K
-    V = Array{3, Float64}(undef, n, 2 * n - 1, K)
+    V = Array{Float64, 3}(undef, n, 2 * n - 1, K)
     Ylm_decomposition!(V, f, n)
     return V
 end
@@ -82,6 +83,11 @@ end
 function sph_sum(V:: Array{T, 5}):: Array{T, 3} where T
     lmax = sph_lmax(size(V)[1])
     @views sum(V[sph_mode(l, m), :, :, :] for l ∈ 0:lmax for m ∈ -l:l)
+end
+
+function sph_sum(V:: Array{T, 6}):: Array{T, 4} where T
+    lmax = sph_lmax(size(V)[1])
+    @views sum(V[sph_mode(l, m), :, :, :, :] for l ∈ 0:lmax for m ∈ -l:l)
 end
 
 function k_matrix!(KM:: Array{ComplexF64, 5}, 
@@ -112,7 +118,7 @@ end
 
 export spherical_planewave_decomposition
 """
-Computes an integral of the form $e^(-i * k⋅ r) f$ over a sphere's surface, for various values of k, using a spherical FFT algorithm.
+Computes an integral of the form e^(-i * k⋅ r) over a sphere's surface, for various values of k, using a spherical FFT algorithm.
 """
 function spherical_planewave_decomposition(f:: SphericalIntegrand{Float64}, 
                                            n:: Int64, 
@@ -124,11 +130,11 @@ function spherical_planewave_decomposition(f:: SphericalIntegrand{Float64},
     return @. $sph_sum(V * KM)
 end
 
-function spherical_planewave_decomposition(f:: SphericalIntegrand{SVector{K, Float64}} where K, 
+function spherical_planewave_decomposition(f:: SphericalIntegrand{SVector{K, Float64}}, 
                                            n:: Int64, 
                                            k_r:: AbstractVector{Float64}, 
                                            k_Θ:: AbstractVector{Float64}, 
-                                           k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 4}
+                                           k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 4} where K
     V = reshape(Ylm_decomposition(f, n), n, 2 * n - 1, 1, 1, 1, K)
     KM = reshape(k_matrix(k_r, k_Θ, k_Φ, n), n, 2 * n - 1, length(k_r), length(k_Θ), length(k_Φ), 1)
     return @. $sph_sum(V * KM)
@@ -146,7 +152,10 @@ SphericalZX = SphericalXZ
 struct SphericalYY <: SphericalIntegrand{Float64} end
 struct SphericalYZ <: SphericalIntegrand{Float64} end
 struct SphericalZZ <: SphericalIntegrand{Float64} end
-
+TensorDirection = Union{SphericalTrace, SphericalXhat, 
+                        SphericalYhat, SphericalZhat, 
+                        SphericalXX, SphericalXY, SphericalXZ, 
+                        SphericalYY, SphericalZZ}
 
 (st:: SphericalTrace)(Θ:: Float64, Φ:: Float64):: Float64 = 1.
 (st:: SphericalXhat)(Θ:: Float64, Φ:: Float64):: Float64 = sin(Θ) * cos(Φ)
@@ -159,6 +168,70 @@ struct SphericalZZ <: SphericalIntegrand{Float64} end
 (st:: SphericalYZ)(Θ:: Float64, Φ:: Float64):: Float64 = cos(Θ) * sin(Θ) * sin(Φ)
 (st:: SphericalZZ)(Θ:: Float64, Φ:: Float64):: Float64 = cos(Θ) ^ 2
 
+struct BubbleIntersectionSurfaceIntegrand{K} <: SphericalIntegrand{SVector{K, Float64}}
+    bi:: BubbleIntersection
+    R:: Float64
+    ΔV:: Float64
+    tds:: NTuple{K, TensorDirection}
+end
 
+function (bii:: BubbleIntersectionSurfaceIntegrand{K})(Θ:: Float64, Φ:: Float64):: SVector{K, Float64} where K
+    ∉(cos(Θ), Φ, bii.bi) && return SVector{K, Float64}(zeros(K))
+    return (bii.ΔV / 3. * bii.R^3) .* SVector{K, Float64}((td(Θ, Φ) for td in bii.tds)...)
+end 
+
+function dot(p:: Vec3, k_r:: Float64, k_Θ:: Float64, k_Φ:: Float64):: Float64
+    return (p[1] * sin(k_Θ) * cos(k_Φ) + p[2] * sin(k_Θ) * sin(k_Φ) + p[3] * cos(k_Θ)) * k_r
+end
+
+function translation_phase(p:: Point3, k_r:: AbstractVector{Float64}, 
+             k_Θ:: AbstractVector{Float64}, 
+             k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
+    k_r = reshape(k_r, :, 1, 1)
+    k_Θ = reshape(k_Θ, 1, :, 1)
+    k_Φ = reshape(k_Φ, 1, 1, :)
+    return @. exp(-im * dot((p.coordinates, ), k_r, k_Θ, k_Φ))
+end
+
+function surface_integral(k_r:: AbstractVector{Float64}, 
+                          k_Θ:: AbstractVector{Float64}, 
+                          k_Φ:: AbstractVector{Float64}, 
+                          n:: Int64,
+                          bubbles:: Bubbles, 
+                          tensor_directions:: NTuple{K, TensorDirection} where K,
+                          bubble_intersections:: Dict{Int64, BubbleIntersection}, 
+                          ΔV:: Float64 = 1.):: Array{ComplexF64, 4}
+    V = zeros(ComplexF64, length(k_r), length(k_Θ), length(k_Φ), length(tensor_directions))
+    for (bubble_index, bi) in bubble_intersections
+        bubble_integrand = BubbleIntersectionSurfaceIntegrand{length(tensor_directions)}(bi, bubbles[bubble_index].radius, 
+                                                                                         ΔV, tensor_directions)
+        @. V += $spherical_planewave_decomposition(bubble_integrand, n, k_r, k_Θ, k_Φ) * 
+                $reshape($translation_phase(bubbles[bubble_index].center, k_r, k_Θ, k_Φ), $length(k_r), $length(k_Θ), $length(k_Φ), 1)
+    end
+    return V
+end
+
+function surface_integral(k_r:: AbstractVector{Float64}, 
+                          k_Θ:: AbstractVector{Float64}, 
+                          k_Φ:: AbstractVector{Float64}, 
+                          n:: Int64,
+                          bubbles:: Bubbles, 
+                          tensor_directions:: NTuple{K, TensorDirection} where K,
+                          ϕ_resolution:: Float64, μ_resolution:: Float64, 
+                          ΔV:: Float64 = 1.):: Array{ComplexF64, 4}
+    bis = bubble_intersections(ϕ_resolution, μ_resolution, bubbles)
+    return surface_integral(k_r, k_Θ, k_Φ, n, bubbles, tensor_directions, bis, ΔV)
+end
+
+function surface_integral(k_r:: AbstractVector{Float64}, 
+    k_Θ:: AbstractVector{Float64}, 
+    k_Φ:: AbstractVector{Float64}, 
+    n:: Int64,
+    bubbles:: Bubbles, 
+    tensor_directions:: NTuple{K, TensorDirection} where K,
+    n_ϕ:: Int64, n_μ:: Int64, 
+    ΔV:: Float64 = 1.):: Array{ComplexF64, 4}
+    return surface_integral(k_r, k_Θ, k_Φ, n, bubbles, tensor_directions, 2π / n_ϕ, 2. / n_μ, ΔV)
+end
 
 end
