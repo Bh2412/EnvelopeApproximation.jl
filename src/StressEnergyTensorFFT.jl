@@ -31,7 +31,7 @@ struct SphericalDirectSumIntegrand{K, T} <: SphericalIntegrand{SVector{K, T}}
 end
 
 function (ds:: SphericalDirectSumIntegrand{K, T})(Θ:: Float64, Φ:: Float64):: SVector{K, T} where {K, T}
-    SVector{K, T}((c(Θ, Φ) for c in ds.components)...)
+    SVector{K, T}(invoke.(ds.components, Tuple{Float64, Float64}, Θ, Φ))
 end
 
 function ⊕(si1:: SphericalIntegrand{T}, si2:: SphericalIntegrand{T}):: SphericalDirectSumIntegrand{2, T} where T
@@ -65,7 +65,7 @@ function Ylm_decomposition!(V:: Array{Float64, 3}, f:: SphericalIntegrand{SVecto
         V[l, m, :] = f(θ, ϕ)
     end
     @inbounds for k in 1:K
-        V[:, :, k] .= sph_transform(V[:, :, k])
+        V[:, :, k] .= sph_transform!(V[:, :, k])
     end
 end
 
@@ -177,11 +177,11 @@ end
 
 function (bii:: BubbleIntersectionSurfaceIntegrand{K})(Θ:: Float64, Φ:: Float64):: SVector{K, Float64} where K
     ∉(cos(Θ), Φ, bii.bi) && return SVector{K, Float64}(zeros(K))
-    return (bii.ΔV / 3. * bii.R^3) .* SVector{K, Float64}((td(Θ, Φ) for td in bii.tds)...)
+    return @. (bii.ΔV / 3. * bii.R^3) * $SVector(invoke(bii.tds, Tuple{Float64, Float64}, Θ, Φ))
 end 
 
 function dot(p:: Vec3, k_r:: Float64, k_Θ:: Float64, k_Φ:: Float64):: Float64
-    return (p[1] * sin(k_Θ) * cos(k_Φ) + p[2] * sin(k_Θ) * sin(k_Φ) + p[3] * cos(k_Θ)) * k_r
+    return  k_r * (p[1] * sin(k_Θ) * cos(k_Φ) + p[2] * sin(k_Θ) * sin(k_Φ) + p[3] * cos(k_Θ))
 end
 
 function translation_phase(p:: Point3, k_r:: AbstractVector{Float64}, 

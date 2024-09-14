@@ -108,6 +108,8 @@ push!(bi:: BubbleIntersection, ind:: CartesianIndex{2}) = push!(bi.included, ind
 idx(μ:: Float64, ϕ:: Float64, μ_limits:: AbstractVector{Float64}, ϕ_limits:: AbstractVector{Float64}):: CartesianIndex{2} = begin
     μ_index = searchsortedfirst(μ_limits, μ, lt=<=) - 1
     ϕ_index = searchsortedfirst(ϕ_limits, ϕ, lt=<=) - 1
+    μ ≈ μ_limits[end] && (μ_index = length(μ_limits))
+    ϕ ≈ ϕ_limits[end] && (ϕ_index = length(ϕ_limits))
     CartesianIndex(μ_index, ϕ_index)
 end
 

@@ -76,3 +76,4 @@ scripts/gravitational_potentials/source_behaviour/double_bubble_fixed_eta.ipynb
 scripts/gravitational_potentials/source_behaviour/double_bubble_fixed_k.ipynb
 scripts/gravitational_potentials/source_behaviour/gravitational_potential_source.png
 scripts/gravitational_potentials/source_behaviour/gravitational_potential.png
+scripts/general/debugging_FFT/debugging_FFT.jl
