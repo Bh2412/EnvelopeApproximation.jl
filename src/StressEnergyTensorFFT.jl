@@ -2,6 +2,7 @@ module StressEnergyTensorFFT
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.SurfaceTesselation
 using FastSphericalHarmonics
+using SphericalHarmonicModes
 using StaticArrays
 using SpecialFunctions
 using SphericalHarmonics
@@ -77,17 +78,38 @@ end
 
 function sph_sum(v:: Matrix{T}):: T where T
     @assert size(v)[2] = 2 * size(v)[1] - 1
-    return sum(v[sph_mode(l, m)] for l ∈ 0:1:lmax for m ∈ -l:1:l)
+    return sum(v[sph_mode(l, m)] for (l, m) ∈ LM(0:lmax))
 end
 
 function sph_sum(V:: Array{T, 5}):: Array{T, 3} where T
     lmax = sph_lmax(size(V)[1])
-    @views sum(V[sph_mode(l, m), :, :, :] for l ∈ 0:lmax for m ∈ -l:l)
+    @views sum(V[sph_mode(l, m), :, :, :] for (l, m) ∈ LM(0:lmax))
 end
 
 function sph_sum(V:: Array{T, 6}):: Array{T, 4} where T
     lmax = sph_lmax(size(V)[1])
-    @views sum(V[sph_mode(l, m), :, :, :, :] for l ∈ 0:lmax for m ∈ -l:l)
+    @views sum(V[sph_mode(l, m), :, :, :, :] for (l, m) ∈ LM(0:lmax))
+end
+
+function sph_dot(V:: Array{Float64, 2}, KM:: Array{ComplexF64, 5}, n:: Int):: Array{ComplexF64, 3}
+    res = zeros(size(KM[3:end]))
+    @inbounds for (l, m) ∈ LM(0:sph_lmax(n))
+        @views @. res +=  V[sph_mode(l, m)] * KM[sph_mode(l, m), :, :, :]
+    end
+    return res
+end
+
+function sph_dot(V:: Array{Float64, 3}, KM:: Array{ComplexF64, 5}, n:: Int):: Array{ComplexF64, 4}
+    SV = size(V)
+    SKM = size(KM)
+    @assert SV[1:2] == SKM[1:2] == (n, 2 * n - 1)
+    res = zeros(ComplexF64, SKM[3:end]..., SV[end])
+    V = reshape(V, n, 2 * n - 1, 1, 1, 1, size(V)[end])
+    KM = reshape(KM, size(KM)..., 1)
+    @inbounds for (l, m) ∈ LM(0:sph_lmax(n))
+        @views @. res +=  V[$sph_mode(l, m), :, :, :, :] * KM[$sph_mode(l, m), :, :, :, :]
+    end
+    return res
 end
 
 function k_matrix!(KM:: Array{ComplexF64, 5}, 
@@ -101,7 +123,7 @@ function k_matrix!(KM:: Array{ComplexF64, 5},
     c_l_k_r = @. sphericalbesselj($reshape((0:lmax), :, 1), $reshape(k_r * R, 1, :))
     @inbounds for (j, k_ϕ) ∈ enumerate(k_Φ), (i, k_θ) ∈ enumerate(k_Θ)
         Ylm = computeYlm(k_θ, k_ϕ; lmax=lmax, SHType = SphericalHarmonics.RealHarmonics())
-        @inbounds for n ∈ eachindex(k_r), l ∈ 0:lmax, m ∈ -l:l, 
+        @inbounds for n ∈ eachindex(k_r), (l, m) ∈ LM(0:lmax), 
             KM[sph_mode(l, m), n, i, j] = (Ylm[(l, m)] * c_l_k_r[l + 1, n]) * φl[l + 1]
         end
     end
@@ -125,9 +147,9 @@ function spherical_planewave_decomposition(f:: SphericalIntegrand{Float64},
                                            k_r:: AbstractVector{Float64}, 
                                            k_Θ:: AbstractVector{Float64}, 
                                            k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
-    V = reshape(Ylm_decomposition(f, n), n, :, 1, 1, 1)
+    V = Ylm_decomposition(f, n)
     KM = k_matrix(k_r, k_Θ, k_Φ, n)
-    return @. $sph_sum(V * KM)
+    return sph_dot(V, KM, n)
 end
 
 function spherical_planewave_decomposition(f:: SphericalIntegrand{SVector{K, Float64}}, 
@@ -135,9 +157,9 @@ function spherical_planewave_decomposition(f:: SphericalIntegrand{SVector{K, Flo
                                            k_r:: AbstractVector{Float64}, 
                                            k_Θ:: AbstractVector{Float64}, 
                                            k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 4} where K
-    V = reshape(Ylm_decomposition(f, n), n, 2 * n - 1, 1, 1, 1, K)
-    KM = reshape(k_matrix(k_r, k_Θ, k_Φ, n), n, 2 * n - 1, length(k_r), length(k_Θ), length(k_Φ), 1)
-    return @. $sph_sum(V * KM)
+    V = Ylm_decomposition(f, n)
+    KM = k_matrix(k_r, k_Θ, k_Φ, n)
+    return sph_dot(V, KM, n)
 end
 
 struct SphericalTrace <: SphericalIntegrand{Float64} end
@@ -180,13 +202,29 @@ function (bii:: BubbleIntersectionSurfaceIntegrand{K})(Θ:: Float64, Φ:: Float6
     return @. (bii.ΔV / 3. * bii.R^3) * $SVector(invoke(bii.tds, Tuple{Float64, Float64}, Θ, Φ))
 end 
 
+struct BubbleIntersectionPotentialIntegrand <: SphericalIntegrand{SVector{3, Float64}}
+    bi:: BubbleIntersection
+    R:: Float64
+    ΔV:: Float64
+    tds:: NTuple{3, TensorDirection}
+    function BubbleIntersectionPotentialIntegrand(bi:: BubbleIntersection, R:: Float64, ΔV:: Float64)
+        return new(bi, R, ΔV, (SphericalXhat(), SphericalYhat(), SphericalZhat()))
+    end
+end
+
+function (bip:: BubbleIntersectionPotentialIntegrand)(Θ:: Float64, Φ:: Float64):: SVector{3, Float64}
+    ∉(cos(Θ), Φ, bii.bi) && return SVector{3, Float64}(zeros(3))
+    return @. (-bip.ΔV * R^2) * $SVector(invoke(bii.tds, Tuple{Float64, Float64}, Θ, Φ))
+end
+
 function dot(p:: Vec3, k_r:: Float64, k_Θ:: Float64, k_Φ:: Float64):: Float64
     return  k_r * (p[1] * sin(k_Θ) * cos(k_Φ) + p[2] * sin(k_Θ) * sin(k_Φ) + p[3] * cos(k_Θ))
 end
 
-function translation_phase(p:: Point3, k_r:: AbstractVector{Float64}, 
-             k_Θ:: AbstractVector{Float64}, 
-             k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
+function translation_phase(p:: Point3, 
+                           k_r:: AbstractVector{Float64}, 
+                           k_Θ:: AbstractVector{Float64}, 
+                           k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
     k_r = reshape(k_r, :, 1, 1)
     k_Θ = reshape(k_Θ, 1, :, 1)
     k_Φ = reshape(k_Φ, 1, 1, :)
