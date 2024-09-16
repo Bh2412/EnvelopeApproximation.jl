@@ -59,12 +59,8 @@ function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float6
     px = coordinate_transformation(x, s)
     p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 3 * ((ΔV / 3.) * measure(s) / 4π))
-    for (i, k) ∈ enumerate(ks)
-        e_dump[i] = exp(p, k)
-    end
-    for (i, td) ∈ enumerate(tensor_directions)
-        td_dump[i] = td_integrand(px, td)
-    end
+    @. e_dump = exp((p, ), ks)
+    @. td_dump = td_integrand((px, ), td)
     @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
         V[j, l] += e * td * c
     end
