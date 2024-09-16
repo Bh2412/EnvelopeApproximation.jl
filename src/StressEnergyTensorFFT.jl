@@ -76,66 +76,47 @@ function Ylm_decomposition(f:: SphericalIntegrand{SVector{K, Float64}}, n:: Int)
     return V
 end
 
-function sph_sum(v:: Matrix{T}):: T where T
-    @assert size(v)[2] = 2 * size(v)[1] - 1
-    return sum(v[sph_mode(l, m)] for (l, m) ∈ LM(0:lmax))
-end
-
-function sph_sum(V:: Array{T, 5}):: Array{T, 3} where T
-    lmax = sph_lmax(size(V)[1])
-    @views sum(V[sph_mode(l, m), :, :, :] for (l, m) ∈ LM(0:lmax))
-end
-
-function sph_sum(V:: Array{T, 6}):: Array{T, 4} where T
-    lmax = sph_lmax(size(V)[1])
-    @views sum(V[sph_mode(l, m), :, :, :, :] for (l, m) ∈ LM(0:lmax))
-end
-
-function sph_dot(V:: Array{Float64, 2}, KM:: Array{ComplexF64, 5}, n:: Int):: Array{ComplexF64, 3}
-    res = zeros(size(KM[3:end]))
-    @inbounds for (l, m) ∈ LM(0:sph_lmax(n))
-        @views @. res +=  V[sph_mode(l, m)] * KM[sph_mode(l, m), :, :, :]
-    end
-    return res
-end
-
-function sph_dot(V:: Array{Float64, 3}, KM:: Array{ComplexF64, 5}, n:: Int):: Array{ComplexF64, 4}
-    SV = size(V)
-    SKM = size(KM)
-    @assert SV[1:2] == SKM[1:2] == (n, 2 * n - 1)
-    res = zeros(ComplexF64, SKM[3:end]..., SV[end])
-    V = reshape(V, n, 2 * n - 1, 1, 1, 1, size(V)[end])
-    KM = reshape(KM, size(KM)..., 1)
-    @inbounds for (l, m) ∈ LM(0:sph_lmax(n))
-        @views @. res +=  V[$sph_mode(l, m), :, :, :, :] * KM[$sph_mode(l, m), :, :, :, :]
-    end
-    return res
-end
-
-function k_matrix!(KM:: Array{ComplexF64, 5}, 
-                   k_r:: AbstractVector{Float64}, 
-                   k_Θ:: AbstractVector{Float64}, 
-                   k_Φ:: AbstractVector{Float64}, 
-                   n:: Int64, 
-                   R:: Float64 = 1.)
+function k_projection!(res:: Array{ComplexF64, 3},
+                       V:: Array{Float64, 2}, 
+                       k_r:: AbstractVector{Float64}, 
+                       k_Θ:: AbstractVector{Float64}, 
+                       k_Φ:: AbstractVector{Float64}, 
+                       n:: Int64, 
+                       R:: Float64 = 1.):: Array{ComplexF64, 4}
     lmax = sph_lmax(n)
-    φl = @. (im ^ (0:lmax)) * 4π
+    φl = @. ((-im) ^ (0:lmax)) * 4π
     c_l_k_r = @. sphericalbesselj($reshape((0:lmax), :, 1), $reshape(k_r * R, 1, :))
     @inbounds for (j, k_ϕ) ∈ enumerate(k_Φ), (i, k_θ) ∈ enumerate(k_Θ)
         Ylm = computeYlm(k_θ, k_ϕ; lmax=lmax, SHType = SphericalHarmonics.RealHarmonics())
-        @inbounds for n ∈ eachindex(k_r), (l, m) ∈ LM(0:lmax), 
-            KM[sph_mode(l, m), n, i, j] = (Ylm[(l, m)] * c_l_k_r[l + 1, n]) * φl[l + 1]
+        @inbounds for n ∈ eachindex(k_r)
+            @inbounds for (l, m) ∈ LM(0:lmax)
+                res[n, i, j, k] += (V[sph_mode(l, m), k] * Ylm[(l, m)] * c_l_k_r[l + 1, n]) * φl[l + 1] 
+            end
         end
     end
+    return res
 end
 
-function k_matrix(k_r:: AbstractVector{Float64}, 
-                  k_Θ:: AbstractVector{Float64}, 
-                  k_Φ:: AbstractVector{Float64}, 
-                  n:: Int64, R:: Float64 = 1.)
-    KM = Array{ComplexF64, 5}(undef, n, 2 * n - 1, length(k_r), length(k_Θ), length(k_Φ))
-    k_matrix!(KM, k_r, k_Θ, k_Φ, n, R)
-    return KM
+function k_projection!(res:: Array{ComplexF64, 4},
+                       V:: Array{Float64, 3}, 
+                       k_r:: AbstractVector{Float64}, 
+                       k_Θ:: AbstractVector{Float64}, 
+                       k_Φ:: AbstractVector{Float64}, 
+                       n:: Int64, 
+                       R:: Float64 = 1.):: Array{ComplexF64, 4}
+    K = size(res)[4]
+    lmax = sph_lmax(n)
+    φl = @. ((-im) ^ (0:lmax)) * 4π
+    c_l_k_r = @. sphericalbesselj($reshape((0:lmax), :, 1), $reshape(k_r * R, 1, :))
+    @inbounds for (j, k_ϕ) ∈ enumerate(k_Φ), (i, k_θ) ∈ enumerate(k_Θ)
+        Ylm = computeYlm(k_θ, k_ϕ; lmax=lmax, SHType = SphericalHarmonics.RealHarmonics())
+        @inbounds for k ∈ 1:K, n ∈ eachindex(k_r)
+            @inbounds for (l, m) ∈ LM(0:lmax)
+                res[n, i, j, k] += (V[sph_mode(l, m), k] * Ylm[(l, m)] * c_l_k_r[l + 1, n]) * φl[l + 1] 
+            end
+        end
+    end
+    return res
 end
 
 export spherical_planewave_decomposition
@@ -146,20 +127,22 @@ function spherical_planewave_decomposition(f:: SphericalIntegrand{Float64},
                                            n:: Int64, 
                                            k_r:: AbstractVector{Float64}, 
                                            k_Θ:: AbstractVector{Float64}, 
-                                           k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
+                                           k_Φ:: AbstractVector{Float64}, 
+                                           R:: Float64 = 1.):: Array{ComplexF64, 3}
     V = Ylm_decomposition(f, n)
-    KM = k_matrix(k_r, k_Θ, k_Φ, n)
-    return sph_dot(V, KM, n)
+    res = zeros(ComplexF64, length(k_r), length(k_Θ), length(k_Φ))
+    return k_projection!(res, V, k_r, k_Θ, k_Φ, n, R)
 end
 
 function spherical_planewave_decomposition(f:: SphericalIntegrand{SVector{K, Float64}}, 
                                            n:: Int64, 
                                            k_r:: AbstractVector{Float64}, 
                                            k_Θ:: AbstractVector{Float64}, 
-                                           k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 4} where K
+                                           k_Φ:: AbstractVector{Float64},
+                                           R:: Float64 = 1.):: Array{ComplexF64, 4} where K
     V = Ylm_decomposition(f, n)
-    KM = k_matrix(k_r, k_Θ, k_Φ, n)
-    return sph_dot(V, KM, n)
+    res = zeros(ComplexF64, length(k_r), length(k_Θ), length(k_Φ), K)
+    return k_projection!(res, V, k_r, k_Θ, k_Φ, n, R)
 end
 
 struct SphericalTrace <: SphericalIntegrand{Float64} end
@@ -213,8 +196,8 @@ struct BubbleIntersectionPotentialIntegrand <: SphericalIntegrand{SVector{3, Flo
 end
 
 function (bip:: BubbleIntersectionPotentialIntegrand)(Θ:: Float64, Φ:: Float64):: SVector{3, Float64}
-    ∉(cos(Θ), Φ, bii.bi) && return SVector{3, Float64}(zeros(3))
-    return @. (-bip.ΔV * R^2) * $SVector(invoke(bii.tds, Tuple{Float64, Float64}, Θ, Φ))
+    ∉(cos(Θ), Φ, bip.bi) && return SVector{3, Float64}(zeros(3))
+    return @. (-bip.ΔV * bip.R^2) * $SVector(invoke(bip.tds, Tuple{Float64, Float64}, Θ, Φ))
 end
 
 function dot(p:: Vec3, k_r:: Float64, k_Θ:: Float64, k_Φ:: Float64):: Float64
@@ -243,7 +226,7 @@ function surface_integral(k_r:: AbstractVector{Float64},
     for (bubble_index, bi) in bubble_intersections
         bubble_integrand = BubbleIntersectionSurfaceIntegrand{length(tensor_directions)}(bi, bubbles[bubble_index].radius, 
                                                                                          ΔV, tensor_directions)
-        @. V += $spherical_planewave_decomposition(bubble_integrand, n, k_r, k_Θ, k_Φ) * 
+        @. V += $spherical_planewave_decomposition(bubble_integrand, n, k_r, k_Θ, k_Φ, bubbles[bubble_index].radius) * 
                 $reshape($translation_phase(bubbles[bubble_index].center, k_r, k_Θ, k_Φ), $length(k_r), $length(k_Θ), $length(k_Φ), 1)
     end
     return V
@@ -270,6 +253,64 @@ function surface_integral(k_r:: AbstractVector{Float64},
     n_ϕ:: Int64, n_μ:: Int64, 
     ΔV:: Float64 = 1.):: Array{ComplexF64, 4}
     return surface_integral(k_r, k_Θ, k_Φ, n, bubbles, tensor_directions, 2π / n_ϕ, 2. / n_μ, ΔV)
+end
+
+
+"""
+Compute k_hat ⋅ x where x is the vector of the 4th dimension of V.
+This includes a factor of i / k
+"""
+function dotk(V:: Array{ComplexF64, 4},
+              k_Θ:: AbstractVector{Float64}, 
+              k_Φ:: AbstractVector{Float64}):: Array{ComplexF64, 3}
+    @assert size(V)[4] == 3
+    k_Θ = reshape(k_Θ, 1, :, 1)
+    k_Φ = reshape(k_Φ, 1, 1, :)
+    sΘ = @. sin(k_Θ)
+    kx = @. sΘ * cos(k_Φ)
+    ky = @. sΘ * sin(k_Φ)
+    kz = @. cos(k_Θ)
+    return @views @. (V[:, :, :, 1] * kx + V[:, :, :, 2] * ky + V[:, :, :, 3] * kz)
+end
+
+function potential_integral(k_r:: AbstractVector{Float64}, 
+                            k_Θ:: AbstractVector{Float64}, 
+                            k_Φ:: AbstractVector{Float64}, 
+                            n:: Int64,
+                            bubbles:: Bubbles, 
+                            bubble_intersections:: Dict{Int64, BubbleIntersection}, 
+                            ΔV:: Float64 = 1.):: Array{ComplexF64, 3}
+    V = zeros(ComplexF64, length(k_r), length(k_Θ), length(k_Φ))
+    c = @. im / $reshape(k_r, :, 1, 1)
+    for (bubble_index, bi) in bubble_intersections
+         bubble_integrand = BubbleIntersectionPotentialIntegrand(bi, 
+                                                                 bubbles[bubble_index].radius,
+                                                                 ΔV)
+        @. V += $dotk($spherical_planewave_decomposition(bubble_integrand, n, k_r, k_Θ, k_Φ), k_Θ, k_Φ) * c *
+                $reshape($translation_phase(bubbles[bubble_index].center, k_r, k_Θ, k_Φ), $length(k_r), $length(k_Θ), $length(k_Φ))
+    end
+    return V
+end
+
+function potential_integral(k_r:: AbstractVector{Float64}, 
+                            k_Θ:: AbstractVector{Float64}, 
+                            k_Φ:: AbstractVector{Float64}, 
+                            n:: Int64,
+                            bubbles:: Bubbles, 
+                            ϕ_resolution:: Float64, μ_resolution:: Float64,
+                            ΔV:: Float64 = 1.):: Array{ComplexF64, 3}
+    bis = bubble_intersections(ϕ_resolution, μ_resolution, bubbles)
+    return potential_integral(k_r, k_Θ, k_Φ, n, bubbles, bis, ΔV)
+end
+
+function potential_integral(k_r:: AbstractVector{Float64}, 
+                            k_Θ:: AbstractVector{Float64}, 
+                            k_Φ:: AbstractVector{Float64}, 
+                            n:: Int64,
+                            bubbles:: Bubbles, 
+                            n_ϕ:: Int64, n_μ:: Int64,
+                            ΔV:: Float64 = 1.):: Array{ComplexF64, 3}
+    return potential_integral(k_r, k_Θ, k_Φ, n, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV)
 end
 
 end
