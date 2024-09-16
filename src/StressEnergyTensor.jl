@@ -36,10 +36,6 @@ function td_integrand(x:: SVector{2, Float64}, td:: Tuple{Symbol, Symbol}):: Flo
     return td_integrand(x, td[1]) * td_integrand(x, td[2])
 end
 
-function td_integrand(x:: SVector{2, Float64}, tensor_directions:: Matrix):: Matrix{Float64}
-    return td_integrand.((x, ), tensor_directions)
-end
-
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 
 exp(p:: Point3, k:: Vec3):: ComplexF64 = begin
@@ -58,22 +54,28 @@ end
 measure(s:: BubbleSection) = s.ϕ.d * s.μ.d
 
 function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float64}, s:: BubbleSection, ks:: Vector{Vec3}, 
-                                   bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64})
+                                   bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64}, 
+                                   td_dump:: Vector{Float64})
     px = coordinate_transformation(x, s)
     p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 3 * ((ΔV / 3.) * measure(s) / 4π))
-    @. e_dump = exp((p, ), ks)
-    tds = td_integrand.((px, ), tensor_directions)
-    @inbounds for (l, td) ∈ enumerate(tds), (j, e) ∈ enumerate(e_dump)
+    for (i, k) ∈ enumerate(ks)
+        e_dump[i] = exp(p, k)
+    end
+    for (i, td) ∈ enumerate(tensor_directions)
+        td_dump[i] = td_integrand(px, td)
+    end
+    @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
         V[j, l] += e * td * c
     end
 end
 
 function surface_integrand!(x:: SVector{2, Float64}, sections:: Vector{BubbleSection}, ks:: Vector{Vec3}, 
-                            bubbles:: Bubbles, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64}):: Matrix{ComplexF64}
+                            bubbles:: Bubbles, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64},
+                            td_dump:: Vector{Float64}):: Matrix{ComplexF64}
     V = zeros(ComplexF64, length(ks), length(tensor_directions))
     for section in sections
-        add_section_contribution!(V, x, section, ks, bubbles[section.bubble_index], tensor_directions, ΔV, e_dump)
+        add_section_contribution!(V, x, section, ks, bubbles[section.bubble_index], tensor_directions, ΔV, e_dump, td_dump)
     end
     return V
 end
@@ -89,7 +91,8 @@ function surface_integral(ks:: Vector{Vec3},
                           sections:: Vector{BubbleSection},
                           ΔV:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
     e_dump = Vector{ComplexF64}(undef, length(ks))
-    integrand(x:: SVector{2, Float64}):: Matrix{ComplexF64} = surface_integrand!(x, sections, ks, bubbles, tensor_directions, ΔV, e_dump)
+    td_dump = Vector{Float64}(undef, length(tensor_directions))
+    integrand(x:: SVector{2, Float64}):: Matrix{ComplexF64} = surface_integrand!(x, sections, ks, bubbles, tensor_directions, ΔV, e_dump, td_dump)
     return unit_sphere_hcubature(integrand; kwargs...)[1]
 end
 
