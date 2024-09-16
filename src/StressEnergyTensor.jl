@@ -38,8 +38,11 @@ end
 
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 
-exp(p:: Point3, k:: Vec3):: ComplexF64 = begin
-    d = p ⋅ k
+exp(x:: SVector{2, Float64}, k:: Vec3):: ComplexF64 = begin
+    sθ = √(1 - x[2] ^ 2)
+    cϕ = cos(x[1])
+    sϕ = sin(x[1])
+    d = k[1] * sθ * cϕ + k[2] * sθ * sϕ + k[3] * x[2]
     return cos(d) - im * sin(d)
 end
 
@@ -57,10 +60,9 @@ function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float6
                                    bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64}, 
                                    td_dump:: Vector{Float64})
     px = coordinate_transformation(x, s)
-    p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 3 * ((ΔV / 3.) * measure(s) / 4π))
-    @. e_dump = exp((p, ), ks)
-    @. td_dump = td_integrand((px, ), td)
+    @. e_dump = exp((px, ), ks)
+    @. td_dump = td_integrand((px, ), tensor_directions)
     @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
         V[j, l] += e * td * c
     end
