@@ -69,11 +69,11 @@ import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_di
 using HCubature
 import LinearAlgebra: norm
 
-function hat(v:: Vec3):: Vec3
+function v̂(v:: Vec3):: Vec3
     return v ./ norm(v)
 end
 
-function normalized_auto_outer_product(k:: Vec3, td:: Tuple{Symbol, Symbol})
+function v̂iv̂j(k:: Vec3, td:: Tuple{Symbol, Symbol})
     ```math
     k_ik_j / k^2
     ```        
@@ -81,8 +81,13 @@ function normalized_auto_outer_product(k:: Vec3, td:: Tuple{Symbol, Symbol})
     return prod(k[indices])
 end
 
-function normalized_auto_outer_product(ks:: Vector{Vec3}, tds:: Vector):: Array{Float64, 2}
-    return normalized_auto_outer_product.(reshape(hat.(ks), :, 1), reshape(tds, 1, :))
+function v̂iv̂j(ks:: Vector{Vec3}, tds:: Vector):: Array{Float64, 2}
+    return @. v̂iv̂j($reshape(v̂(ks), :, 1), $reshape(tds, 1, :))
+end
+
+function δij(td:: Tuple{Symbol, Symbol}):: Float64
+    (td[1] ≡ td[2]) && return 1.
+    return 0.
 end
 
 function ψ_source(ks:: Vector{Vec3}, 
@@ -93,7 +98,7 @@ function ψ_source(ks:: Vector{Vec3},
     ```math
     ψ'' = 4πG_N a^2 
     ```        
-    k_ik_j = normalized_auto_outer_product(ks, tensor_directions)
+    k_ik_j = v̂iv̂j(ks, tensor_directions)
     V = zeros(ComplexF64, length(ks))
     for (i, td) in enumerate(tensor_directions)
         if td in above_diagonal
@@ -212,5 +217,38 @@ function ψ(ks:: Vector{Vec3},
 end
 
 export ψ
+
+function Ŋ(ks:: Vector{Vec3},
+           T:: Matrix{ComplexF64},
+           tensor_directions:: Vector,
+           a:: Float64,
+           G:: Float64
+           )
+    c = @. (-12π * G * a ^ 2) / (ks ⋅ ks) 
+    A = @. $v̂iv̂j(ks, tensor_directions) - ($reshape(δij(tensor_directions), 1, :) / 3)
+    return @. $sum(c * A * T, dims=2)
+end
+
+function Ŋ(ks:: Vector{Vec3}, 
+           bubbles:: Bubbles.
+           ϕ_resolution:: Float64, 
+           μ_resolution:: Float64, 
+           ΔV:: Float64 = 1.,
+           a:: Float64 = 1.,
+           G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
+    tensor_directions = Vector{TensorDirection}(upper_right)
+    T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
+    return Ŋ(ks, T, tensor_directions, a, G)
+end
+
+function Ŋ(ks:: Vector{Vec3}, 
+           bubbles:: Bubbles.
+           n_ϕ:: Int64, 
+           n_μ:: Int64, 
+           ΔV:: Float64 = 1.,
+           a:: Float64 = 1.,
+           G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
+    return Ŋ(ks, bubble, 2π / n_ϕ, 2. / n_μ, ΔV, a, G)
+end
 
 end

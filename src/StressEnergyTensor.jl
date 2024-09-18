@@ -39,10 +39,7 @@ end
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 
 exp(x:: SVector{2, Float64}, k:: Vec3):: ComplexF64 = begin
-    sθ = √(1 - x[2] ^ 2)
-    cϕ = cos(x[1])
-    sϕ = sin(x[1])
-    d = k[1] * sθ * cϕ + k[2] * sθ * sϕ + k[3] * x[2]
+    d = √(1 - x[2] ^ 2) * (k[1]  * cos(x[1]) + k[2] * sin(x[1])) + k[3] * x[2]
     return cos(d) - im * sin(d)
 end
 
@@ -64,7 +61,7 @@ function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float6
     @. e_dump = exp((px, ), ks)
     @. td_dump = td_integrand((px, ), tensor_directions)
     @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
-        V[j, l] += e * td * c
+        V[j, l] += e * (td * c)
     end
 end
 
@@ -116,17 +113,15 @@ end
 
 export surface_integral
 
-
 function add_potential_section_contribution!(V:: Vector{ComplexF64}, 
                                              x:: SVector{2, Float64},
                                              s:: BubbleSection,
                                              ks:: Vector{Vec3},
                                              bubble:: Bubble)
     px = coordinate_transformation(x, s)
-    p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 2) * measure(s) / 4π
     usp = unit_sphere_point(px)
-    @. V += exp((p, ), ks) * ((usp, ) ⋅ ks) * c
+    @. V += exp((px, ), ks) * ((usp, ) ⋅ ks) * c
 end
 
 function potential_integrand(x:: SVector{2, Float64}, 
