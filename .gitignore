@@ -82,3 +82,4 @@ scripts/general/single_bubble.ipynb
 scripts/general/double_bubble.ipynb
 scripts/general/single_bubble.ipynb
 scripts/studying_performance/profiling_Tij.jl
+scripts/benchmarks/comparison_to_Maya/gravitational_potential/varying_eta_fixed_k.npy
