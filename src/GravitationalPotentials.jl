@@ -157,6 +157,8 @@ function ψ_source(ks:: Vector{Vec3},
                     ΔV, a, G; kwargs...)
 end
 
+export quad_ψ
+
 function quad_ψ(ks:: Vector{Vec3}, 
                 snapshot:: BubblesSnapShot, 
                 t:: Float64, 
@@ -229,8 +231,10 @@ function Ŋ(ks:: Vector{Vec3},
     return @. $sum(c * A * T, dims=2)
 end
 
+export ψ
+
 function Ŋ(ks:: Vector{Vec3}, 
-           bubbles:: Bubbles.
+           bubbles:: Bubbles,
            ϕ_resolution:: Float64, 
            μ_resolution:: Float64, 
            ΔV:: Float64 = 1.,
@@ -242,13 +246,17 @@ function Ŋ(ks:: Vector{Vec3},
 end
 
 function Ŋ(ks:: Vector{Vec3}, 
-           bubbles:: Bubbles.
+           bubbles:: Bubbles,
            n_ϕ:: Int64, 
            n_μ:: Int64, 
            ΔV:: Float64 = 1.,
            a:: Float64 = 1.,
            G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
-    return Ŋ(ks, bubble, 2π / n_ϕ, 2. / n_μ, ΔV, a, G)
+    return Ŋ(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
+end
+
+function Φ(ŋ:: Vector{ComplexF64}, Ψ:: Vector{ComplexF64}):: Vector{ComplexF64}
+    return ŋ - Ψ
 end
 
 end

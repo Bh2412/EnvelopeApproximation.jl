@@ -75,7 +75,7 @@ euc(p1:: Point3, p2:: Point3):: Float64 = norm(coordinates(p1) - coordinates(p2)
 export euc
 
 function ≲(a:: Float64, b:: Float64):: Bool
-    return (a <= b) | (a ≈ b)
+    return (a <= b) | (isapprox(a, b, atol=1e-12))
 end
 
 export ≲
