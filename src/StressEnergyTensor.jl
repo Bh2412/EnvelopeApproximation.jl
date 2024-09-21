@@ -37,12 +37,7 @@ function td_integrand(x:: SVector{2, Float64}, td:: Tuple{Symbol, Symbol}):: Flo
 end
 
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
-
-exp(x:: SVector{2, Float64}, k:: Vec3):: ComplexF64 = begin
-    d = √(1 - x[2] ^ 2) * (k[1]  * cos(x[1]) + k[2] * sin(x[1])) + k[3] * x[2]
-    return cos(d) - im * sin(d)
-end
-
+⋅(x:: SVector{2, Float64}, k:: Vec3) = (√(1 - x[2] ^ 2) * (k[1]  * cos(x[1]) + k[2] * sin(x[1])) + k[3] * x[2])
 
 function coordinate_transformation(x:: SVector{2, Float64}, s:: BubbleSection):: SVector{2, Float64}
     """
@@ -57,8 +52,9 @@ function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float6
                                    bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64}, 
                                    td_dump:: Vector{Float64})
     px = coordinate_transformation(x, s)
+    p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 3 * ((ΔV / 3.) * measure(s) / 4π))
-    @. e_dump = exp((px, ), ks)
+    @. e_dump = cis(-((p, ) ⋅ ks))
     @. td_dump = td_integrand((px, ), tensor_directions)
     @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
         V[j, l] += e * (td * c)
@@ -119,9 +115,9 @@ function add_potential_section_contribution!(V:: Vector{ComplexF64},
                                              ks:: Vector{Vec3},
                                              bubble:: Bubble)
     px = coordinate_transformation(x, s)
+    p = bubble_point(px..., bubble)
     c = (bubble.radius ^ 2) * measure(s) / 4π
-    usp = unit_sphere_point(px)
-    @. V += exp((px, ), ks) * ((usp, ) ⋅ ks) * c
+    @. V += cis(-((p, ) ⋅ ks)) * ((px, ) ⋅ ks) * c
 end
 
 function potential_integrand(x:: SVector{2, Float64}, 
