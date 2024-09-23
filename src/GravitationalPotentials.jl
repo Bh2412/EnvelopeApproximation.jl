@@ -78,11 +78,11 @@ function v̂iv̂j(k:: Vec3, td:: Tuple{Symbol, Symbol})
     k_ik_j / k^2
     ```        
     indices = indexin(td, [:x, :y, :z])
-    return prod(k[indices])
+    return prod(v̂(k)[indices])
 end
 
 function v̂iv̂j(ks:: Vector{Vec3}, tds:: Vector):: Array{Float64, 2}
-    return @. v̂iv̂j($reshape(v̂(ks), :, 1), $reshape(tds, 1, :))
+    return @. v̂iv̂j($reshape(ks, :, 1), $reshape(tds, 1, :))
 end
 
 function δij(td:: Tuple{Symbol, Symbol}):: Float64
@@ -96,7 +96,7 @@ function ψ_source(ks:: Vector{Vec3},
                   a = 1., 
                   G = 1.):: Vector{ComplexF64}
     ```math
-    ψ'' = 4πG_N a^2 
+    ψ'' = 4πG_N a^2 k̂ik̂j Tij
     ```        
     k_ik_j = v̂iv̂j(ks, tensor_directions)
     V = zeros(ComplexF64, length(ks))
@@ -167,7 +167,7 @@ function quad_ψ(ks:: Vector{Vec3},
                 ΔV:: Float64 = 1., 
                 a:: Float64 = 1., 
                 G:: Float64 = 1.; 
-                kwargs...)
+                kwargs...):: Vector{ComplexF64}
     f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ, ϕ_resolution, μ_resolution, 
                                                    ΔV, a, G; kwargs...) * (t - τ)
     return hquadrature(f, 0., t; kwargs...)[1]
@@ -181,7 +181,7 @@ function quad_ψ(ks:: Vector{Vec3},
                 ΔV:: Float64 = 1., 
                 a:: Float64 = 1., 
                 G:: Float64 = 1.; 
-                kwargs...)
+                kwargs...):: Vector{ComplexF64}
     return quad_ψ(ks, snapshot, t, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
 end
 
@@ -232,6 +232,8 @@ function Ŋ(ks:: Vector{Vec3},
 end
 
 export ψ
+
+export Ŋ
 
 function Ŋ(ks:: Vector{Vec3}, 
            bubbles:: Bubbles,

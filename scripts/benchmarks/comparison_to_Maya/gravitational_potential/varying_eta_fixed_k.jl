@@ -2,7 +2,7 @@ using EnvelopeApproximation.GravitationalPotentials
 using CSV, DataFrames
 using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
-using EnvelopeApproximation.BubblesEvolution
+using EnvelopeApproximation.BubblesEvoluation
 using EnvelopeApproximation.StressEnergyTensor
 import EnvelopeApproximation.StressEnergyTensor: T_ij, diagonal, TensorDirection
 using Plots
@@ -67,11 +67,22 @@ end
 
 Ψ
 
+# plot
+
 begin
-    n = 60
+    n = 5
     p = plot(ηs[1:n], Maya_results_df[!, :Psi][1:n], label="Maya", title="Ψ")
     plot!(ηs[1:n], Ψ[1:n] .|> real, label="Ben")
+    display(p)
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/psi_comparison_varying_eta_constant_k.png")
+end
+
+# difference plot
+
+begin
+    n = 60
+    p = plot(ηs[1:n], (Maya_results_df[!, :Psi][1:n] - (real.(Ψ))[1:n]), label="Maya", title="Ψ")
+    display(p)
 end
 
 # Saving the data

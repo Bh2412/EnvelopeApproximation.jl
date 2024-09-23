@@ -17,4 +17,4 @@ ks = LinRange(k_0 / 10, k_0 * 10, 100)
 k_vecs = (x -> Vec3(0., 0., x)).(ks)
 
 import EnvelopeApproximation.GravitationalPotentials: quad_ψ as _ψ
-@profview ψ = _ψ(k_vecs, snapshot, 5., 10, 10; rtol=1e-2)
+@profview ψ = _ψ(k_vecs, snapshot, 5., 10, 10, 1., 1., 1.; rtol=1e-2)
