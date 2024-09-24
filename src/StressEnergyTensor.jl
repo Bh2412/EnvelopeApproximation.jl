@@ -5,10 +5,11 @@ import EnvelopeApproximation.BubbleBasics: ⋅
 using EnvelopeApproximation.BubblesEvolution
 using Base.Iterators
 import EnvelopeApproximation.SurfaceTesselation: surface_sections, BubbleSection, unit_sphere_point, bubble_point
+using EnvelopeApproximation.SurfaceTesselation
 using StaticArrays
 using HCubature
 import HCubature: hcubature
-import Base: exp
+import Base: exp, push!
 
 TensorDirection = Union{Symbol, Tuple{Symbol, Symbol}}
 
@@ -215,15 +216,15 @@ function T_ij(ks:: Vector{Vec3},
               tensor_directions:: Union{Vector{TensorDirection}, Nothing} = nothing; 
               kwargs...):: Array{ComplexF64, 2}
     isnothing(tensor_directions) && (tensor_directions = Vector{TensorDirection}(vcat([:trace], upper_right)))
-    sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
-    T = surface_integral(ks, bubbles, tensor_directions, sections, 
+    intersections = bubble_intersections(ϕ_resolution, μ_resolution, bubbles)
+    T = surface_integral(ks, bubbles, tensor_directions, intersections, 
                          ΔV; kwargs...)
      # Based on the following:
     ```math
     T_ij = ∂_iϕ∂_jϕ - δ_ij⋅L ≈ ∂_iϕ∂_jϕ - δ_ij V
     ```         
     if any(td in tensor_directions for td in diagonal)
-        vi = potential_integral(ks, bubbles, sections, ΔV; kwargs...)
+        vi = potential_integral(ks, bubbles, intersections, ΔV; kwargs...)
         for (i, td) in enumerate(tensor_directions)
             if td in diagonal
                 T[:, i] .-= vi

@@ -93,3 +93,4 @@ scripts/benchmarks/comparison_to_Maya/gravitational_potential/ForBenSet5.npy
 scripts/gravitational_potentials/attempting_quadratures/double_bubble_fixed_eta.jl
 scripts/general/debugging_new_integration/profiling potential_integral.jl
 scripts/general/debugging_new_integration/profiling surface_integral.jl
+scripts/benchmarks/comparison_to_Maya/gravitational_potential/gravitational_potential_source_varying_eta_constant_k.png

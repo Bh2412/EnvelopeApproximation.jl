@@ -2,9 +2,10 @@ using EnvelopeApproximation.GravitationalPotentials
 using CSV, DataFrames
 using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
-using EnvelopeApproximation.BubblesEvoluation
+using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.StressEnergyTensor
-import EnvelopeApproximation.StressEnergyTensor: T_ij, diagonal, TensorDirection
+import EnvelopeApproximation.StressEnergyTensor: T_ij, diagonal, TensorDirection, upper_right
+import EnvelopeApproximation.GravitationalPotentials: ψ_source
 using Plots
 
 # Loading Maya results
@@ -21,17 +22,25 @@ snapshot = BubblesSnapShot(nucleations, η_max)
 
 # computing Txx, Tyy, Tzz
 
-tds = Vector{TensorDirection}(diagonal)
+tds = Vector{TensorDirection}(upper_right)
 
-function T_ij(η:: Float64):: Array{ComplexF64, 2}
+function Tij(η:: Float64):: Array{ComplexF64, 2}
     return T_ij(kvecs, current_bubbles(snapshot, η), 1, 1000, ΔV, tds; rtol=1e-3)
 end
 
+function ψsource(η:: Float64)
+    return ψ_source(kvecs, snapshot, η, 1, 1000, ΔV; rtol=1e-3)
+end
+
 begin
-    Ts = T_ij.(ηs)
+    Ts = Tij.(ηs)
     Txx = (x -> x[1]).(Ts)
     Tyy = (x-> x[2]).(Ts)
-    Tzz = (x -> x[3]).(Ts)        
+    Tzz = (x -> x[3]).(Ts)
+    Txy = (x -> x[4]).(Ts)
+    Txz = (x -> x[5]).(Ts)
+    Tyz = (x -> x[6]).(Ts)        
+    ψs = @. (x -> x[1])(ψsource(ηs))
 end
 
 # comparison Plots For Tij
@@ -40,19 +49,21 @@ begin
     p = plot(ηs, Maya_results_df[:, :T_xx], label="Maya", title="Txx")
     plot!(ηs, Txx .|> real, label="Ben")     
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Txx_comparison_varying_eta_constant_k.png")
-
+    display(p)
 end
 
 begin 
     p = plot(ηs, Maya_results_df[:, :T_yy], label="Maya", title="Tyy")
     plot!(ηs, Tyy .|> real, label="Ben")
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Tyy_comparison_varying_eta_constant_k.png")
+    display(p)
 end
 
 begin
     p = plot(ηs, Maya_results_df[:, :T_zz], label="Maya", title="Tzz")
     plot!(ηs, Tzz .|> real, label="Ben")    
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Tzz_comparison_varying_eta_constant_k.png")    
+    display(p)
 end
 
 # comparing ψ
@@ -67,11 +78,18 @@ end
 
 Ψ
 
+begin
+    p = plot(ηs, ψs .|> real, label="ψ``", xlabel="η")
+    plot!(ηs, Ψ .|> real, label="ψ")    
+    savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/gravitational_potential_source_varying_eta_constant_k.png")    
+    display(p)
+end
+
 # plot
 
 begin
     n = 5
-    p = plot(ηs[1:n], Maya_results_df[!, :Psi][1:n], label="Maya", title="Ψ")
+    p = plot(ηs[1:n], Maya_results_df[!, :Psi][1:n], label="Maya", title="Ψ", xlabel="η")
     plot!(ηs[1:n], Ψ[1:n] .|> real, label="Ben")
     display(p)
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/psi_comparison_varying_eta_constant_k.png")

@@ -127,6 +127,18 @@ end
 
 function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
+                  t:: Float64, 
+                  n_ϕ:: Int,
+                  n_μ:: Int,
+                  ΔV:: Float64 = 1., 
+                  a:: Float64 = 1., 
+                  G:: Float64 = 1.; 
+                  kwargs...):: Vector{ComplexF64}
+    return ψ_source(ks, snapshot, t, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
+end
+
+function ψ_source(ks:: Vector{Vec3}, 
+                  snapshot:: BubblesSnapShot, 
                   times:: Vector{Float64}, 
                   ϕ_resolution:: Float64,
                   μ_resolution:: Float64,
