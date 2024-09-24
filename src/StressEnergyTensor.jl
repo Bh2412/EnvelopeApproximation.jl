@@ -39,37 +39,54 @@ end
 ⋅(p1:: Point3, k:: Vec3):: Float64 = coordinates(p1) ⋅ k
 ⋅(x:: SVector{2, Float64}, k:: Vec3) = (√(1 - x[2] ^ 2) * (k[1]  * cos(x[1]) + k[2] * sin(x[1])) + k[3] * x[2])
 
-function coordinate_transformation(x:: SVector{2, Float64}, s:: BubbleSection):: SVector{2, Float64}
-    """
-    The integration over each section is performed between (0., 2π), (-1., 1.), this transformation makes sure of that
-    """
-    return @. (x * (s.ϕ.d / 2π, s.μ.d / 2)) + (s.ϕ.c + s.ϕ.d / 2 - π, s.μ.c)
+struct BubbleIntegrand!
+    bubble_intersection:: BubbleIntersection
+    bubble:: Bubble
+    ΔV:: Float64
 end
 
-measure(s:: BubbleSection) = s.ϕ.d * s.μ.d
-
-function add_section_contribution!(V:: Matrix{ComplexF64}, x:: SVector{2, Float64}, s:: BubbleSection, ks:: Vector{Vec3}, 
-                                   bubble:: Bubble, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64}, 
-                                   td_dump:: Vector{Float64})
-    px = coordinate_transformation(x, s)
-    p = bubble_point(px..., bubble)
-    c = (bubble.radius ^ 3 * ((ΔV / 3.) * measure(s) / 4π))
+function (bi:: BubbleIntegrand!)(x:: SVector{2, Float64}, 
+                                 ks:: Vector{Vec3},
+                                 tensor_directions:: Vector{TensorDirection},
+                                 V:: Matrix{ComplexF64}, 
+                                 e_dump:: Vector{ComplexF64},
+                                 td_dump:: Vector{Float64})
+    ∉(x[2], x[1], bi.bubble_intersection) && return
+    p = bubble_point(x..., bi.bubble)
+    c = bi.bubble.radius ^ 3 * ((bi.ΔV / 3.))
     @. e_dump = cis(-((p, ) ⋅ ks))
-    @. td_dump = td_integrand((px, ), tensor_directions)
-    @inbounds for (l, td) ∈ enumerate(td_dump), (j, e) ∈ enumerate(e_dump)
-        V[j, l] += e * (td * c)
+    @. td_dump = td_integrand((x, ), tensor_directions) * c
+    @. V += $reshape(e_dump, :, 1) * $reshape(td_dump, 1, :)
+end
+
+struct SurfaceIntegrand
+    bubble_integrands:: Vector{BubbleIntegrand!}
+    ks:: Vector{Vec3}
+    tensor_directions:: Vector{TensorDirection}
+    V:: Matrix{ComplexF64}
+    e_dump:: Vector{ComplexF64}
+    td_dump:: Vector{Float64}
+
+    function SurfaceIntegrand(bubble_integrands:: Vector{BubbleIntegrand!},
+                               ks:: Vector{Vec3},
+                               tensor_directions:: Vector{TensorDirection})
+        V = zeros(ComplexF64, length(ks), length(tensor_directions))
+        e_dump = zeros(ComplexF64, length(ks))
+        td_dump = zeros(Float64, length(tensor_directions))
+        return new(bubble_integrands, ks, tensor_directions,
+                   V, e_dump, td_dump)
     end
 end
 
-function surface_integrand!(x:: SVector{2, Float64}, sections:: Vector{BubbleSection}, ks:: Vector{Vec3}, 
-                            bubbles:: Bubbles, tensor_directions:: Vector{TensorDirection}, ΔV:: Float64, e_dump:: Vector{ComplexF64},
-                            td_dump:: Vector{Float64}):: Matrix{ComplexF64}
-    V = zeros(ComplexF64, length(ks), length(tensor_directions))
-    for section in sections
-        add_section_contribution!(V, x, section, ks, bubbles[section.bubble_index], tensor_directions, ΔV, e_dump, td_dump)
+function (si:: SurfaceIntegrand)(x:: SVector{2, Float64}):: Matrix{ComplexF64}
+    V = zeros(ComplexF64, length(si.ks), length(si.tensor_directions))
+    for bi! in si.bubble_integrands
+        bi!(x, si.ks, si.tensor_directions, V, si.e_dump, si.td_dump)
     end
     return V
 end
+
+push!(si:: SurfaceIntegrand, bi:: BubbleIntegrand!) = push!(si.bubble_integrands, bi)
 
 function unit_sphere_hcubature(f; kwargs...)
     x0, xf = SVector{2, Float64}(0., -1.), SVector{2, Float64}(2π, 1.)
@@ -79,12 +96,17 @@ end
 function surface_integral(ks:: Vector{Vec3}, 
                           bubbles:: Bubbles, 
                           tensor_directions:: Vector{TensorDirection},
-                          sections:: Vector{BubbleSection},
+                          intersections:: Dict{Int64, BubbleIntersection},
                           ΔV:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
-    e_dump = Vector{ComplexF64}(undef, length(ks))
-    td_dump = Vector{Float64}(undef, length(tensor_directions))
-    integrand(x:: SVector{2, Float64}):: Matrix{ComplexF64} = surface_integrand!(x, sections, ks, bubbles, tensor_directions, ΔV, e_dump, td_dump)
-    return unit_sphere_hcubature(integrand; kwargs...)[1]
+    surface_integrand = SurfaceIntegrand(Vector{BubbleIntegrand!}(), 
+                                         ks, 
+                                         tensor_directions)
+    for (bubble_index, bubble_intersection) in intersections
+        push!(surface_integrand, BubbleIntegrand!(bubble_intersection, 
+                                                  bubbles[bubble_index],
+                                                  ΔV))
+    end
+    return unit_sphere_hcubature(surface_integrand; kwargs...)[1]
 end
 
 function surface_integral(ks:: Vector{Vec3}, 
@@ -93,8 +115,8 @@ function surface_integral(ks:: Vector{Vec3},
                           ϕ_resolution:: Float64,
                           μ_resolution:: Float64,
                           ΔV:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
-    sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
-    surface_integral(ks, bubbles, tensor_directions, sections, ΔV; kwargs...)
+    intersections = bubble_intersections(ϕ_resolution, μ_resolution, bubbles)
+    surface_integral(ks, bubbles, tensor_directions, intersections, ΔV; kwargs...)
 end
 
 function surface_integral(ks:: Vector{Vec3}, 
@@ -109,41 +131,56 @@ end
 
 export surface_integral
 
-function add_potential_section_contribution!(V:: Vector{ComplexF64}, 
-                                             x:: SVector{2, Float64},
-                                             s:: BubbleSection,
-                                             ks:: Vector{Vec3},
-                                             bubble:: Bubble)
-    px = coordinate_transformation(x, s)
-    p = bubble_point(px..., bubble)
-    c = (bubble.radius ^ 2) * measure(s) / 4π
-    @. V += cis(-((p, ) ⋅ ks)) * ((px, ) ⋅ ks) * c
+struct BubblePotentialIntegrand!
+    bubble_intersection:: BubbleIntersection
+    bubble:: Bubble
+    ΔV:: Float64
 end
 
-function potential_integrand(x:: SVector{2, Float64}, 
-                             sections:: Vector{BubbleSection}, 
-                             ks:: Vector{Vec3}, bubbles:: Bubbles, 
-                             ΔV:: Float64 = 1.):: Vector{ComplexF64}
-    #=
-    This assumes that the potential is negative within the true vacuum
-    and zero outside of it.
-    =#
-    c:: Vector{ComplexF64} = @. im * ((-ΔV) / (ks ⋅ ks))
-    V = zeros(ComplexF64, length(ks))
-    for s in sections
-        add_potential_section_contribution!(V, x, s, ks, bubbles[s.bubble_index])
-    end
-    return c .* V
+function (bpi:: BubblePotentialIntegrand!)(x:: SVector{2, Float64}, 
+                                           ks:: Vector{Vec3},
+                                           V:: Vector{ComplexF64})
+    ∉(x[2], x[1], bpi.bubble_intersection) && return
+    p = bubble_point(x..., bpi.bubble)
+    c = (bpi.bubble.radius ^ 2)
+    @. V += cis(-((p, ) ⋅ ks)) * ((x, ) ⋅ ks) * c
 end
+
+struct PotentialIntegrand
+    bubble_potential_integrands:: Vector{BubblePotentialIntegrand!}
+    ks:: Vector{Vec3}
+    V:: Vector{ComplexF64}
+
+    function PotentialIntegrand(bubble_potential_integrands:: Vector{BubblePotentialIntegrand!},
+                                ks:: Vector{Vec3})
+        V = zeros(ComplexF64, length(ks))
+        return new(bubble_potential_integrands, ks, V)
+    end
+end
+
+function (bpi:: PotentialIntegrand)(x:: SVector{2, Float64}):: Vector{ComplexF64}
+    V = zeros(ComplexF64, length(bpi.ks))
+    for bpi! in bpi.bubble_potential_integrands
+        bpi!(x, bpi.ks, V)
+    end
+    return V
+end
+
+push!(pi:: PotentialIntegrand, bpi:: BubblePotentialIntegrand!) = push!(pi.bubble_potential_integrands, bpi)
 
 function potential_integral(ks:: Vector{Vec3}, 
                             bubbles:: Bubbles, 
-                            sections:: Vector{BubbleSection},
+                            intersections:: Dict{Int, BubbleIntersection},
                             ΔV:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
-    integrand(x:: SVector{2, Float64}):: Vector{ComplexF64} = potential_integrand(x, 
-                                                                                  sections,
-                                                                                  ks, bubbles, ΔV)
-    return unit_sphere_hcubature(integrand; kwargs...)[1]
+    potential_integrand = PotentialIntegrand(Vector{BubblePotentialIntegrand!}(), 
+                                             ks)
+    for (bubble_index, bubble_intersection) in intersections
+        push!(potential_integrand, BubblePotentialIntegrand!(bubble_intersection, 
+                                                             bubbles[bubble_index],
+                                                             ΔV))
+    end
+    c:: Vector{ComplexF64} = @. im * ((-ΔV) / (ks ⋅ ks))
+    return @. c * $unit_sphere_hcubature(potential_integrand; kwargs...)[1]
 end
 
 function potential_integral(ks:: Vector{Vec3}, 
@@ -151,15 +188,15 @@ function potential_integral(ks:: Vector{Vec3},
                             ϕ_resolution:: Float64,
                             μ_resolution:: Float64,
                             ΔV:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
-    sections = surface_sections(ϕ_resolution, μ_resolution, bubbles)
-    return potential_integral(ks, bubbles, sections, ΔV; kwargs...)
+    intersections = bubble_intersections(ϕ_resolution, μ_resolution, bubbles)
+    return potential_integral(ks, bubbles, intersections, ΔV; kwargs...)
 end
 
 function potential_integral(ks:: Vector{Vec3}, 
                             bubbles:: Bubbles, 
                             n_ϕ:: Int64, 
                             n_μ:: Int64, 
-                            ΔV:: Float64 = 1.; kwargs...)
+                            ΔV:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
     return potential_integral(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV; kwargs...)
 end
 

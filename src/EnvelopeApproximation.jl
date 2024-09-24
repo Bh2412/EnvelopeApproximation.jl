@@ -105,8 +105,6 @@ include("SurfaceTesselation.jl")
 
 include("StressEnergyTensor.jl")
 
-include("StressEnergyTensor copy.jl")
-
 include("StressEnergyTensorFFT.jl")
 
 include("GravitationalPotentials.jl")
