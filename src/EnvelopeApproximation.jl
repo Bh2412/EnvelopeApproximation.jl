@@ -109,6 +109,8 @@ include("StressEnergyTensorFFT.jl")
 
 include("GravitationalPotentials.jl")
 
+include("TemperatureFluctuations.jl")
+
 include("Visualization.jl")
 
 end
