@@ -5,11 +5,11 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.StressEnergyTensor
 import EnvelopeApproximation.StressEnergyTensor: T_ij, diagonal, TensorDirection, upper_right
-import EnvelopeApproximation.GravitationalPotentials: ψ_source
+import EnvelopeApproximation.GravitationalPotentials: ψ_source, Ŋ, Φ
 using Plots
 
 # Loading Maya results
-Maya_results_df = CSV.read("scripts/benchmarks/comparison_to_Maya/gravitational_potential/varying_eta_fixed_k.csv", DataFrame)
+Maya_results_df = CSV.read("scripts/benchmarks/comparison_to_Maya/gravitational_potential/varying_eta_fixed_k_data_Maya.csv", DataFrame)
 ηs = Maya_results_df[!, :eta]
 
 # Ssetting up the parameters
@@ -66,6 +66,13 @@ begin
     display(p)
 end
 
+begin
+    p = plot(ηs, Maya_results_df[:, :T_zx], label="Maya", title="Tzx")
+    plot!(ηs, Txz .|> real, label="Ben")    
+    savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Txz_comparison_varying_eta_constant_k.png")    
+    display(p)
+end
+
 # comparing ψ
 
 a, G = 1., 1.
@@ -78,9 +85,13 @@ end
 
 Ψ
 
+ŋ = (T -> Ŋ(kvecs, T, tds, a, G)).(Ts) .|> x -> x[1]
+
+ϕ = Φ(ŋ, Ψ)
+
 begin
     p = plot(ηs, ψs .|> real, label="ψ``", xlabel="η")
-    plot!(ηs, Ψ .|> real, label="ψ")    
+    plot!(ηs, Ψ .|> real, label="ψ")  
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/gravitational_potential_source_varying_eta_constant_k.png")    
     display(p)
 end
@@ -88,7 +99,7 @@ end
 # plot
 
 begin
-    n = 5
+    n = 120
     p = plot(ηs[1:n], Maya_results_df[!, :Psi][1:n], label="Maya", title="Ψ", xlabel="η")
     plot!(ηs[1:n], Ψ[1:n] .|> real, label="Ben")
     display(p)
@@ -103,9 +114,20 @@ begin
     display(p)
 end
 
+# Comparing ϕ
+
+begin
+    n = 120
+    p = plot(ηs[1:n], Maya_results_df[!, :Phi][1:n], label="Maya", title="ϕ", xlabel="η")
+    plot!(ηs[1:n], ϕ[1:n] .|> real, label="Ben")
+    display(p)
+    savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/phi_comparison_varying_eta_constant_k.png")
+end
+
+
 # Saving the data
 
 d = begin
-    d = DataFrame(:η => ηs, :Txx => Txx, :Tyy => Tyy, :Tzz => Tzz, :ψ => Ψ)
+    d = DataFrame(:η => ηs, :Txx => Txx, :Tyy => Tyy, :Tzz => Tzz, :Txz => Txz, :ψ => Ψ)
     CSV.write("scripts/benchmarks/comparison_to_Maya/gravitational_potential/numeric_varying_eta_constant_k_data.csv", d, delim=';', header=true)
 end
