@@ -1,23 +1,25 @@
 module GeometricStressEnergyTensor
 
 using EnvelopeApproximation.BubbleBasics
+using StaticArrays
 using LinearAlgebra
 using Intervals
 using Rotations
+import Base: *
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     return euc(bubble1.center - bubble2.center) < bubble1.radius + bubble2.radius
 end
 
-struct Intersection
+struct IntersectionArc
     h:: Float64
     n̂:: Vec3
     dome_like:: Bool
 end
 
-function Intersection(n:: Vec3, includes_center:: Bool)
+function IntersectionArc(n:: Vec3, includes_center:: Bool)
     h = norm(n)
-    return Intersection(h, n / h, includes_center)
+    return IntersectionArc(h, n / h, includes_center)
 end
 
 #=
@@ -28,7 +30,7 @@ function λ(r1:: Float64, r2:: Float64, d:: Float64)
     return x
 end
 
-function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{Intersection, Interection}
+function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{IntersectionArc, IntersectionArc}
     n = bubble2.center - bubble1.center
     d = norm(n)
     n̂ = n / d 
@@ -37,11 +39,11 @@ function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{Intersection, Interecti
     n2 = -n + n1
     in1 = sign(d^2 + bubble1.radius ^ 2 - bubble2.radius ^ 2)
     in2 = sign(d^2 + bubble2.radius ^ 2 - bubble1.radius ^ 2)
-    return (Intersection(n1, in1), Intersection(n2, in2))
+    return (IntersectionArc(n1, in1), IntersectionArc(n2, in2))
 end
 
-function intersections(bubbles:: Bubbles):: Dict{Int, Vector{Intersection}}
-    d = Dict{Int, Vector{Intersection}}()
+function intersections(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc}}
+    d = Dict{Int, Vector{IntersectionArc}}()
     for (i, bubble1) in enumerate(bubbles)
         for (j̃, bubble2) in bubbles[(i + 1):end]
             j = j̃ + i
@@ -51,7 +53,7 @@ function intersections(bubbles:: Bubbles):: Dict{Int, Vector{Intersection}}
                     if k ∈ keys(d)
                         push!(d[k], intersection)
                     else
-                        d[k] = Vector{Intersection}([intersection])
+                        d[k] = Vector{IntersectionArc}([intersection])
                     end
                 end
             else
@@ -109,13 +111,13 @@ function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalS
 end
 
 function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64},
-             intersection:: Intersection):: Interval{Float64, Closed, Closed}
+             intersection:: IntersectionArc):: Interval{Float64, Closed, Closed}
     n̂′ = krotation * intersection.n̂
     if n̂′ ∥ ẑ
         if (μ′ * R * sign(n̂′[3])) >= intersection.h
-            return EntireRing
+            _Δϕ′ =  EntireRing
         else
-            return EmptyInterval
+            _Δϕ′ = EmptyInterval
         end
     else
         _Δϕ′ = Δϕ′(μ′, R, n̂′, intersection.h)        
@@ -129,8 +131,8 @@ function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64
 end
 
 function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64}, 
-             intersections:: Vector{Intersection}):: Vector{Interval{Float64, Closed, Closed}}
-    _Δϕ′(intersection:: Intersectoin):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, krotation, intersection)
+             intersections:: Vector{IntersectionArc}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    _Δϕ′(intersection:: IntersectionArc):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, krotation, intersection)
     return @. $reduce(∩, apply_periodicity(_Δϕ′(intersections)))
 end
 
@@ -144,7 +146,7 @@ function (si:: SphericalIntegrand{T})(μϕ:: Tuple{Float64, Float64}):: T where 
     return si(μϕ...)
 end
 
-function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: T
+function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: T where T
     throw(error("Not Implemented"))
 end
 
@@ -161,14 +163,14 @@ function *(si1:: SphericalIntegrand{Float64}, si2:: SphericalIntegrand{SVector{K
 end
 
 struct SphericalDirectSumIntegrand{K, T} <: SphericalIntegrand{Vector{T}}
-    components:: NTuple{K, Z} where Z <: SphericalIntegrand{T}
+    components:: NTuple{K, SphericalIntegrand{T}} 
 end
 
-function (ds:: SphericalDirectSumIntegrand{K, T})(μ:: Float64, ϕ:: Float64):: Vector{T}
-    invoke.(ds.components, Tuple{Float64, Float64}, μ, ϕ)
+function (ds:: SphericalDirectSumIntegrand{K, T})(μ:: Float64, ϕ:: Float64):: Vector{T} where {K, T}
+    ((μ, ϕ), ) .|> ds.components
 end
 
-function (ds:: SphericalDirectSumIntegrand{K, T})(V:: Vector{T}, μ:: Float64, ϕ:: Float64):: Vector{T}
+function (ds:: SphericalDirectSumIntegrand{K, T})(V:: Vector{T}, μ:: Float64, ϕ:: Float64):: Vector{T} where {K, T}
     @. V = invoke(ds.components, Tuple{Float64, Float64}, μ, ϕ)
     return V
 end
@@ -181,12 +183,12 @@ function ⊕(si1:: SphericalDirectSumIntegrand{K, T}, si2:: SphericalIntegrand{T
     SphericalDirectSumIntegrand{K+1, T}(((si1.components..., si2)))
 end
 
-function ∫_ϕ(sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Vector{T}
+function ∫_ϕ(sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: NTuple{K, T} where {K, T}
     return ∫_ϕ.(sdsi.components, μ, ϕ1, ϕ2)
 end
 
-function ∫_ϕ!(V:: Vector{T}, sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Vector{T}
-    return @. V = ∫_ϕ(sdsi.components, (μ, ), (ϕ1, ), (ϕ2, ))
+function ∫_ϕ!(V:: AbstractVector{T}, sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Vector{T} where {K, T}
+    return V .= ∫_ϕ(sdsi, μ, ϕ1, ϕ2)
 end
 
 abstract type TensorDirection <: SphericalIntegrand{Float64} end
@@ -224,8 +226,9 @@ struct SphericalZZ <: TensorDirection end
 (st:: SphericalZZ)(μ:: Float64, ϕ:: Float64):: Float64 = μ ^ 2
 ∫_ϕ(st:: SphericalZZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ ^ 2 * (ϕ2 - ϕ1)
 
-const diagonal:: Vector{<: TensorDirection} = SphericalXX() ⊕ SphericalYY() ⊕ SphericalZZ()
-const upper_right:: Vector{<: TensorDirection} = reduce(⊕, [SphericalXX(), SphericalXY(), SphericalXZ(), SphericalYY(), SphericalYZ(), SphericalZZ()])
+const diagonal:: SphericalDirectSumIntegrand{3, Float64} = SphericalXX() ⊕ SphericalYY() ⊕ SphericalZZ()
+const upper_right:: SphericalDirectSumIntegrand{6, Float64} = reduce(⊕, [SphericalXX(), SphericalXY(), SphericalXZ(), SphericalYY(), SphericalYZ(), SphericalZZ()])
+
 
 
 end
