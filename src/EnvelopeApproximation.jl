@@ -3,9 +3,7 @@ module EnvelopeApproximation
 module BubbleBasics
 
 using Distances
-import Base.length
-import Base.∈
-import Base.keys
+import Base: ∈, keys, +, -, lastindex, length, getindex
 using StaticArrays
 import LinearAlgebra: norm, ⋅
 import Base: +, -
@@ -66,7 +64,9 @@ function Base.iterate(bs:: Bubbles, state)
     return Base.iterate(bs.bubbles, state)
 end
 
+lastindex(bs:: Bubbles) = lastindex(bs.bubbles)
 keys(bs:: Bubbles) = keys(bs.bubbles)
+getindex(bs:: Bubbles, i:: Int) = getindex(b.bubbles, i)
 
 Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 
@@ -106,6 +106,8 @@ include("SurfaceTesselation.jl")
 include("StressEnergyTensor.jl")
 
 include("StressEnergyTensorFFT.jl")
+
+include("GeometricStressEnergyTensor.jl")
 
 include("GravitationalPotentials.jl")
 
