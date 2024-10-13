@@ -66,7 +66,6 @@ end
 
 lastindex(bs:: Bubbles) = lastindex(bs.bubbles)
 keys(bs:: Bubbles) = keys(bs.bubbles)
-getindex(bs:: Bubbles, i:: Int) = getindex(b.bubbles, i)
 
 Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 

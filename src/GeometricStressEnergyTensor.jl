@@ -74,8 +74,8 @@ const ẑ:: Vec3 = Vec3(0., 0., 1.)
 
 ∥(u:: Vec3, v:: Vec3):: Bool = u×v ≈ NullVec
 
-const EmptyInterval:: Interval{Float64, Closed, Closed} = 2π .. 0.
-const EntireRing:: Interval{Float64, Closed, Closed} = 0. .. 2π
+const EmptyInterval:: Nothing = nothing
+const EntireRing:: Tuple{Float64, Float64} = 0., 2π
 
 function ∠(k:: Vec3):: Vec3
     ∥(k) && return Vec3(0., 0., 0.)
@@ -86,7 +86,7 @@ end
 
 align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k...)))
 
-function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Interval{Float64, Closed, Closed}
+function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Union{Tuple{Float64, Float64}, Nothing}
     # This function assumes n̂′ is not parallel to the sphere of the integration ring
     s′ = √(1 - μ′ ^ 2)
     d, sgn = begin
@@ -99,12 +99,12 @@ function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Int
     α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
     Δ = acos(d / (R * s′))
     # Returns the interval that describes the Dome!!! of the intersection, that is the short arc of the intersection
-    return α - Δ .. α + Δ
+    return α - Δ, α + Δ
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system
 function Δϕ′(μ′:: Float64, R:: Float64, 
-             intersection′:: IntersectionArc):: Interval{Float64, Closed, Closed}
+             intersection′:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing}
     n̂′, h = intersection′.n̂, intersection′.h
     if n̂′ ∥ ẑ
         if (μ′ * R * sign(n̂′[3])) >= h
@@ -116,24 +116,36 @@ function Δϕ′(μ′:: Float64, R:: Float64,
         _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
     end
     # This function returns the correctt arc of the intersection, in a representation by a single interval.
-    if intersection′.dome_like
+    if intersection′.dome_like 
         return _Δϕ′
     else
-        return _Δϕ′.left .. _Δϕ′.right
+        if !isnothing(_Δϕ′)
+            return _Δϕ′[[2, 1]]
+        else
+            return EntireRing
+        end
     end
 end
 
-function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    if Δϕ.right >= Δϕ.left
-        return IntervalSet([Δϕ])
+const EmptyIntervalSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([])
+
+function apply_periodicity(Δϕ:: Union{Tuple{Float64, Float64}, Nothing}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    isnothing(Δϕ) && return EmptyIntervalSet
+    # Naive use of intervals ignore the fact that the point 0. is ientified with
+    # The point 2π, This means we need to fix intervalss that pass through the origin
+    # This function assumes Δϕ is smaller than π
+    ϕ1 = mod2π(Δϕ[1])
+    ϕ2 = ϕ1 + Δϕ[2] - Δϕ[1]
+    if ϕ2 ≲ 2π
+        return IntervalSet([ϕ1 .. ϕ2])
     else
-        return IntervalSet([0. .. Δϕ.right, Δϕ.left .. 2π])
+        return IntervalSet([0. .. mod2π(ϕ2), ϕ1 .. 2π])
     end
 end
 
 function Δϕ′(μ′:: Float64, R:: Float64,
              intersection_arcs:: Vector{IntersectionArc}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    _Δϕ′(intersection:: IntersectionArc):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, intersection)
+    _Δϕ′(intersection:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing} = Δϕ′(μ′, R, intersection)
     return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)))
 end
 
@@ -241,8 +253,7 @@ end
 
 function ∫_ϕ(basi:: BubbleArcSurfaceIntegrand, μ:: Float64):: MVector{6, Float64}
     V = zeros(MVector{6, Float64})
-    # TODO: Make sure if the union is necessary
-    intervals = union(Δϕ′(μ, basi.R, basi.arcs))
+    intervals = Δϕ′(μ, basi.R, basi.arcs)
     for interval in intervals
         V .+= ∫_ϕ(upper_right, μ, interval.first, interval.last)
     end
