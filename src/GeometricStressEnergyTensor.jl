@@ -254,14 +254,14 @@ end
 function ∫_ϕ(basi:: BubbleArcSurfaceIntegrand, μ:: Float64):: MVector{6, Float64}
     V = zeros(MVector{6, Float64})
     intervals = Δϕ′(μ, basi.R, basi.arcs)
-    for interval in intervals
+    for interval in intervals.items
         V .+= ∫_ϕ(upper_right, μ, interval.first, interval.last)
     end
     return V
 end
 
 # Assume the rotation is right handed, that is of unit determinant (else it would change the dome_like parameter)
-function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionArc):: BubbleArcSurfaceIntegrand
+function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionArc):: IntersectionArc
      return IntersectionArc(arc.h, rotation * arc.n̂, arc.dome_like)
 end
 
@@ -272,7 +272,7 @@ end
 function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}}, 
                       κ:: Float64; kwargs...):: MVector{K, ComplexF64} where K
     _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-im * κ * μ) * ∫_ϕ(f, μ)
-    return quadgk(_f, -1., 1.; kwargs...)
+    return quadgk(_f, -1., 1.; kwargs...)[1]
 end
 
 # The mapping between a 3 x 3 symmetric tensor's double indices and 
@@ -307,10 +307,10 @@ function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: 
 end
 
 function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble:: Bubble, arcs:: Vector{IntersectionArc},
-                                  krotatiton:: SMatrix{3, 3, Float64}, 
+                                  krotation:: SMatrix{3, 3, Float64}, 
                                   ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
     mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
-    V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-im * (k ⋅ bubble.center)))
+    V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-im * (k ⋅ bubble.center.coordinates)))
 end
 
 function surface_integral(k:: Vec3, bubbles:: Bubbles, 
@@ -318,7 +318,7 @@ function surface_integral(k:: Vec3, bubbles:: Bubbles,
                           krotation:: SMatrix{3, 3, Float64}, 
                           kdrotation:: SMatrix{6, 6, Float64},
                           ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
-    V = zeros(MVector{6, Float64})
+    V = zeros(MVector{6, ComplexF64})
     for (bubble_index, bubble_arcs) in arcs
         add_bubble_contribution!(V, k, bubbles[bubble_index], 
                                  bubble_arcs, krotation, ΔV; kwargs...)
@@ -330,7 +330,7 @@ function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles,
                           arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
                           krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
                           kdrotations:: Union{Nothing, Vector{SMatrix{6, 6, Float64}}} = nothing, 
-                          ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+                          ΔV:: Float64 = 1.; rtol...):: Matrix{ComplexF64}
     arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
