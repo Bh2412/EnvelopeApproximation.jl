@@ -297,9 +297,8 @@ end
 
 function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble:: Bubble, arcs:: Vector{IntersectionArc},
                                   krotatiton:: SMatrix{3, 3, Float64}, 
-                                  kdrotation:: SMatrix{6, 6, Float64}, 
                                   ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
-    mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .*arcs), bubble.radius * norm(k); kwargs...)
+    mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
     V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-im * (k ⋅ bubble.center)))
 end
 
@@ -307,13 +306,13 @@ function surface_integral(k:: Vec3, bubbles:: Bubbles,
                           arcs:: Dict{Int64, Vector{IntersectionArc}},
                           krotation:: SMatrix{3, 3, Float64}, 
                           kdrotation:: SMatrix{6, 6, Float64},
-                          ΔV:: Float64 = 1.):: MVector{6, ComplexF64}
+                          ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
     V = zeros(MVector{6, Float64})
     for (bubble_index, bubble_arcs) in arcs
         add_bubble_contribution!(V, k, bubbles[bubble_index], 
-                                 bubble_arcs, krotation, kdrotation, ΔV)
+                                 bubble_arcs, krotation, ΔV; kwargs...)
     end
-    return V
+    return kdrotation * V
 end
 
 function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
