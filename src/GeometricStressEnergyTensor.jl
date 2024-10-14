@@ -5,6 +5,7 @@ using StaticArrays
 using LinearAlgebra
 using Intervals
 using Rotations
+import Intervals: ∩
 import Base: *
 using QuadGK
 
@@ -44,17 +45,16 @@ end
 
 function intersection_arcs(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc}}
     d = Dict{Int, Vector{IntersectionArc}}()
+    for i in eachindex(bubbles.bubbles)
+        d[i] = Vector{IntersectionArc}()
+    end
     for (i, bubble1) in enumerate(bubbles.bubbles)
         for (j̃, bubble2) in enumerate(bubbles.bubbles[(i + 1):end])
             j = j̃ + i
             if intersecting(bubble1, bubble2)
                 intersection1, intersection2 = bubble1 ∩ bubble2
                 for (k, intersection) in ((i, intersection1), (j, intersection2))
-                    if k ∈ keys(d)
-                        push!(d[k], intersection)
-                    else
-                        d[k] = Vector{IntersectionArc}([intersection])
-                    end
+                    push!(d[k], intersection)
                 end
             else
                 continue
@@ -93,8 +93,13 @@ function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Uni
         x = (h - μ′ * R) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
         abs(x), sign(x)
     end
-    if abs(d) >= R * s′
-        return EmptyInterval
+    if d >= R * s′
+        # The sign indicates where the integration ring is entirely in or entirely out
+        if sgn > 0.
+            return EntireRing
+        else
+            return EmptyInterval
+        end
     end
     α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
     Δ = acos(d / (R * s′))
@@ -108,9 +113,9 @@ function Δϕ′(μ′:: Float64, R:: Float64,
     n̂′, h = intersection′.n̂, intersection′.h
     if n̂′ ∥ ẑ
         if (μ′ * R * sign(n̂′[3])) >= h
-            _Δϕ′ =  EntireRing
+            _Δϕ′ =  EmptyInterval
         else
-            _Δϕ′ = EmptyInterval
+            _Δϕ′ = EntireRing
         end
     else
         _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
@@ -143,10 +148,12 @@ function apply_periodicity(Δϕ:: Union{Tuple{Float64, Float64}, Nothing}):: Int
     end
 end
 
+const EntireRingSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([EntireRing[1] .. EntireRing[2]])
+
 function Δϕ′(μ′:: Float64, R:: Float64,
-             intersection_arcs:: Vector{IntersectionArc}):: IntervalSet{Interval{Float64, Closed, Closed}}
+             intersection_arcs:: Vector{IntersectionArc}):: IntervalSet{Interval}
     _Δϕ′(intersection:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing} = Δϕ′(μ′, R, intersection)
-    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)))
+    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)), init=EntireRingSet)
 end
 
 abstract type SphericalIntegrand{T} end
