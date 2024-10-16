@@ -166,6 +166,23 @@ function ∫_ϕ(basi:: BubbleArcSurfaceIntegrand, μ:: Float64):: MVector{6, Flo
     return V
 end
 
+const ZHat:: SphericalZhat = SphericalZhat()
+
+struct BubbleArcPotentialIntegrand <: SphericalIntegrand{Float64}
+    R:: Float64
+    arcs:: Vector{IntersectionArc}
+end
+
+function ∫_ϕ(bapi:: BubbleArcPotentialIntegrand, μ:: Float64):: Float64
+    intervals = Δϕ′(μ, bapi.R, bapi.arcs).items
+    _f(i:: Interval{Float64, Closed, Closed}):: Float64 = ∫_ϕ(ZHat, μ, i.first, i.last)
+    x:: Float64 = 0.
+    for i in intervals
+        x += _f(i)
+    end
+    return x
+end
+
 # Assume the rotation is right handed, that is of unit determinant (else it would change the dome_like parameter)
 function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionArc):: IntersectionArc
      return IntersectionArc(arc.h, rotation * arc.n̂, arc.dome_like)
@@ -173,6 +190,12 @@ end
 
 function *(rotation:: SMatrix{3, 3, Float64}, basi:: BubbleArcSurfaceIntegrand):: BubbleArcSurfaceIntegrand
     return BubbleArcSurfaceIntegrand(basi.R, (rotation, ) .* basi.arcs)
+end
+
+function fourier_mode(f:: SphericalIntegrand{Float64}, 
+                      κ:: Float64; kwargs...):: ComplexF64
+    _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(f, μ)
+    return quadgk(_f, -1., 1.; kwargs...)[1]
 end
 
 function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}}, 
@@ -248,5 +271,35 @@ function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles,
 end
 
 export surface_integral
+
+function bubble_potential_contribution(k:: Vec3, bubble:: Bubble, 
+                                       arcs:: Vector{IntersectionArc}, 
+                                       krotation:: SMatrix{3, 3, Float64}, 
+                                       ΔV:: Float64 = 1.; kwargs...):: ComplexF64
+    mode = fourier_mode(BubbleArcPotentialIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
+    return mode * (im * cis(-(k ⋅ bubble.center.coordinates))) * ((-ΔV / norm(k)) *  bubble.radius ^ 2) 
+end
+
+function potential_integral(k:: Vec3, bubbles:: Bubbles, 
+                            arcs:: Dict{Int64, Vector{IntersectionArc}},
+                            krotation:: SMatrix{3, 3, Float64}, 
+                            ΔV:: Float64 = 1.; kwargs...):: ComplexF64
+    V = 0.
+    for (bubble_index, bubble_arcs) in arcs
+        V += bubble_potential_contribution(k, bubbles[bubble_index], 
+                                           bubble_arcs, krotation, ΔV; kwargs...)
+    end
+    return V
+end
+
+function potential_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
+                            arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
+                            krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
+                            ΔV:: Float64 = 1.; rtol...):: Matrix{ComplexF64}
+    arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    V = potential_integral.(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ))
+    return permutedims(V)
+end
 
 end
