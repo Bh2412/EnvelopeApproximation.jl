@@ -90,7 +90,7 @@ function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Tup
     # This function assumes n̂′ is not parallel to the sphere of the integration ring
     s′ = √(1 - μ′ ^ 2)
     d, sgn = begin
-        x = (h - μ′ * R) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
+        x = (h - μ′ * R * n̂′[3]) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
         abs(x), sign(x)
     end
     isnan(d) && return EmptyInterval  # Case of 0. / 0.
