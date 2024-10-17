@@ -86,6 +86,10 @@ end
 
 align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
 
+export align_ẑ
+
+# This function returns the intersection between the integratoin ring and the dome like region
+# of the intersection of 2 bubbles
 function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Tuple{Float64, Float64}
     # This function assumes n̂′ is not parallel to the sphere of the integration ring
     s′ = √(1 - μ′ ^ 2)
@@ -95,17 +99,17 @@ function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Tup
     end
     isnan(d) && return EmptyInterval  # Case of 0. / 0.
     if d >= R * s′
-        # The sign indicates where the integration ring is entirely in or entirely out
+        # The sign indicates where the ring is entirely in the dome or entirely out
         if sgn > 0.
-            return EntireRing
-        else
             return EmptyInterval
+        else
+            return EntireRing
         end
     end
     α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
     Δ = acos(d / (R * s′))
     # Returns the interval that describes the Dome!!! of the intersection, that is the short arc of the intersection
-    return α - Δ, α + Δ
+    return mod2π(α - Δ), mod2π(α + Δ)
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system
@@ -113,15 +117,19 @@ function Δϕ′(μ′:: Float64, R:: Float64,
              intersection′:: IntersectionArc):: Tuple{Float64, Float64}
     n̂′, h = intersection′.n̂, intersection′.h
     _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
-    # This function returns the correctt arc of the intersection, in a representation by a single interval.
+    # This function returns the correct arc of integration, in a representation by a single interval.
     if intersection′.dome_like 
-        return _Δϕ′
-    else
         if _Δϕ′ ≢ EmptyInterval
-            return _Δϕ′[[2, 1]]
+            if Δϕ′ == EntireRing
+                return EmptyInterval
+            else
+                return (_Δϕ′[2], _Δϕ′[1])
+            end
         else
             return EntireRing
         end
+    else
+        return _Δϕ′
     end
 end
 
@@ -235,9 +243,11 @@ function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: 
     return drot
 end
 
+export symmetric_tensor_inverse_rotation
+
 function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble:: Bubble, arcs:: Vector{IntersectionArc},
                                   krotation:: SMatrix{3, 3, Float64}, 
-                                  ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
+                                  ΔV:: Float64; kwargs...):: MVector{6, ComplexF64}
     mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
     V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
 end
@@ -246,7 +256,7 @@ function surface_integral(k:: Vec3, bubbles:: Bubbles,
                           arcs:: Dict{Int64, Vector{IntersectionArc}},
                           krotation:: SMatrix{3, 3, Float64}, 
                           kdrotation:: SMatrix{6, 6, Float64},
-                          ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
+                          ΔV:: Float64; kwargs...):: MVector{6, ComplexF64}
     V = zeros(MVector{6, ComplexF64})
     for (bubble_index, bubble_arcs) in arcs
         add_bubble_contribution!(V, k, bubbles[bubble_index], 
@@ -255,17 +265,17 @@ function surface_integral(k:: Vec3, bubbles:: Bubbles,
     return kdrotation * V
 end
 
-function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
+function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles;
                           arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
                           krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
                           kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing, 
-                          ΔV:: Float64 = 1.; rtol...):: Matrix{ComplexF64}
+                          ΔV:: Float64 = 1., kwargs...):: Matrix{ComplexF64}
     arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
     V = Matrix{ComplexF64}(undef, 6, length(ks))
     for ((i, k), krot, kdrot) in zip(enumerate(ks), krotations, kdrotations)
-        @views V[:, i] .= surface_integral(k, bubbles, arcs, krot, kdrot, ΔV)
+        @views V[:, i] .= surface_integral(k, bubbles, arcs, krot, kdrot, ΔV; kwargs...)
     end
     return permutedims(V)
 end
@@ -275,7 +285,7 @@ export surface_integral
 function bubble_potential_contribution(k:: Vec3, bubble:: Bubble, 
                                        arcs:: Vector{IntersectionArc}, 
                                        krotation:: SMatrix{3, 3, Float64}, 
-                                       ΔV:: Float64 = 1.; kwargs...):: ComplexF64
+                                       ΔV:: Float64; kwargs...):: ComplexF64
     mode = fourier_mode(BubbleArcPotentialIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
     return mode * (im * cis(-(k ⋅ bubble.center.coordinates))) * ((-ΔV / norm(k)) *  bubble.radius ^ 2) 
 end
@@ -283,7 +293,7 @@ end
 function potential_integral(k:: Vec3, bubbles:: Bubbles, 
                             arcs:: Dict{Int64, Vector{IntersectionArc}},
                             krotation:: SMatrix{3, 3, Float64}, 
-                            ΔV:: Float64 = 1.; kwargs...):: ComplexF64
+                            ΔV:: Float64; kwargs...):: ComplexF64
     V = 0.
     for (bubble_index, bubble_arcs) in arcs
         V += bubble_potential_contribution(k, bubbles[bubble_index], 
@@ -292,10 +302,10 @@ function potential_integral(k:: Vec3, bubbles:: Bubbles,
     return V
 end
 
-function potential_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
+function potential_integral(ks:: Vector{Vec3}, bubbles:: Bubbles;
                             arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
                             krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-                            ΔV:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
+                            ΔV:: Float64 = 1., kwargs...):: Vector{ComplexF64}
     arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     return potential_integral.(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ); kwargs...)
@@ -306,17 +316,20 @@ export potential_integral
 const DIAGONAL_INDICES:: Vector{Int} = [1, 4, 6]
 
 function T_ij(ks:: Vector{Vec3}, 
-              bubbles:: Bubbles, ΔV:: Float64 = 1., 
+              bubbles:: Bubbles; ΔV:: Float64 = 1., 
               krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-              kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing; 
+              kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing, 
               kwargs...)
     arcs = intersection_arcs(bubbles)
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
-    si = surface_integral(ks, bubbles, arcs, krotations, kdrotations, ΔV; kwargs...)
-    Ṽ = potential_integral(ks, bubbles, arcs, krotations, ΔV; kwargs...)
+    si = surface_integral(ks, bubbles; arcs=arcs, krotations=krotations, 
+                          kdrotations=kdrotations, ΔV, kwargs...)
+    Ṽ = potential_integral(ks, bubbles; arcs=arcs, krotations=krotations, ΔV=ΔV, kwargs...)
     @views @. si[:, DIAGONAL_INDICES] -= Ṽ
     return si 
 end
+
+export T_ij
 
 end
