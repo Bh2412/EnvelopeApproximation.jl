@@ -191,7 +191,7 @@ function Ŋ(ks:: Vector{Vec3},
            a:: Float64 = 1.,
            G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
     tensor_directions = Vector{TensorDirection}(upper_right)
-    T = T_ij(ks, bubbles, ΔV, tensor_directions; kwargs...)
+    T = T_ij(ks, bubbles; ΔV=ΔV, kwargs...)
     return Ŋ(ks, T, tensor_directions, a, G)
 end
 
