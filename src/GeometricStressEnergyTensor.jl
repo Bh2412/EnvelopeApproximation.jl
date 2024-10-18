@@ -6,6 +6,7 @@ using LinearAlgebra
 using Intervals
 using Rotations
 import Base: *
+using QuadGK
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     return euc(bubble1.center - bubble2.center) < bubble1.radius + bubble2.radius
@@ -26,8 +27,7 @@ end
 Credit to WolFram Malthworld sphere-sphere intersection article
 =#
 function λ(r1:: Float64, r2:: Float64, d:: Float64) 
-    x = (d^2 + r1^2 - r2^2) / 2d
-    return x
+    return (d^2 + r1^2 - r2^2) / 2d
 end
 
 function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{IntersectionArc, IntersectionArc}
@@ -37,12 +37,12 @@ function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{IntersectionArc, Inters
     _λ = λ(bubble1.radius, bubble2.radius, d)
     n1 = _λ * n̂
     n2 = -n + n1
-    in1 = sign(d^2 + bubble1.radius ^ 2 - bubble2.radius ^ 2)
-    in2 = sign(d^2 + bubble2.radius ^ 2 - bubble1.radius ^ 2)
-    return (IntersectionArc(n1, in1), IntersectionArc(n2, in2))
+    domelike1 = _λ > 0.
+    domelike2 = λ(bubble2.radius, bubble1.radius, d) > 0.
+    return (IntersectionArc(n1, domelike1), IntersectionArc(n2, domelike2))
 end
 
-function intersections(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc}}
+function intersection_arcs(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc}}
     d = Dict{Int, Vector{IntersectionArc}}()
     for (i, bubble1) in enumerate(bubbles)
         for (j̃, bubble2) in bubbles[(i + 1):end]
@@ -110,30 +110,31 @@ function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalS
     end
 end
 
-function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64},
-             intersection:: IntersectionArc):: Interval{Float64, Closed, Closed}
-    n̂′ = krotation * intersection.n̂
+# A prime indicates that the intersection is in a rotated coordinate ststem
+function Δϕ′(μ′:: Float64, R:: Float64, 
+             intersection′:: IntersectionArc):: Interval{Float64, Closed, Closed}
+    n̂′, h = intersection′.n̂, intersection′.h
     if n̂′ ∥ ẑ
-        if (μ′ * R * sign(n̂′[3])) >= intersection.h
+        if (μ′ * R * sign(n̂′[3])) >= h
             _Δϕ′ =  EntireRing
         else
             _Δϕ′ = EmptyInterval
         end
     else
-        _Δϕ′ = Δϕ′(μ′, R, n̂′, intersection.h)        
+        _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
     end
     # This function returns the correctt arc of the intersection, in a representation by a single interval.
-    if intersection.dome_like
+    if intersection′.dome_like
         return _Δϕ′
     else
         return _Δϕ′.left .. _Δϕ′.right
     end
 end
 
-function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64}, 
-             intersections:: Vector{IntersectionArc}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    _Δϕ′(intersection:: IntersectionArc):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, krotation, intersection)
-    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersections)))
+function Δϕ′(μ′:: Float64, R:: Float64,
+             intersection_arcs:: Vector{IntersectionArc}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    _Δϕ′(intersection:: IntersectionArc):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, intersection)
+    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)))
 end
 
 abstract type SphericalIntegrand{T} end
@@ -150,6 +151,10 @@ function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64, ϕ1:: Float64, ϕ2:: F
     throw(error("Not Implemented"))
 end
 
+function ∫_ϕ(si:: SphericalIntegran{T}, μ:: Float64):: T where T
+    return ∫_ϕ(si, μ, 0., 2π)
+end
+
 struct SphericalMultiplicationIntegrand{T} <: SphericalIntegrand{T}
     components:: NTuple{K, SphericalIntegrand} where K
 end
@@ -162,16 +167,16 @@ function *(si1:: SphericalIntegrand{Float64}, si2:: SphericalIntegrand{SVector{K
     SphericalMultiplicationIntegrand{SVector{Float64}}((si1, si2))
 end
 
-struct SphericalDirectSumIntegrand{K, T} <: SphericalIntegrand{Vector{T}}
+struct SphericalDirectSumIntegrand{K, T} <: SphericalIntegrand{NTuple{K, T}}
     components:: NTuple{K, SphericalIntegrand{T}} 
 end
 
-function (ds:: SphericalDirectSumIntegrand{K, T})(μ:: Float64, ϕ:: Float64):: Vector{T} where {K, T}
+function (ds:: SphericalDirectSumIntegrand{K, T})(μ:: Float64, ϕ:: Float64):: NTuple{K, T} where {K, T}
     ((μ, ϕ), ) .|> ds.components
 end
 
 function (ds:: SphericalDirectSumIntegrand{K, T})(V:: Vector{T}, μ:: Float64, ϕ:: Float64):: Vector{T} where {K, T}
-    @. V = invoke(ds.components, Tuple{Float64, Float64}, μ, ϕ)
+    @. V = ((μ, ϕ), ) |> ds.components
     return V
 end
 
@@ -229,6 +234,101 @@ struct SphericalZZ <: TensorDirection end
 const diagonal:: SphericalDirectSumIntegrand{3, Float64} = SphericalXX() ⊕ SphericalYY() ⊕ SphericalZZ()
 const upper_right:: SphericalDirectSumIntegrand{6, Float64} = reduce(⊕, [SphericalXX(), SphericalXY(), SphericalXZ(), SphericalYY(), SphericalYZ(), SphericalZZ()])
 
+struct BubbleArcSurfaceIntegrand <: SphericalIntegrand{MVector{6, Float64}}
+    R:: Float64
+    arcs:: Vector{IntersectionArc}
+end
 
+function ∫_ϕ(basi:: BubbleArcSurfaceIntegrand, μ:: Float64):: MVector{6, Float64}
+    V = zeros(MVector{6, Float64})
+    # TODO: Make sure if the union is necessary
+    intervals = union(Δϕ′(μ, basi.R, basi.arcs))
+    for interval in intervals
+        V .+= ∫_ϕ(upper_right, μ, interval.first, interval.last)
+    end
+    return V
+end
+
+# Assume the rotation is right handed, that is of unit determinant (else it would change the dome_like parameter)
+function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionArc):: BubbleArcSurfaceIntegrand
+     return IntersectionArc(arc.h, rotation * arc.n̂, arc.dome_like)
+end
+
+function *(rotation:: SMatrix{3, 3, Float64}, basi:: BubbleArcSurfaceIntegrand):: BubbleArcSurfaceIntegrand
+    return BubbleArcSurfaceIntegrand(basi.R, (rotation, ) .* basi.arcs)
+end
+
+function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}}, 
+                      κ:: Float64; kwargs...):: MVector{K, ComplexF64} where K
+    _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-im * κ * μ) * ∫_ϕ(f, μ)
+    return quadgk(_f, -1., 1.; kwargs...)
+end
+
+# The mapping between a 3 x 3 symmetric tensor's double indices and 
+#  a vector of length 6
+const SymmetricTensorMapping:: Dict{Int, Tuple{Int, Int}} = Dict(1 => (1, 1), 2 => (1, 2), 3 => (1, 3), 4 => (2, 2), 5 => (2, 3), 6 => (3, 3))
+
+# The mapping looks like This:
+#=
+   1       2     3
+ #undef    4     5
+ #undef  #undef  6
+=#
+
+
+#=
+This matrix applies the transformation law:
+x̂_ix̂_j = R_li * Rmj * x̂′_i x̂′_j
+=#
+
+function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: SMatrix{6, 6, Float64}
+    drot = SMatrix{6, 6, Float64}(undef)
+    for n ∈ 1:6, k ∈ 1:6
+        i, j = SymmetricTensorMapping[k]
+        l, m = SymmetricTensorMapping[n]
+        if l == m
+            drot[k, n] = rotation[l, i] * rotation[m, j] 
+        else
+            drot[k, n] = (rotation[l, i] * rotation[m, j]) + (rotaion[m, i] * rotation[l, j]) 
+        end
+    end
+    return drot
+end
+
+function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble:: Bubble, arcs:: Vector{IntersectionArc},
+                                  krotatiton:: SMatrix{3, 3, Float64}, 
+                                  kdrotation:: SMatrix{6, 6, Float64}, 
+                                  ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
+    mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .*arcs), bubble.radius * norm(k); kwargs...)
+    V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-im * (k ⋅ bubble.center)))
+end
+
+function surface_integral(k:: Vec3, bubbles:: Bubbles, 
+                          arcs:: Dict{Int64, Vector{IntersectionArc}},
+                          krotation:: SMatrix{3, 3, Float64}, 
+                          kdrotation:: SMatrix{6, 6, Float64},
+                          ΔV:: Float64 = 1.):: MVector{6, ComplexF64}
+    V = zeros(MVector{6, Float64})
+    for (bubble_index, bubble_arcs) in arcs
+        add_bubble_contribution!(V, k, bubbles[bubble_index], 
+                                 bubble_arcs, krotation, kdrotation, ΔV)
+    end
+    return V
+end
+
+function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
+                          arcs:: union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
+                          krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
+                          kdrotations:: Union{Nothing, Vector{SMatrix{6, 6, Float64}}} = nothing, 
+                          ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+    arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
+    V = Matrix{ComplexF64}(undef, 6, length(ks))
+    for ((i, k), krot, kdrot) in zip(enumerate(ks), krotations, kdrotations)
+        @views V[:, i] .= surface_integral(k, bubbles, arcs, krot, kdrot, ΔV)
+    end
+    return V'
+end
 
 end
