@@ -74,7 +74,7 @@ const ẑ:: Vec3 = Vec3(0., 0., 1.)
 
 ∥(u:: Vec3, v:: Vec3):: Bool = u×v ≈ NullVec
 
-const EmptyInterval:: Nothing = nothing
+const EmptyInterval:: Tuple{Float64, Float64} = (NaN, NaN)
 const EntireRing:: Tuple{Float64, Float64} = 0., 2π
 
 function ∠(k:: Vec3):: Vec3
@@ -86,13 +86,14 @@ end
 
 align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
 
-function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Union{Tuple{Float64, Float64}, Nothing}
+function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Tuple{Float64, Float64}
     # This function assumes n̂′ is not parallel to the sphere of the integration ring
     s′ = √(1 - μ′ ^ 2)
     d, sgn = begin
         x = (h - μ′ * R) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
         abs(x), sign(x)
     end
+    isnan(d) && return EmptyInterval  # Case of 0. / 0.
     if d >= R * s′
         # The sign indicates where the integration ring is entirely in or entirely out
         if sgn > 0.
@@ -109,22 +110,14 @@ end
 
 # A prime indicates that the intersection is in a rotated coordinate system
 function Δϕ′(μ′:: Float64, R:: Float64, 
-             intersection′:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing}
+             intersection′:: IntersectionArc):: Tuple{Float64, Float64}
     n̂′, h = intersection′.n̂, intersection′.h
-    if n̂′ ∥ ẑ
-        if (μ′ * R * sign(n̂′[3])) >= h
-            _Δϕ′ =  EmptyInterval
-        else
-            _Δϕ′ = EntireRing
-        end
-    else
-        _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
-    end
+    _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
     # This function returns the correctt arc of the intersection, in a representation by a single interval.
     if intersection′.dome_like 
         return _Δϕ′
     else
-        if !isnothing(_Δϕ′)
+        if _Δϕ′ ≢ EmptyInterval
             return _Δϕ′[[2, 1]]
         else
             return EntireRing
@@ -134,15 +127,15 @@ end
 
 const EmptyIntervalSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([])
 
-function apply_periodicity(Δϕ:: Union{Tuple{Float64, Float64}, Nothing}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    isnothing(Δϕ) && return EmptyIntervalSet
+function apply_periodicity(Δϕ:: Tuple{Float64, Float64}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    Δϕ ≡ EmptyInterval && return EmptyIntervalSet
     # Naive use of intervals ignore the fact that the point 0. is ientified with
     # The point 2π, This means we need to fix intervalss that pass through the origin
     # This function assumes Δϕ is smaller than π
     ϕ1 = mod2π(Δϕ[1])
     ϕ2 = ϕ1 + Δϕ[2] - Δϕ[1]
     if ϕ2 ≲ 2π
-        return IntervalSet([ϕ1 .. ϕ2])
+        return IntervalSet(ϕ1 .. ϕ2)
     else
         return IntervalSet([0. .. mod2π(ϕ2), ϕ1 .. 2π])
     end
@@ -151,107 +144,13 @@ end
 const EntireRingSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([EntireRing[1] .. EntireRing[2]])
 
 function Δϕ′(μ′:: Float64, R:: Float64,
-             intersection_arcs:: Vector{IntersectionArc}):: IntervalSet{Interval}
+             intersection_arcs:: Vector{IntersectionArc}):: IntervalSet
     _Δϕ′(intersection:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing} = Δϕ′(μ′, R, intersection)
-    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)), init=EntireRingSet)
+    isempty(intersection_arcs) && return EntireRingSet
+    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)))
 end
 
-abstract type SphericalIntegrand{T} end
-
-function (si:: SphericalIntegrand{T})(μ:: Float64, ϕ:: Float64):: T where T  
-    throw(error("Not Implemented"))
-end
-
-function (si:: SphericalIntegrand{T})(μϕ:: Tuple{Float64, Float64}):: T where T
-    return si(μϕ...)
-end
-
-function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: T where T
-    throw(error("Not Implemented"))
-end
-
-function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64):: T where T
-    return ∫_ϕ(si, μ, 0., 2π)
-end
-
-struct SphericalMultiplicationIntegrand{T} <: SphericalIntegrand{T}
-    components:: NTuple{K, SphericalIntegrand} where K
-end
-
-function (m:: SphericalMultiplicationIntegrand{T})(μ:: Float64, ϕ:: Float64):: T where T
-    prod(c(μ, ϕ) for c in m.components)
-end
-
-function *(si1:: SphericalIntegrand{Float64}, si2:: SphericalIntegrand{SVector{K, Float64}}):: SphericalMultiplicationIntegrand{SVector{K, Float64}} where K 
-    SphericalMultiplicationIntegrand{SVector{Float64}}((si1, si2))
-end
-
-struct SphericalDirectSumIntegrand{K, T} <: SphericalIntegrand{NTuple{K, T}}
-    components:: NTuple{K, SphericalIntegrand{T}} 
-end
-
-function (ds:: SphericalDirectSumIntegrand{K, T})(μ:: Float64, ϕ:: Float64):: NTuple{K, T} where {K, T}
-    ((μ, ϕ), ) .|> ds.components
-end
-
-function (ds:: SphericalDirectSumIntegrand{K, T})(V:: Vector{T}, μ:: Float64, ϕ:: Float64):: Vector{T} where {K, T}
-    @. V = ((μ, ϕ), ) |> ds.components
-    return V
-end
-
-function ⊕(si1:: SphericalIntegrand{T}, si2:: SphericalIntegrand{T}):: SphericalDirectSumIntegrand{2, T} where T
-    SphericalDirectSumIntegrand{2, T}((si1, si2))
-end
-
-function ⊕(si1:: SphericalDirectSumIntegrand{K, T}, si2:: SphericalIntegrand{T}):: SphericalDirectSumIntegrand{K + 1, T} where {K, T}
-    SphericalDirectSumIntegrand{K+1, T}(((si1.components..., si2)))
-end
-
-function ∫_ϕ(sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: NTuple{K, T} where {K, T}
-    return ∫_ϕ.(sdsi.components, μ, ϕ1, ϕ2)
-end
-
-function ∫_ϕ!(V:: AbstractVector{T}, sdsi:: SphericalDirectSumIntegrand{K, T}, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Vector{T} where {K, T}
-    return V .= ∫_ϕ(sdsi, μ, ϕ1, ϕ2)
-end
-
-abstract type TensorDirection <: SphericalIntegrand{Float64} end
-struct SphericalTrace <: TensorDirection end
-struct SphericalXhat <: TensorDirection end
-struct SphericalYhat <: TensorDirection end
-struct SphericalZhat <: TensorDirection end
-struct SphericalXX <: TensorDirection end
-struct SphericalXY <: TensorDirection end
-SphericalYX = SphericalXY
-struct SphericalXZ <: TensorDirection end
-SphericalZX = SphericalXZ
-struct SphericalYY <: TensorDirection end
-struct SphericalYZ <: TensorDirection end
-struct SphericalZZ <: TensorDirection end
-
-(st:: SphericalTrace)(μ:: Float64, ϕ:: Float64):: Float64 = 1.
-∫_ϕ(st:: SphericalTrace, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = ϕ2 - ϕ1
-(st:: SphericalXhat)(μ:: Float64, ϕ:: Float64):: Float64 = √(1 - μ^2) * cos(ϕ)
-∫_ϕ(st:: SphericalXhat, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = √(1 - μ ^ 2) * (sin(ϕ2) - sin(ϕ1))
-(st:: SphericalYhat)(μ:: Float64, ϕ:: Float64):: Float64 = √(1 - μ^2) * sin(ϕ)
-∫_ϕ(st:: SphericalYhat, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = √(1 - μ ^ 2) * (cos(ϕ1) - cos(ϕ2))
-(st:: SphericalZhat)(μ:: Float64, ϕ:: Float64) = μ
-∫_ϕ(st:: SphericalZhat, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ * (ϕ2 - ϕ1)
-(st:: SphericalXX)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * cos(ϕ) ^ 2
-∫_ϕ(st:: SphericalXX, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1 / 2) * (ϕ2 - ϕ1) - (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
-(st:: SphericalXY)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * cos(ϕ) * sin(ϕ)
-∫_ϕ(st:: SphericalXY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * (1 / 4) * (cos(2ϕ2) - cos(2ϕ1))
-(st:: SphericalXZ)(μ:: Float64, ϕ:: Float64):: Float64 = (μ * √(1 - μ ^ 2)) * cos(ϕ)
-∫_ϕ(st:: SphericalXZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (μ * √(1 - μ ^ 2)) * (sin(ϕ1) - sin(ϕ2))
-(st:: SphericalYY)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * (sin(ϕ)) ^ 2
-∫_ϕ(st:: SphericalYY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1/2) * (ϕ2 - ϕ1) + (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
-(st:: SphericalYZ)(μ:: Float64, ϕ:: Float64):: Float64 = μ * √(1 - μ ^ 2) * sin(ϕ)
-∫_ϕ(st:: SphericalYZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ * √(1 - μ ^ 2) * (cos(ϕ2) - cos(ϕ1))
-(st:: SphericalZZ)(μ:: Float64, ϕ:: Float64):: Float64 = μ ^ 2
-∫_ϕ(st:: SphericalZZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ ^ 2 * (ϕ2 - ϕ1)
-
-const diagonal:: SphericalDirectSumIntegrand{3, Float64} = SphericalXX() ⊕ SphericalYY() ⊕ SphericalZZ()
-const upper_right:: SphericalDirectSumIntegrand{6, Float64} = reduce(⊕, [SphericalXX(), SphericalXY(), SphericalXZ(), SphericalYY(), SphericalYZ(), SphericalZZ()])
+include("SphericalIntegrands.jl")
 
 struct BubbleArcSurfaceIntegrand <: SphericalIntegrand{MVector{6, Float64}}
     R:: Float64
@@ -278,7 +177,7 @@ end
 
 function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}}, 
                       κ:: Float64; kwargs...):: MVector{K, ComplexF64} where K
-    _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-im * κ * μ) * ∫_ϕ(f, μ)
+    _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-κ * μ) * ∫_ϕ(f, μ)
     return quadgk(_f, -1., 1.; kwargs...)[1]
 end
 
@@ -296,7 +195,7 @@ const SymmetricTensorMapping:: Dict{Int, Tuple{Int, Int}} = Dict(1 => (1, 1), 2 
 
 #=
 This matrix applies the transformation law:
-x̂_ix̂_j = R_li * Rmj * x̂′_i x̂′_j
+x̂_ix̂_j = R_li * Rmj * x̂′_l x̂′_m
 =#
 
 function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: SMatrix{6, 6, Float64}
@@ -317,7 +216,7 @@ function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble::
                                   krotation:: SMatrix{3, 3, Float64}, 
                                   ΔV:: Float64 = 1.; kwargs...):: MVector{6, ComplexF64}
     mode = fourier_mode(BubbleArcSurfaceIntegrand(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
-    V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-im * (k ⋅ bubble.center.coordinates)))
+    V .+= mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
 end
 
 function surface_integral(k:: Vec3, bubbles:: Bubbles, 
@@ -347,5 +246,7 @@ function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles,
     end
     return permutedims(V)
 end
+
+export surface_integral
 
 end
