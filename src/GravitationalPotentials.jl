@@ -63,11 +63,16 @@ end
 using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
-using EnvelopeApproximation.StressEnergyTensor
+using EnvelopeApproximation.GeometricStressEnergyTensor
 import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
-import EnvelopeApproximation.StressEnergyTensor: upper_right, diagonal, above_diagonal
-using HCubature
+using QuadGK
+using StaticArrays
 import LinearAlgebra: norm
+
+# In accordange with the T_ij function
+const TensorDirections:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:x, :y), (:x, :z), (:y, :y), (:y, :z), (:z, :z)]
+const AboveDiagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :y), (:x, :z), (:y, :z)]
+const Diagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:y, :y), (:z, :z)]
 
 function v̂(v:: Vec3):: Vec3
     return v ./ norm(v)
@@ -81,7 +86,7 @@ function v̂iv̂j(k:: Vec3, td:: Tuple{Symbol, Symbol})
     return prod(v̂(k)[indices])
 end
 
-function v̂iv̂j(ks:: Vector{Vec3}, tds:: Vector):: Array{Float64, 2}
+function v̂iv̂j(ks:: Vector{Vec3}, tds:: Vector{Tuple{Symbol, Symbol}} = TensorDirections):: Array{Float64, 2}
     return @. v̂iv̂j($reshape(ks, :, 1), $reshape(tds, 1, :))
 end
 
@@ -92,18 +97,17 @@ end
 
 function ψ_source(ks:: Vector{Vec3}, 
                   T:: Matrix{ComplexF64}, 
-                  tensor_directions:: Vector, 
                   a = 1., 
                   G = 1.):: Vector{ComplexF64}
     ```math
     ψ'' = 4πG_N a^2 k̂ik̂j Tij
     ```        
-    k_ik_j = v̂iv̂j(ks, tensor_directions)
+    k_ik_j = v̂iv̂j(ks, TensorDirections)
     V = zeros(ComplexF64, length(ks))
-    for (i, td) in enumerate(tensor_directions)
-        if td in above_diagonal
+    for (i, td) in enumerate(TensorDirections)
+        if td in AboveDiagonal
             @. V += (2 * k_ik_j[:, i]) * T[:, i]
-        elseif td in diagonal
+        elseif td in Diagonal
             @. V += k_ik_j[:, i] * T[:, i] 
         end
     end
@@ -112,125 +116,57 @@ end
 
 function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
-                  t:: Float64, 
-                  ϕ_resolution:: Float64,
-                  μ_resolution:: Float64,
+                  t:: Float64;
                   ΔV:: Float64 = 1., 
                   a:: Float64 = 1., 
-                  G:: Float64 = 1.; 
+                  G:: Float64 = 1., 
+                  krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                  kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing,
                   kwargs...):: Vector{ComplexF64}
-    tensor_directions = Vector{TensorDirection}(upper_right)
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
     bubbles = current_bubbles(snapshot, t)
-    T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
-    return ψ_source(ks, T, tensor_directions, a, G)
+    T = T_ij(ks, bubbles; krotations=krotations, 
+             kdrotations=kdrotations, ΔV=ΔV, kwargs...)
+    return ψ_source(ks, T, a, G)
 end
+
 
 function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
-                  t:: Float64, 
-                  n_ϕ:: Int,
-                  n_μ:: Int,
+                  times:: Vector{Float64};
                   ΔV:: Float64 = 1., 
                   a:: Float64 = 1., 
-                  G:: Float64 = 1.; 
-                  kwargs...):: Vector{ComplexF64}
-    return ψ_source(ks, snapshot, t, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
-end
-
-function ψ_source(ks:: Vector{Vec3}, 
-                  snapshot:: BubblesSnapShot, 
-                  times:: Vector{Float64}, 
-                  ϕ_resolution:: Float64,
-                  μ_resolution:: Float64,
-                  ΔV:: Float64 = 1., 
-                  a:: Float64 = 1., 
-                  G:: Float64 = 1.; 
+                  G:: Float64 = 1.,
                   kwargs...):: Matrix{ComplexF64}
-    tensor_directions = Vector{TensorDirection}(upper_right)
     S = zeros(ComplexF64, length(times), length(ks))
     for (i, t) in enumerate(times)
         bubbles = current_bubbles(snapshot, t)
-        T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
-        S[i, :] .= ψ_source(ks, T, tensor_directions, a, G)
+        T = T_ij(ks, bubbles; ΔV=ΔV, kwargs...)
+        S[i, :] .= ψ_source(ks, T, a, G)
     end
     return S
 end
 
-function ψ_source(ks:: Vector{Vec3}, 
-                  snapshot:: BubblesSnapShot, 
-                  times:: Vector{Float64}, 
-                  n_ϕ:: Int64,
-                  n_μ:: Int64,
-                  ΔV:: Float64 = 1., 
-                  a:: Float64 = 1., 
-                  G:: Float64 = 1.; 
-                  kwargs...):: Matrix{ComplexF64}
-    return ψ_source(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, 
-                    ΔV, a, G; kwargs...)
-end
-
-export quad_ψ
-
-function quad_ψ(ks:: Vector{Vec3}, 
-                snapshot:: BubblesSnapShot, 
-                t:: Float64, 
-                ϕ_resolution:: Float64,
-                μ_resolution:: Float64,
-                ΔV:: Float64 = 1., 
-                a:: Float64 = 1., 
-                G:: Float64 = 1.; 
-                kwargs...):: Vector{ComplexF64}
-    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ, ϕ_resolution, μ_resolution, 
-                                                   ΔV, a, G; kwargs...) * (t - τ)
-    return hquadrature(f, 0., t; kwargs...)[1]
-end
-
-function quad_ψ(ks:: Vector{Vec3}, 
-                snapshot:: BubblesSnapShot, 
-                t:: Float64, 
-                n_ϕ:: Int64,
-                n_μ:: Int64,
-                ΔV:: Float64 = 1., 
-                a:: Float64 = 1., 
-                G:: Float64 = 1.; 
-                kwargs...):: Vector{ComplexF64}
-    return quad_ψ(ks, snapshot, t, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
-end
-
-function ψ(times:: Vector{Float64}, 
-           S:: Matrix{ComplexF64}):: Matrix{ComplexF64}
-    source = Source(times, S)
-    return ode_solution(source)
-end
-
-function ψ(ks:: Vector{Vec3}, 
-           snapshot:: BubblesSnapShot, 
-           times:: Vector{Float64}, 
-           ϕ_resolution:: Float64, 
-           μ_resolution:: Float64,
-           ΔV:: Float64 = 1., 
-           a:: Float64 = 1., 
-           G:: Float64 = 1.; 
-           kwargs...)
-    S = ψ_source(ks, snapshot, times, ϕ_resolution, μ_resolution, 
-                 ΔV, a, G; kwargs...)
-    return ψ(times, S)
-end
-
-function ψ(ks:: Vector{Vec3}, 
-           snapshot:: BubblesSnapShot, 
-           times:: Vector{Float64}, 
-           n_ϕ:: Int64, 
-           n_μ:: Int64,
-           ΔV:: Float64 = 1., 
-           a:: Float64 = 1., 
-           G:: Float64 = 1.; 
-           kwargs...)
-    return ψ(ks, snapshot, times, 2π / n_ϕ, 2. / n_μ, 
-             ΔV, a, G)
-end
-
 export ψ
+
+function ψ(ks:: Vector{Vec3}, 
+           snapshot:: BubblesSnapShot, 
+           t:: Float64;
+           ΔV:: Float64 = 1., 
+           a:: Float64 = 1., 
+           G:: Float64 = 1., 
+           krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+           kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing,
+           kwargs...):: Vector{ComplexF64}
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
+    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ, 
+                                                   ΔV=ΔV, a=a, G=G, 
+                                                   krotations=krotations, 
+                                                   kdrotations=kdrotations; kwargs...) * (t - τ)
+    return quadgk(f, 0., t; kwargs...)[1]
+end
 
 function Ŋ(ks:: Vector{Vec3},
            T:: Matrix{ComplexF64},
@@ -255,7 +191,7 @@ function Ŋ(ks:: Vector{Vec3},
            a:: Float64 = 1.,
            G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
     tensor_directions = Vector{TensorDirection}(upper_right)
-    T = T_ij(ks, bubbles, ϕ_resolution, μ_resolution, ΔV, tensor_directions; kwargs...)
+    T = T_ij(ks, bubbles, ΔV, tensor_directions; kwargs...)
     return Ŋ(ks, T, tensor_directions, a, G)
 end
 

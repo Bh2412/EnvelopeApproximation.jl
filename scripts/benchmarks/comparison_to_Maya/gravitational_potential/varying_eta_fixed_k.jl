@@ -3,8 +3,7 @@ using CSV, DataFrames
 using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
-using EnvelopeApproximation.StressEnergyTensor
-import EnvelopeApproximation.StressEnergyTensor: T_ij, diagonal, TensorDirection, upper_right
+using EnvelopeApproximation.GeometricStressEnergyTensor
 import EnvelopeApproximation.GravitationalPotentials: ψ_source, Ŋ, Φ
 using Plots
 
@@ -22,24 +21,23 @@ snapshot = BubblesSnapShot(nucleations, η_max)
 
 # computing Txx, Tyy, Tzz
 
-tds = Vector{TensorDirection}(upper_right)
 
 function Tij(η:: Float64):: Array{ComplexF64, 2}
-    return T_ij(kvecs, current_bubbles(snapshot, η), 1, 1000, ΔV, tds; rtol=1e-3)
+    return T_ij(kvecs, current_bubbles(snapshot, η); ΔV=ΔV, rtol=1e-3)
 end
 
 function ψsource(η:: Float64)
-    return ψ_source(kvecs, snapshot, η, 1, 1000, ΔV; rtol=1e-3)
+    return ψ_source(kvecs, snapshot, η; ΔV=ΔV, rtol=1e-3)
 end
 
-begin
+@time begin
     Ts = Tij.(ηs)
     Txx = (x -> x[1]).(Ts)
-    Tyy = (x-> x[2]).(Ts)
-    Tzz = (x -> x[3]).(Ts)
-    Txy = (x -> x[4]).(Ts)
-    Txz = (x -> x[5]).(Ts)
-    Tyz = (x -> x[6]).(Ts)        
+    Tyy = (x-> x[4]).(Ts)
+    Tzz = (x -> x[6]).(Ts)
+    Txy = (x -> x[2]).(Ts)
+    Txz = (x -> x[3]).(Ts)
+    Tyz = (x -> x[5]).(Ts)        
     ψs = @. (x -> x[1])(ψsource(ηs))
 end
 
