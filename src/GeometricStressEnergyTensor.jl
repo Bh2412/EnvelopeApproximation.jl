@@ -4,9 +4,9 @@ using EnvelopeApproximation.BubbleBasics
 using StaticArrays
 using LinearAlgebra
 using Intervals
+import Intervals: IntervalSet
 using Rotations
-import Intervals: ∩
-import Base: *
+import Base: *, ∈, isempty, ~
 using QuadGK
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
@@ -74,74 +74,74 @@ const ẑ:: Vec3 = Vec3(0., 0., 1.)
 
 ∥(u:: Vec3, v:: Vec3):: Bool = u×v ≈ NullVec
 
-const EmptyInterval:: Tuple{Float64, Float64} = (NaN, NaN)
-const EntireRing:: Tuple{Float64, Float64} = 0., 2π
-
-function ∠(k:: Vec3):: Vec3
-    (k ∥ ẑ) && return Vec3(0., 0., 0.)
-    k_ = norm(k)
-    θ = acos(k[3] / k_)
-    return ((k / (k_ * sin(θ))) * θ) × ẑ
+struct PeriodicInterval
+    ϕ1:: Float64
+    Δ:: Float64
 end
 
-align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
+∈(ϕ:: Float64, p:: PeriodicInterval):: Bool = mod2π(ϕ - p.ϕ1) <= p.Δ
+approxempty(p:: PeriodicInterval):: Bool = p.Δ ≈ 0.
+approxentire(p:: PeriodicInterval):: Bool = p.Δ ≈ 2π 
 
-export align_ẑ
+const EmptyArc:: PeriodicInterval = PeriodicInterval(0., 0.)
+const FullCircle:: PeriodicInterval = PeriodicInterval(0., 2π)
+
+function complement(p:: PeriodicInterval):: PeriodicInterval
+    if approxempty(p)
+        return FullCircle
+    elseif approxentire(p)
+        return EmptyArc
+    else 
+        return PeriodicInterval(mod2π(p.ϕ1 + p.Δ), 2π - p.Δ)
+    end
+end
 
 # This function returns the intersection between the integratoin ring and the dome like region
 # of the intersection of 2 bubbles
-function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Tuple{Float64, Float64}
-    # This function assumes n̂′ is not parallel to the sphere of the integration ring
+function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: PeriodicInterval
+    if n̂′ ∥ ẑ
+        if h >= μ′ * R * n̂′[3] 
+            return EmptyArc
+        else
+            return FullCircle
+        end
+    end
+    # From here on out we assume n̂′ is not parallel to the sphere of the integration ring
     s′ = √(1 - μ′ ^ 2)
     d, sgn = begin
         x = (h - μ′ * R * n̂′[3]) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
         abs(x), sign(x)
     end
-    isnan(d) && return EmptyInterval  # Case of 0. / 0.
     if d >= R * s′
         # The sign indicates where the ring is entirely in the dome or entirely out
         if sgn > 0.
-            return EmptyInterval
+            return EmptyArc
         else
-            return EntireRing
+            return FullCircle
         end
     end
     α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
     Δ = acos(d / (R * s′))
     # Returns the interval that describes the Dome!!! of the intersection, that is the short arc of the intersection
-    return mod2π(α - Δ), mod2π(α + Δ)
+    return PeriodicInterval(mod2π(α - Δ), 2 * Δ)
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system
 function Δϕ′(μ′:: Float64, R:: Float64, 
-             intersection′:: IntersectionArc):: Tuple{Float64, Float64}
+             intersection′:: IntersectionArc):: PeriodicInterval
     n̂′, h = intersection′.n̂, intersection′.h
-    _Δϕ′ = Δϕ′(μ′, R, n̂′, h)        
-    # This function returns the correct arc of integration, in a representation by a single interval.
-    if intersection′.dome_like 
-        if _Δϕ′ ≢ EmptyInterval
-            if Δϕ′ == EntireRing
-                return EmptyInterval
-            else
-                return (_Δϕ′[2], _Δϕ′[1])
-            end
-        else
-            return EntireRing
-        end
-    else
-        return _Δϕ′
-    end
+    _ring_dome_intersection = ring_dome_intersection(μ′, R, n̂′, h) 
+    # This function returns the correct arc of integration, in a representation by a single periodic interval.
+    intersection′.dome_like && return complement(_ring_dome_intersection)
+    return _ring_dome_intersection
 end
 
-const EmptyIntervalSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([])
-
-function apply_periodicity(Δϕ:: Tuple{Float64, Float64}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    Δϕ ≡ EmptyInterval && return EmptyIntervalSet
+function IntervalSet(Δϕ:: PeriodicInterval):: IntervalSet{Interval{Float64, Closed, Closed}}
     # Naive use of intervals ignore the fact that the point 0. is ientified with
     # The point 2π, This means we need to fix intervalss that pass through the origin
     # This function assumes Δϕ is smaller than π
-    ϕ1 = mod2π(Δϕ[1])
-    ϕ2 = ϕ1 + Δϕ[2] - Δϕ[1]
+    ϕ1 = Δϕ.ϕ1
+    ϕ2 = ϕ1 + Δϕ.Δ
     if ϕ2 ≲ 2π
         return IntervalSet(ϕ1 .. ϕ2)
     else
@@ -149,13 +149,12 @@ function apply_periodicity(Δϕ:: Tuple{Float64, Float64}):: IntervalSet{Interva
     end
 end
 
-const EntireRingSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet{Interval{Float64, Closed, Closed}}([EntireRing[1] .. EntireRing[2]])
+FullCircleSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet(FullCircle)
 
 function Δϕ′(μ′:: Float64, R:: Float64,
              intersection_arcs:: Vector{IntersectionArc}):: IntervalSet
-    _Δϕ′(intersection:: IntersectionArc):: Union{Tuple{Float64, Float64}, Nothing} = Δϕ′(μ′, R, intersection)
-    isempty(intersection_arcs) && return EntireRingSet
-    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersection_arcs)))
+    isempty(intersection_arcs) && return FullCircleSet
+    return reduce(∩, (IntervalSet(Δϕ′(μ′, R, intersection_arc)) for intersection_arc in intersection_arcs))
 end
 
 include("SphericalIntegrands.jl")
@@ -211,6 +210,18 @@ function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}},
     _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-κ * μ) * ∫_ϕ(f, μ)
     return quadgk(_f, -1., 1.; kwargs...)[1]
 end
+
+function ∠(k:: Vec3):: Vec3
+    (k ∥ ẑ) && return Vec3(0., 0., 0.)
+    k_ = norm(k)
+    θ = acos(k[3] / k_)
+    return ((k / (k_ * sin(θ))) * θ) × ẑ
+end
+
+align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
+
+export align_ẑ
+
 
 # The mapping between a 3 x 3 symmetric tensor's double indices and 
 #  a vector of length 6
