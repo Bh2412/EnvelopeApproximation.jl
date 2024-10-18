@@ -257,8 +257,8 @@ end
 
 function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
                           arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
-                          krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
-                          kdrotations:: Union{Nothing, Vector{SMatrix{6, 6, Float64}}} = nothing, 
+                          krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                          kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing, 
                           ΔV:: Float64 = 1.; rtol...):: Matrix{ComplexF64}
     arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
@@ -294,12 +294,29 @@ end
 
 function potential_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
                             arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
-                            krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
-                            ΔV:: Float64 = 1.; rtol...):: Matrix{ComplexF64}
+                            krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                            ΔV:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
     arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
-    V = potential_integral.(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ))
-    return permutedims(V)
+    return potential_integral.(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ); kwargs...)
+end
+
+export potential_integral
+
+const DIAGONAL_INDICES:: Vector{Int} = [1, 4, 6]
+
+function T_ij(ks:: Vector{Vec3}, 
+              bubbles:: Bubbles, ΔV:: Float64 = 1., 
+              krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+              kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing; 
+              kwargs...)
+    arcs = intersection_arcs(bubbles)
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
+    si = surface_integral(ks, bubbles, arcs, krotations, kdrotations, ΔV; kwargs...)
+    Ṽ = potential_integral(ks, bubbles, arcs, krotations, ΔV; kwargs...)
+    @views @. si[:, DIAGONAL_INDICES] -= Ṽ
+    return si 
 end
 
 end
