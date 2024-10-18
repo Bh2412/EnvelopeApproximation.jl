@@ -78,13 +78,13 @@ const EmptyInterval:: Nothing = nothing
 const EntireRing:: Tuple{Float64, Float64} = 0., 2π
 
 function ∠(k:: Vec3):: Vec3
-    ∥(k) && return Vec3(0., 0., 0.)
+    (k ∥ ẑ) && return Vec3(0., 0., 0.)
     k_ = norm(k)
     θ = acos(k[3] / k_)
-    return ẑ × (k / k_ * sin(θ)) * θ
+    return ((k / (k_ * sin(θ))) * θ) × ẑ
 end
 
-align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k...)))
+align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
 
 function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Union{Tuple{Float64, Float64}, Nothing}
     # This function assumes n̂′ is not parallel to the sphere of the integration ring
@@ -293,14 +293,14 @@ x̂_ix̂_j = R_li * Rmj * x̂′_i x̂′_j
 =#
 
 function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: SMatrix{6, 6, Float64}
-    drot = SMatrix{6, 6, Float64}(undef)
-    for n ∈ 1:6, k ∈ 1:6
+    drot = MMatrix{6, 6, Float64}(undef)
+    @inbounds for n ∈ 1:6, k ∈ 1:6
         i, j = SymmetricTensorMapping[k]
         l, m = SymmetricTensorMapping[n]
         if l == m
             drot[k, n] = rotation[l, i] * rotation[m, j] 
         else
-            drot[k, n] = (rotation[l, i] * rotation[m, j]) + (rotaion[m, i] * rotation[l, j]) 
+            drot[k, n] = (rotation[l, i] * rotation[m, j]) + (rotation[m, i] * rotation[l, j]) 
         end
     end
     return drot
