@@ -120,10 +120,14 @@ function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h::
             return FullCircle
         end
     end
-    α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
-    Δ = acos(d / (R * s′))
-    # Returns the interval that describes the Dome!!! of the intersection, that is the short arc of the intersection
-    return PeriodicInterval(mod2π(α - Δ), 2 * Δ)
+    α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn) 
+    Δ = acos(d / (R * s′))  # The short arc
+    if sgn > 0.
+        return PeriodicInterval(mod2π(α - Δ), 2Δ)
+    else
+        return PeriodicInterval(mod2π(α + Δ), 2π - 2Δ)
+    end
+    # Returns the interval that describes the intersection with the dome.
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system
