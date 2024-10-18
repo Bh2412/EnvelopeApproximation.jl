@@ -2,6 +2,8 @@ module GeometricStressEnergyTensor
 
 using EnvelopeApproximation.BubbleBasics
 using LinearAlgebra
+using Intervals
+using Rotations
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     return euc(bubble1.center - bubble2.center) < bubble1.radius + bubble2.radius
@@ -10,7 +12,7 @@ end
 struct Intersection
     h:: Float64
     n̂:: Vec3
-    includes_center:: Bool
+    dome_like:: Bool
 end
 
 function Intersection(n:: Vec3, includes_center:: Bool)
@@ -22,18 +24,19 @@ end
 Credit to WolFram Malthworld sphere-sphere intersection article
 =#
 function λ(r1:: Float64, r2:: Float64, d:: Float64) 
-    x = (d^2 + r1 ^2 - r2 ^ 2) / 2d
+    x = (d^2 + r1^2 - r2^2) / 2d
     return x
 end
 
 function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{Intersection, Interection}
     n = bubble2.center - bubble1.center
     d = norm(n)
+    n̂ = n / d 
     _λ = λ(bubble1.radius, bubble2.radius, d)
-    n1 = _λ * n
+    n1 = _λ * n̂
     n2 = -n + n1
-    in1 = bubble1.center ∈ bubble2
-    in2 = bubble2.center ∈ bubble1
+    in1 = sign(d^2 + bubble1.radius ^ 2 - bubble2.radius ^ 2)
+    in2 = sign(d^2 + bubble2.radius ^ 2 - bubble1.radius ^ 2)
     return (Intersection(n1, in1), Intersection(n2, in2))
 end
 
@@ -59,6 +62,76 @@ function intersections(bubbles:: Bubbles):: Dict{Int, Vector{Intersection}}
     return d
 end
 
+mod2π(ϕ:: Float64) = mod(ϕ, 2π)
 
+atan2π = mod2π ∘ atan
+
+const NullVec:: Vec3 = Vec3(zeros(3))
+
+const ẑ:: Vec3 = Vec3(0., 0., 1.)
+
+∥(u:: Vec3, v:: Vec3):: Bool = u×v ≈ NullVec
+
+const EmptyInterval:: Interval{Float64, Closed, Closed} = 2π .. 0.
+const EntireRing:: Interval{Float64, Closed, Closed} = 0. .. 2π
+
+function ∠(k:: Vec3):: Vec3
+    ∥(k) && return Vec3(0., 0., 0.)
+    k_ = norm(k)
+    θ = acos(k[3] / k_)
+    return ẑ × (k / k_ * sin(θ)) * θ
+end
+
+align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k...)))
+
+function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Interval{Float64, Closed, Closed}
+    # This function assumes n̂′ is not parallel to the sphere of the integration ring
+    s′ = √(1 - μ′ ^ 2)
+    d, sgn = begin
+        x = (h - μ′ * R) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
+        abs(x), sign(x)
+    end
+    if abs(d) >= R * s′
+        return EmptyInterval
+    end
+    α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn)
+    Δ = acos(d / (R * s′))
+    # Returns the interval that describes the Dome!!! of the intersection, that is the short arc of the intersection
+    return α - Δ .. α + Δ
+end
+
+function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    if Δϕ.right >= Δϕ.left
+        return IntervalSet([Δϕ])
+    else
+        return IntervalSet([0. .. Δϕ.right, Δϕ.left .. 2π])
+    end
+end
+
+function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64},
+             intersection:: Intersection):: Interval{Float64, Closed, Closed}
+    n̂′ = krotation * intersection.n̂
+    if n̂′ ∥ ẑ
+        if (μ′ * R * sign(n̂′[3])) >= intersection.h
+            return EntireRing
+        else
+            return EmptyInterval
+        end
+    else
+        _Δϕ′ = Δϕ′(μ′, R, n̂′, intersection.h)        
+    end
+    # This function returns the correctt arc of the intersection, in a representation by a single interval.
+    if intersection.dome_like
+        return _Δϕ′
+    else
+        return _Δϕ′.left .. _Δϕ′.right
+    end
+end
+
+function Δϕ′(μ′:: Float64, R:: Float64, krotation:: SMatrix{3, 3, Float64}, 
+             intersections:: Vector{Intersection}):: Vector{Interval{Float64, Closed, Closed}}
+    _Δϕ′(intersection:: Intersectoin):: Interval{Float64, Closed, Closed} = Δϕ′(μ′, R, krotation, intersection)
+    return @. $reduce(∩, apply_periodicity(_Δϕ′(intersections)))
+end
 
 end
