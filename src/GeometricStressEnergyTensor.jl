@@ -9,7 +9,7 @@ import Base: *
 using QuadGK
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
-    return euc(bubble1.center - bubble2.center) < bubble1.radius + bubble2.radius
+    return euc(bubble1.center, bubble2.center) < bubble1.radius + bubble2.radius
 end
 
 struct IntersectionArc
@@ -44,8 +44,8 @@ end
 
 function intersection_arcs(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc}}
     d = Dict{Int, Vector{IntersectionArc}}()
-    for (i, bubble1) in enumerate(bubbles)
-        for (j̃, bubble2) in bubbles[(i + 1):end]
+    for (i, bubble1) in enumerate(bubbles.bubbles)
+        for (j̃, bubble2) in enumerate(bubbles.bubbles[(i + 1):end])
             j = j̃ + i
             if intersecting(bubble1, bubble2)
                 intersection1, intersection2 = bubble1 ∩ bubble2
@@ -102,15 +102,7 @@ function Δϕ′(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: Int
     return α - Δ .. α + Δ
 end
 
-function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalSet{Interval{Float64, Closed, Closed}}
-    if Δϕ.right >= Δϕ.left
-        return IntervalSet([Δϕ])
-    else
-        return IntervalSet([0. .. Δϕ.right, Δϕ.left .. 2π])
-    end
-end
-
-# A prime indicates that the intersection is in a rotated coordinate ststem
+# A prime indicates that the intersection is in a rotated coordinate system
 function Δϕ′(μ′:: Float64, R:: Float64, 
              intersection′:: IntersectionArc):: Interval{Float64, Closed, Closed}
     n̂′, h = intersection′.n̂, intersection′.h
@@ -128,6 +120,14 @@ function Δϕ′(μ′:: Float64, R:: Float64,
         return _Δϕ′
     else
         return _Δϕ′.left .. _Δϕ′.right
+    end
+end
+
+function apply_periodicity(Δϕ:: Interval{Float64, Closed, Closed}):: IntervalSet{Interval{Float64, Closed, Closed}}
+    if Δϕ.right >= Δϕ.left
+        return IntervalSet([Δϕ])
+    else
+        return IntervalSet([0. .. Δϕ.right, Δϕ.left .. 2π])
     end
 end
 
@@ -151,7 +151,7 @@ function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64, ϕ1:: Float64, ϕ2:: F
     throw(error("Not Implemented"))
 end
 
-function ∫_ϕ(si:: SphericalIntegran{T}, μ:: Float64):: T where T
+function ∫_ϕ(si:: SphericalIntegrand{T}, μ:: Float64):: T where T
     return ∫_ϕ(si, μ, 0., 2π)
 end
 
@@ -316,7 +316,7 @@ function surface_integral(k:: Vec3, bubbles:: Bubbles,
 end
 
 function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles, 
-                          arcs:: union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
+                          arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
                           krotations:: Union{Nothing, Vector{SMatrix{3, 3, Float64}}} = nothing, 
                           kdrotations:: Union{Nothing, Vector{SMatrix{6, 6, Float64}}} = nothing, 
                           ΔV:: Float64 = 1.):: Matrix{ComplexF64}
@@ -327,7 +327,7 @@ function surface_integral(ks:: Vector{Vec3}, bubbles:: Bubbles,
     for ((i, k), krot, kdrot) in zip(enumerate(ks), krotations, kdrotations)
         @views V[:, i] .= surface_integral(k, bubbles, arcs, krot, kdrot, ΔV)
     end
-    return V'
+    return permutedims(V)
 end
 
 end
