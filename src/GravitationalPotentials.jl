@@ -175,7 +175,7 @@ function Ŋ(ks:: Vector{Vec3},
            G:: Float64
            ):: Vector{ComplexF64}
     c = @. (-12π * G * a ^ 2) / (ks ⋅ ks) 
-    A = @. $v̂iv̂j(ks, tensor_directions) - ($reshape(δij(tensor_directions), 1, :) / 3)
+    A = @. ($v̂iv̂j(ks, tensor_directions) - ($reshape(δij(tensor_directions), 1, :) / 3)) * (2 - $reshape(δij(tensor_directions), 1, :))
     return @. $sum((c * A * T), dims=2)[:]
 end
 
