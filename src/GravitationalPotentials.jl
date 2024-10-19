@@ -69,7 +69,7 @@ using QuadGK
 using StaticArrays
 import LinearAlgebra: norm
 
-# In accordange with the T_ij function
+# In accordance with the T_ij function
 const TensorDirections:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:x, :y), (:x, :z), (:y, :y), (:y, :z), (:z, :z)]
 const AboveDiagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :y), (:x, :z), (:y, :z)]
 const Diagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:y, :y), (:z, :z)]
@@ -170,13 +170,12 @@ end
 
 function Ŋ(ks:: Vector{Vec3},
            T:: Matrix{ComplexF64},
-           tensor_directions:: Vector,
            a:: Float64,
            G:: Float64
            ):: Vector{ComplexF64}
     c = @. (-12π * G * a ^ 2) / (ks ⋅ ks)
-    δ = reshape(δij.(tensor_directions), 1, :)
-    A = @. ($v̂iv̂j(ks, tensor_directions) - (δ / 3)) * (2 - δ)  # The 2 - δ is due to the concatenation of a symmetric tensor
+    δ = reshape(δij.(TensorDirections), 1, :)
+    A = @. ($v̂iv̂j(ks, TensorDirections) - (δ / 3)) * (2 - δ)  # The 2 - δ is due to the concatenation of a symmetric tensor
     return @. $sum((c * A * T), dims=2)[:]
 end
 
@@ -185,25 +184,12 @@ export ψ
 export Ŋ
 
 function Ŋ(ks:: Vector{Vec3}, 
-           bubbles:: Bubbles,
-           ϕ_resolution:: Float64, 
-           μ_resolution:: Float64, 
+           bubbles:: Bubbles;
            ΔV:: Float64 = 1.,
            a:: Float64 = 1.,
-           G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
-    tensor_directions = Vector{TensorDirection}(upper_right)
+           G:: Float64 = 1., kwargs...):: Vector{ComplexF64}
     T = T_ij(ks, bubbles; ΔV=ΔV, kwargs...)
-    return Ŋ(ks, T, tensor_directions, a, G)
-end
-
-function Ŋ(ks:: Vector{Vec3}, 
-           bubbles:: Bubbles,
-           n_ϕ:: Int64, 
-           n_μ:: Int64, 
-           ΔV:: Float64 = 1.,
-           a:: Float64 = 1.,
-           G:: Float64 = 1.; kwargs...):: Vector{ComplexF64}
-    return Ŋ(ks, bubbles, 2π / n_ϕ, 2. / n_μ, ΔV, a, G; kwargs...)
+    return Ŋ(ks, T, a, G)
 end
 
 function Φ(ŋ:: Vector{ComplexF64}, Ψ:: Vector{ComplexF64}):: Vector{ComplexF64}
