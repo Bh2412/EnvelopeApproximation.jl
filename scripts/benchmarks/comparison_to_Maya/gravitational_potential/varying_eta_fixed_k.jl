@@ -4,7 +4,7 @@ using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor
-import EnvelopeApproximation.GravitationalPotentials: ψ_source, Ŋ, Φ
+import EnvelopeApproximation.GravitationalPotentials: ψ_source, Ŋ, Φ, ψ
 using Plots
 
 # Loading Maya results
@@ -23,7 +23,7 @@ snapshot = BubblesSnapShot(nucleations, η_max)
 
 
 function Tij(η:: Float64):: Array{ComplexF64, 2}
-    return T_ij(kvecs, current_bubbles(snapshot, η); ΔV=ΔV, rtol=1e-3)
+    return T_ij(kvecs, current_bubbles(snapshot, η); ΔV=ΔV, rtol=1e-12)
 end
 
 function ψsource(η:: Float64)
@@ -75,21 +75,21 @@ end
 
 a, G = 1., 1.
 
-function quad_Ψ(η:: Float64):: Vector{ComplexF64}
-    return quad_ψ(kvecs, snapshot, η, 1, 100, ΔV, a, G; rtol=1e-2)
+function Ψ(η:: Float64):: Vector{ComplexF64}
+    return ψ(kvecs, snapshot, η; ΔV=ΔV, a=a, G=G, rtol=1e-2)
 end
 
-@time Ψ = @. (x -> x[1])(quad_Ψ(ηs))
+@time _Ψ = @. (x -> x[1])(Ψ(ηs))
 
-Ψ
+_Ψ
 
-ŋ = (T -> Ŋ(kvecs, T, tds, a, G)).(Ts) .|> x -> x[1]
+ŋ = (T -> Ŋ(kvecs, T, a, G)).(Ts) .|> x -> x[1]
 
-ϕ = Φ(ŋ, Ψ)
+ϕ = Φ(ŋ, _Ψ)
 
 begin
     p = plot(ηs, ψs .|> real, label="ψ``", xlabel="η")
-    plot!(ηs, Ψ .|> real, label="ψ")  
+    plot!(ηs, _Ψ .|> real, label="ψ")  
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/gravitational_potential_source_varying_eta_constant_k.png")    
     display(p)
 end
@@ -99,7 +99,7 @@ end
 begin
     n = 120
     p = plot(ηs[1:n], Maya_results_df[!, :Psi][1:n], label="Maya", title="Ψ", xlabel="η")
-    plot!(ηs[1:n], Ψ[1:n] .|> real, label="Ben")
+    plot!(ηs[1:n], _Ψ[1:n] .|> real, label="Ben")
     display(p)
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/psi_comparison_varying_eta_constant_k.png")
 end
@@ -108,7 +108,7 @@ end
 
 begin
     n = 60
-    p = plot(ηs[1:n], (Maya_results_df[!, :Psi][1:n] - (real.(Ψ))[1:n]), label="Maya", title="Ψ")
+    p = plot(ηs[1:n], (Maya_results_df[!, :Psi][1:n] - (real.(_Ψ))[1:n]), label="Maya", title="Ψ")
     display(p)
 end
 

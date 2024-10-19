@@ -161,10 +161,10 @@ function ψ(ks:: Vector{Vec3},
            kwargs...):: Vector{ComplexF64}
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
-    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ, 
+    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ;
                                                    ΔV=ΔV, a=a, G=G, 
                                                    krotations=krotations, 
-                                                   kdrotations=kdrotations; kwargs...) * (t - τ)
+                                                   kdrotations=kdrotations, kwargs...) * (t - τ)
     return quadgk(f, 0., t; kwargs...)[1]
 end
 

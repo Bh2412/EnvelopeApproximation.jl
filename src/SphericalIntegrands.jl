@@ -89,15 +89,15 @@ struct SphericalZZ <: TensorDirection end
 (st:: SphericalZhat)(μ:: Float64, ϕ:: Float64) = μ
 ∫_ϕ(st:: SphericalZhat, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ * (ϕ2 - ϕ1)
 (st:: SphericalXX)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * cos(ϕ) ^ 2
-∫_ϕ(st:: SphericalXX, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1 / 2) * (ϕ2 - ϕ1) - (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
+∫_ϕ(st:: SphericalXX, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1 / 2) * (ϕ2 - ϕ1) + (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
 (st:: SphericalXY)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * cos(ϕ) * sin(ϕ)
-∫_ϕ(st:: SphericalXY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * (1 / 4) * (cos(2ϕ2) - cos(2ϕ1))
+∫_ϕ(st:: SphericalXY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * (1 / 4) * (cos(2ϕ1) - cos(2ϕ2))
 (st:: SphericalXZ)(μ:: Float64, ϕ:: Float64):: Float64 = (μ * √(1 - μ ^ 2)) * cos(ϕ)
-∫_ϕ(st:: SphericalXZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (μ * √(1 - μ ^ 2)) * (sin(ϕ1) - sin(ϕ2))
+∫_ϕ(st:: SphericalXZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (μ * √(1 - μ ^ 2)) * (sin(ϕ2) - sin(ϕ1))
 (st:: SphericalYY)(μ:: Float64, ϕ:: Float64):: Float64 = (1 - μ ^ 2) * (sin(ϕ)) ^ 2
-∫_ϕ(st:: SphericalYY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1/2) * (ϕ2 - ϕ1) + (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
+∫_ϕ(st:: SphericalYY, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = (1 - μ ^ 2) * ((1/2) * (ϕ2 - ϕ1) - (1/4) * (sin(2ϕ2) - sin(2ϕ1)))
 (st:: SphericalYZ)(μ:: Float64, ϕ:: Float64):: Float64 = μ * √(1 - μ ^ 2) * sin(ϕ)
-∫_ϕ(st:: SphericalYZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ * √(1 - μ ^ 2) * (cos(ϕ2) - cos(ϕ1))
+∫_ϕ(st:: SphericalYZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ * √(1 - μ ^ 2) * (cos(ϕ1) - cos(ϕ2))
 (st:: SphericalZZ)(μ:: Float64, ϕ:: Float64):: Float64 = μ ^ 2
 ∫_ϕ(st:: SphericalZZ, μ:: Float64, ϕ1:: Float64, ϕ2:: Float64):: Float64 = μ ^ 2 * (ϕ2 - ϕ1)
 
