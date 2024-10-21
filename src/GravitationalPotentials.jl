@@ -121,31 +121,10 @@ function ψ_source(ks:: Vector{Vec3},
                   a:: Float64 = 1., 
                   G:: Float64 = 1., 
                   krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-                  kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing,
                   kwargs...):: Vector{ComplexF64}
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
-    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
     bubbles = current_bubbles(snapshot, t)
-    T = T_ij(ks, bubbles; krotations=krotations, 
-             kdrotations=kdrotations, ΔV=ΔV, kwargs...)
-    return ψ_source(ks, T, a, G)
-end
-
-
-function ψ_source(ks:: Vector{Vec3}, 
-                  snapshot:: BubblesSnapShot, 
-                  times:: Vector{Float64};
-                  ΔV:: Float64 = 1., 
-                  a:: Float64 = 1., 
-                  G:: Float64 = 1.,
-                  kwargs...):: Matrix{ComplexF64}
-    S = zeros(ComplexF64, length(times), length(ks))
-    for (i, t) in enumerate(times)
-        bubbles = current_bubbles(snapshot, t)
-        T = T_ij(ks, bubbles; ΔV=ΔV, kwargs...)
-        S[i, :] .= ψ_source(ks, T, a, G)
-    end
-    return S
+    return (4π * a^2 * G) .* k̂ik̂jTij(ks, bubbles; krotations=krotations, ΔV=ΔV)
 end
 
 export ψ
@@ -157,14 +136,12 @@ function ψ(ks:: Vector{Vec3},
            a:: Float64 = 1., 
            G:: Float64 = 1., 
            krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-           kdrotations:: Union{Nothing, Vector{<: SMatrix{6, 6, Float64}}} = nothing,
            kwargs...):: Vector{ComplexF64}
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
-    kdrotations ≡ nothing && (kdrotations = symmetric_tensor_inverse_rotation.(krotations))
     f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, snapshot, τ;
                                                    ΔV=ΔV, a=a, G=G, 
                                                    krotations=krotations, 
-                                                   kdrotations=kdrotations, kwargs...) * (t - τ)
+                                                   kwargs...) * (t - τ)
     return quadgk(f, 0., t; kwargs...)[1]
 end
 

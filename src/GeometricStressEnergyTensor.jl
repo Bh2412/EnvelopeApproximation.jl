@@ -347,4 +347,6 @@ end
 
 export T_ij
 
+include("StressEneryTensorContractions.jl")
+
 end
