@@ -145,29 +145,18 @@ function ψ(ks:: Vector{Vec3},
     return quadgk(f, 0., t; kwargs...)[1]
 end
 
-function Ŋ(ks:: Vector{Vec3},
-           T:: Matrix{ComplexF64},
-           a:: Float64,
-           G:: Float64
-           ):: Vector{ComplexF64}
-    c = @. (-12π * G * a ^ 2) / (ks ⋅ ks)
-    δ = reshape(δij.(TensorDirections), 1, :)
-    A = @. ($v̂iv̂j(ks, TensorDirections) - (δ / 3)) * (2 - δ)  # The 2 - δ is due to the concatenation of a symmetric tensor
-    return @. $sum((c * A * T), dims=2)[:]
-end
-
 export ψ
-
-export Ŋ
 
 function Ŋ(ks:: Vector{Vec3}, 
            bubbles:: Bubbles;
            ΔV:: Float64 = 1.,
            a:: Float64 = 1.,
            G:: Float64 = 1., kwargs...):: Vector{ComplexF64}
-    T = T_ij(ks, bubbles; ΔV=ΔV, kwargs...)
-    return Ŋ(ks, T, a, G)
+    c = @. (-12π * G * a ^ 2) / (ks ⋅ ks)
+    return @. c * $ŋ_source(ks, bubbles; ΔV=ΔV, kwargs...)
 end
+
+export Ŋ
 
 function Φ(ŋ:: Vector{ComplexF64}, Ψ:: Vector{ComplexF64}):: Vector{ComplexF64}
     return ŋ - Ψ
