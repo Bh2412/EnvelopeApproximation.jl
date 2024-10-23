@@ -5,6 +5,53 @@ import EnvelopeApproximation.SurfaceTesselation as SI
 import EnvelopeApproximation.GravitationalPotentials as GP
 using Meshes
 
+@testset "GeometricStressEnergyTensor.jl" begin
+@testset "ring_dome_intersection" begin
+@testset "benchmark1" begin
+    import EnvelopeApproximation.GeometricStressEnergyTensor: ∩, intersection_arcs, Δϕ′, ∥, ẑ, mod2π, align_ẑ, symmetric_tensor_inverse_rotation, SymmetricTensorMapping, surface_integral, ∫_ϕ, upper_right
+    import EnvelopeApproximation.GeometricStressEnergyTensor: BubbleArcSurfaceIntegrand, fourier_mode, SphericalIntegrand
+    import EnvelopeApproximation.GeometricStressEnergyTensor: potential_integral, BubbleArcPotentialIntegrand
+    import EnvelopeApproximation.GeometricStressEnergyTensor: T_ij, ring_dome_intersection, IntervalSet, PeriodicInterval, complement, IntersectionArc, atan2π
+    import EnvelopeApproximation.GeometricStressEnergyTensor: k̂ik̂jTij, ŋ_source
+    R, n̂ , h = 1., (1. / √(2)) * Vec3(1., 0., 1.), 0.5
+    x(μ) = 1. / √(2) - μ
+    y2(μ) = (1. / 2 + √(2) * μ - 2 * μ^2)
+    y(μ) = √(y2(μ))
+    μp, μm = begin
+        a, b = 1/√(8), √(6) / 4
+        a - b, a + b
+    end 
+    ϕp(μ) = begin 
+        if μ < μp
+            return 0.
+        elseif μ > μm
+            return 0.
+        else
+            return atan(-y(μ), x(μ))
+        end
+    end
+    Δ(μ) = begin
+        if μ < μp
+            return 0.
+        elseif μ > μm
+            return 2π
+        else
+            return atan(y(μ), x(μ)) - ϕp(μ)
+        end
+    end
+    println("arrived here")
+    μs = -1.:0.0001:1.
+    expected_ϕs = ϕp.(μs) .|> mod2π
+    expected_Δs = Δ.(μs)
+    pis = ring_dome_intersection.(μs, (R, ), (n̂, ), h)
+    derived_ϕs = pis .|> x -> x.ϕ1
+    derived_Δs = pis .|> x -> x.Δ
+    @test all(isapprox.(derived_ϕs, expected_ϕs, atol=1e-8))
+    @test all(isapprox.(derived_Δs, expected_Δs, atol=1e-8))
+end
+end
+end
+
 @testset "BubblesEvolution.jl" begin
     using EnvelopeApproximation.BubblesEvolution
     bs = BallSpace(1., Point3(0., 0., 0.))
