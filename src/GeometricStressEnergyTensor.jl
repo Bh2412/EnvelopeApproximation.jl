@@ -25,6 +25,8 @@ function IntersectionArc(n:: Vec3, includes_center:: Bool)
     return IntersectionArc(h, n / h, includes_center)
 end
 
+export IntersectionArc
+
 #=
 Credit to WolFram Malthworld sphere-sphere intersection article
 =#
@@ -64,6 +66,8 @@ function intersection_arcs(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionArc
     end
     return d
 end
+
+export intersection_arcs
 
 mod2π(ϕ:: Float64) = mod(ϕ, 2π)
 

@@ -83,7 +83,7 @@ end
 
 _Ψ
 
-ŋ = (t -> Ŋ(kvecs, current_bubbles(snapshot, t), a=a, G=G)).(ηs) .|> x -> x[1]
+@time ŋ = (t -> Ŋ(kvecs, current_bubbles(snapshot, t), a=a, G=G)).(ηs) .|> x -> x[1]
 
 ϕ = Φ(ŋ, _Ψ)
 
