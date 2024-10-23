@@ -8,6 +8,7 @@ using StaticArrays
 using EnvelopeApproximation.GravitationalPotentials
 using SpecialFunctions
 using QuadGK
+using DoubleExponentialFormulas
 
 function spherical_unit_vectors(n:: Int):: Matrix{Vec3}
     Θ, Φ = sph_points(n)
@@ -65,12 +66,12 @@ function ŋ_contribution_integrand(κ:: Float64, χ_PT:: Float64,
     n, _ = size(n̂s)
     ls = 0:sph_lmax(n)
     cl = @. sphericalbesselj(ls, κ) * (κ ^ 2) * cispi(ls / 2)
-    _ŋ_source_lm = ŋ_lm(κ / χ_PT, n̂s, bubbles, 
+    _ŋ_lm = ŋ_lm(κ / χ_PT, n̂s, bubbles, 
                         arcs, n̂_rotations, ΔV; kwargs...)
     @inbounds for (l, m) ∈ LM(ls)
-        _ŋ_source_lm[sph_mode(l, m)] *= cl[l + 1]
+        _ŋ_lm[sph_mode(l, m)] *= cl[l + 1]
     end
-    return _ŋ_source_lm
+    return _ŋ_lm
 end
 
 function ψ_contribution(χ_PT:: Float64, η_PT:: Float64,
@@ -80,7 +81,7 @@ function ψ_contribution(χ_PT:: Float64, η_PT:: Float64,
                         G:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
     integrand(κ:: Float64, η:: Float64):: Matrix{ComplexF64} = ψ_contribution_integrand(κ, η, χ_PT, η_PT, n̂s, snapshot, n̂_rotations, 
                                                                                           ΔV; kwargs...)                                                                                      
-    η_integrand(η:: Float64) :: Matrix{ComplexF64} = quadgk(κ -> integrand(κ, η), 0., Inf64; kwargs...)[1]
+    η_integrand(η:: Float64) :: Matrix{ComplexF64} = quadde(κ -> integrand(κ, η), 0., Inf64; kwargs...)[1]
     V = quadgk(η_integrand, 0., η_PT; kwargs...)[1]
     return (-4G * a^2 / (π * χ_PT ^ 3)) .* V
 end
@@ -92,7 +93,7 @@ function ŋ_contribution(χ_PT:: Float64, η_PT:: Float64,
     bubbles = current_bubbles(snapshot, η_PT)
     arcs = intersection_arcs(bubbles)
     integrand(κ:: Float64):: Matrix{ComplexF64} = ŋ_contribution_integrand(κ, χ_PT, n̂s, bubbles, arcs, n̂_rotations, ΔV; kwargs...)
-    return (1 / (2 * (π ^ 2) * χ_PT ^ 3)) * quadgk(integrand, 0., Inf64; kwargs...)[1]
+    return (1 / (2 * (π ^ 2) * χ_PT ^ 3)) * quadde(integrand, 0., Inf64; kwargs...)[1]
 end
 
 function ISW(snapshot:: BubblesSnapShot, 

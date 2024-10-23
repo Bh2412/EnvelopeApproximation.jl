@@ -13,6 +13,7 @@ Cubature = "667455a9-e2ce-5579-9412-b964f529a492"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DoubleExponentialFormulas = "eb426421-6452-4132-80ef-4b100a757ac5"
 FastSphericalHarmonics = "d335c211-7587-445e-a753-f0b1fb7e445f"
 FastTransforms = "057dd010-8810-581a-b7be-e3fc3b93f78c"
 FunctionWrappers = "069b7b12-0de2-55c6-9aab-29f3d0a68a2e"
@@ -43,6 +44,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [compat]
+DoubleExponentialFormulas = "0.1.0"
 Rotations = "1.7.1"
 julia = "1"
 
