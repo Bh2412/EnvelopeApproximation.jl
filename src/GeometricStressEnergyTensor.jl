@@ -1,5 +1,6 @@
 module GeometricStressEnergyTensor
 
+import EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using StaticArrays
 using LinearAlgebra
@@ -96,38 +97,14 @@ function complement(p:: PeriodicInterval):: PeriodicInterval
     end
 end
 
+const lib_path = "$(dirname(dirname(pathof(EnvelopeApproximation))))/rust_extensions/benrust/obj/fastrust.so"
+
+rdi(μ, R, n̂, h) = @ccall lib_path.ring_dome_intersect(μ:: Float64, R:: Float64, n̂:: Tuple{Float64, Float64, Float64}, h:: Float64):: Tuple{Float64, Float64}
+
 # This function returns the intersection between the integratoin ring and the dome like region
 # of the intersection of 2 bubbles
 function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: PeriodicInterval
-    if n̂′ ∥ ẑ
-        if h >= μ′ * R * n̂′[3] 
-            return EmptyArc
-        else
-            return FullCircle
-        end
-    end
-    # From here on out we assume n̂′ is not parallel to the sphere of the integration ring
-    s′ = √(1 - μ′ ^ 2)
-    d, sgn = begin
-        x = (h - μ′ * R * n̂′[3]) / √(n̂′[1] ^ 2 + n̂′[2] ^ 2)
-        abs(x), sign(x)
-    end
-    if d >= R * s′
-        # The sign indicates where the ring is entirely in the dome or entirely out
-        if sgn > 0.
-            return EmptyArc
-        else
-            return FullCircle
-        end
-    end
-    α = atan2π(n̂′[2] * sgn, n̂′[1] * sgn) 
-    Δ = acos(d / (R * s′))  # The short arc
-    if sgn > 0.
-        return PeriodicInterval(mod2π(α - Δ), 2Δ)
-    else
-        return PeriodicInterval(mod2π(α + Δ), 2π - 2Δ)
-    end
-    # Returns the interval that describes the intersection with the dome.
+    return PeriodicInterval(rdi(μ′, R, n̂′.data, h)...)
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system

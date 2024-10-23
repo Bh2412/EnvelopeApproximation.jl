@@ -39,7 +39,6 @@ using Meshes
             return atan(y(μ), x(μ)) - ϕp(μ)
         end
     end
-    println("arrived here")
     μs = -1.:0.0001:1.
     expected_ϕs = ϕp.(μs) .|> mod2π
     expected_Δs = Δ.(μs)
