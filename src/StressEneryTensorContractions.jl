@@ -17,6 +17,13 @@ function ∫_ϕ(ba:: BubbleArck̂ik̂j∂iφ∂jφ, μ:: Float64):: Float64
     return x
 end
 
+function fourier_mode(ba:: BubbleArck̂ik̂j∂iφ∂jφ,
+                      κ:: Float64; kwargs...):: ComplexF64
+    _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(ba, μ)
+    μ_lims = polar_limits(ba.R, ba.arcs)
+    return quadgk(_f, μ_lims...; kwargs...)[1]
+end
+
 function bubble_k̂ik̂j∂iφ∂jφ_contribution(k:: Vec3, bubble:: Bubble, 
                                         arcs:: Vector{IntersectionArc}, 
                                         krotation:: SMatrix{3, 3, Float64}, 
@@ -72,6 +79,13 @@ function ∫_ϕ(ba:: BubbleArcŊ, μ:: Float64):: Float64
         x += _f(i)
     end
     return x
+end
+
+function fourier_mode(ba:: BubbleArcŊ,
+                      κ:: Float64; kwargs...):: ComplexF64
+    _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(ba, μ)
+    μ_lims = polar_limits(ba.R, ba.arcs)
+    return quadgk(_f, μ_lims...; kwargs...)[1]
 end
 
 function bubble_Ŋ_contribution(k:: Vec3, bubble:: Bubble, 

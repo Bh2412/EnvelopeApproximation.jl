@@ -104,22 +104,19 @@ end
 
 const lib_path = "$(dirname(dirname(pathof(EnvelopeApproximation))))/rust_extensions/benrust/obj/fastrust.so"
 
-rdi(μ, R, n̂, h) = @ccall lib_path.ring_dome_intersect(μ:: Float64, R:: Float64, n̂:: Tuple{Float64, Float64, Float64}, h:: Float64):: Tuple{Float64, Float64}
+rdi(μ, R, n̂, h, dome_like) = @ccall lib_path.ring_dome_intersect(μ:: Float64, R:: Float64, n̂:: Tuple{Float64, Float64, Float64}, h:: Float64, dome_like:: Bool):: Tuple{Float64, Float64}
 
 # This function returns the intersection between the integratoin ring and the dome like region
 # of the intersection of 2 bubbles
-function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64):: PeriodicInterval
-    return PeriodicInterval(rdi(μ′, R, n̂′.data, h)...)
+function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64, dome_like:: Bool):: PeriodicInterval
+    return PeriodicInterval(rdi(μ′, R, n̂′.data, h, dome_like)...)
 end
 
 # A prime indicates that the intersection is in a rotated coordinate system
 function Δϕ′(μ′:: Float64, R:: Float64, 
              intersection′:: IntersectionArc):: PeriodicInterval
-    n̂′, h = intersection′.n̂, intersection′.h
-    _ring_dome_intersection = ring_dome_intersection(μ′, R, n̂′, h) 
-    # This function returns the correct arc of integration, in a representation by a single periodic interval.
-    intersection′.dome_like && return complement(_ring_dome_intersection)
-    return _ring_dome_intersection
+    n̂′, h, dome_like = intersection′.n̂, intersection′.h, intersection′.dome_like
+    return ring_dome_intersection(μ′, R, n̂′, h, dome_like) 
 end
 
 function IntervalSet(Δϕ:: PeriodicInterval):: IntervalSet{Interval{Float64, Closed, Closed}}
@@ -216,10 +213,24 @@ function fourier_mode(f:: SphericalIntegrand{Float64},
     return quadgk(_f, -1., 1.; kwargs...)[1]
 end
 
+function fourier_mode(bapi:: BubbleArcPotentialIntegrand, 
+                      κ:: Float64; kwargs...):: ComplexF64
+    _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(bapi, μ)
+    μ_lims = polar_limits(bapi.R, bapi.arcs)
+    return quadgk(_f, μ_lims...; kwargs...)[1]
+end
+
 function fourier_mode(f:: SphericalIntegrand{MVector{K, Float64}}, 
                       κ:: Float64; kwargs...):: MVector{K, ComplexF64} where K
     _f(μ:: Float64):: MVector{K, ComplexF64} = cis(-κ * μ) * ∫_ϕ(f, μ)
     return quadgk(_f, -1., 1.; kwargs...)[1]
+end
+
+function fourier_mode(basi:: BubbleArcSurfaceIntegrand,
+                      κ:: Float64; kwargs...):: MVector{6, ComplexF64}
+    _f(μ:: Float64):: MVector{6, ComplexF64} = cis(-κ * μ) * ∫_ϕ(basi, μ)
+    μ_lims = polar_limits(basi.R, basi.arcs)
+    return quadgk(_f, μ_lims...; kwargs...)[1]
 end
 
 function ∠(k:: Vec3):: Vec3
