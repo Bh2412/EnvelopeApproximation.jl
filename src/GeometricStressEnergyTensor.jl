@@ -155,7 +155,14 @@ function polar_intersection_region(R:: Float64,
 end
 
 function polar_limits(R:: Float64, arcs:: Vector{IntersectionArc}):: Vector{Float64}
-    regions = [e for t in polar_intersection_region.((R, ), arcs) for e in t]
+    n = length(arcs)
+    regions = Vector{Float64}(undef, 2n)
+    for (i, arc) in enumerate(arcs)
+        t = polar_intersection_region(R, arc)
+        for (j, e) in enumerate(t)
+            regions[2i + j - 2] = e
+        end
+    end
     regions |> unique! |> sort! 
     pushfirst!(regions, -1.)
     return push!(regions, 1.)
