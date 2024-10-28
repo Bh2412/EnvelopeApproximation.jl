@@ -7,8 +7,9 @@ using LinearAlgebra
 using Intervals
 import Intervals: IntervalSet
 using Rotations
-import Base: *, ∈, isempty, ~
+import Base: *, ∈, isempty, ~, ∩
 using QuadGK
+using DoubleExponentialFormulas
 
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     return euc(bubble1.center, bubble2.center) < bubble1.radius + bubble2.radius
@@ -20,9 +21,9 @@ struct IntersectionArc
     dome_like:: Bool
 end
 
-function IntersectionArc(n:: Vec3, includes_center:: Bool)
+function IntersectionArc(n:: Vec3, dome_like:: Bool)
     h = norm(n)
-    return IntersectionArc(h, n / h, includes_center)
+    return IntersectionArc(h, n / h, dome_like)
 end
 
 export IntersectionArc
@@ -134,12 +135,30 @@ function IntervalSet(Δϕ:: PeriodicInterval):: IntervalSet{Interval{Float64, Cl
     end
 end
 
-FullCircleSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet(FullCircle)
+const FullCircleSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalSet(FullCircle)
 
 function Δϕ′(μ′:: Float64, R:: Float64,
              intersection_arcs:: Vector{IntersectionArc}):: IntervalSet
     isempty(intersection_arcs) && return FullCircleSet
     return reduce(∩, (IntervalSet(Δϕ′(μ′, R, intersection_arc)) for intersection_arc in intersection_arcs))
+end
+
+function polar_intersection_region(R:: Float64, 
+                                   arc:: IntersectionArc):: Tuple{Float64, Float64}
+    # This function assumes h < R
+    n̂_z = arc.n̂[3]
+    n̂_xy = √(1 - n̂_z ^ 2)
+    ratio = arc.h / R
+    c = n̂_z * ratio
+    Δ = n̂_xy * √(1 - ratio ^ 2)
+    return (c - Δ, c + Δ)
+end
+
+function polar_limits(R:: Float64, arcs:: Vector{IntersectionArc}):: Vector{Float64}
+    regions = [e for t in polar_intersection_region.((R, ), arcs) for e in t]
+    regions |> unique! |> sort! 
+    pushfirst!(regions, -1.)
+    return push!(regions, 1.)
 end
 
 include("SphericalIntegrands.jl")
@@ -206,7 +225,6 @@ end
 align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
 
 export align_ẑ
-
 
 # The mapping between a 3 x 3 symmetric tensor's double indices and 
 #  a vector of length 6
