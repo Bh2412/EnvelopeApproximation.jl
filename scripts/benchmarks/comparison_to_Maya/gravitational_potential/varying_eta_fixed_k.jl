@@ -46,6 +46,7 @@ end
 begin
     p = plot(ηs, Maya_results_df[:, :T_xx], label="Maya", title="Txx")
     plot!(ηs, Txx .|> real, label="Ben")     
+    xlabel!("η")
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Txx_comparison_varying_eta_constant_k.png")
     display(p)
 end
@@ -53,6 +54,7 @@ end
 begin 
     p = plot(ηs, Maya_results_df[:, :T_yy], label="Maya", title="Tyy")
     plot!(ηs, Tyy .|> real, label="Ben")
+    xlabel!("η")
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Tyy_comparison_varying_eta_constant_k.png")
     display(p)
 end
@@ -60,6 +62,7 @@ end
 begin
     p = plot(ηs, Maya_results_df[:, :T_zz], label="Maya", title="Tzz")
     plot!(ηs, Tzz .|> real, label="Ben")    
+    xlabel!("η")
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Tzz_comparison_varying_eta_constant_k.png")    
     display(p)
 end
@@ -67,6 +70,7 @@ end
 begin
     p = plot(ηs, Maya_results_df[:, :T_zx], label="Maya", title="Tzx")
     plot!(ηs, Txz .|> real, label="Ben")    
+    xlabel!("η")
     savefig("scripts/benchmarks/comparison_to_Maya/gravitational_potential/Txz_comparison_varying_eta_constant_k.png")    
     display(p)
 end
