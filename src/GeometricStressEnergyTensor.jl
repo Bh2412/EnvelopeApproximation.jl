@@ -136,16 +136,9 @@ function polar_intersection_region(R:: Float64,
     return (c - Δ, c + Δ)
 end
 
-function polar_limits(R:: Float64, arcs:: Vector{IntersectionArc}):: Vector{Float64}
-    n = length(arcs)
-    regions = Vector{Float64}(undef, 2n)
-    for (i, arc) in enumerate(arcs)
-        t = polar_intersection_region(R, arc)
-        for (j, e) in enumerate(t)
-            regions[2i + j - 2] = e
-        end
-    end
-    regions |> unique! |> sort! 
+function polar_limits(R:: Float64, arcs:: Vector{IntersectionArc}):: Vector{Float64}    
+    regions = (x for arc in arcs for t in polar_intersection_region(R, arc) for x in t if abs(x) <= 1.)
+    regions = regions |> collect |> unique! |> sort!
     pushfirst!(regions, -1.)
     return push!(regions, 1.)
 end

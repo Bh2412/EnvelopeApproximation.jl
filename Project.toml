@@ -20,6 +20,7 @@ FunctionWrappers = "069b7b12-0de2-55c6-9aab-29f3d0a68a2e"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 HCubature = "19dc6840-f33b-545b-b366-655c7e3ffd49"
 Intervals = "d8418881-c3e1-53bb-8760-2df7ec849ed5"
+IterTools = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -45,6 +46,7 @@ Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [compat]
 DoubleExponentialFormulas = "0.1.0"
+IterTools = "1.10.0"
 Rotations = "1.7.1"
 julia = "1"
 
