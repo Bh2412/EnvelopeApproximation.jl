@@ -7,7 +7,7 @@ using LinearAlgebra
 using Intervals
 import Intervals: IntervalSet
 using Rotations
-import Base: *, ∈, isempty, ~, ∩
+import Base: *, ∈, isempty, ~, ∩, convert
 using QuadGK
 using DoubleExponentialFormulas
 
@@ -102,22 +102,7 @@ function complement(p:: PeriodicInterval):: PeriodicInterval
     end
 end
 
-const lib_path = "$(dirname(dirname(pathof(EnvelopeApproximation))))/rust_extensions/benrust/obj/fastrust.so"
-
-rdi(μ, R, n̂, h, dome_like) = @ccall lib_path.ring_dome_intersect(μ:: Float64, R:: Float64, n̂:: Tuple{Float64, Float64, Float64}, h:: Float64, dome_like:: Bool):: Tuple{Float64, Float64}
-
-# This function returns the intersection between the integratoin ring and the dome like region
-# of the intersection of 2 bubbles
-function ring_dome_intersection(μ′:: Float64, R:: Float64, n̂′:: Vec3, h:: Float64, dome_like:: Bool):: PeriodicInterval
-    return PeriodicInterval(rdi(μ′, R, n̂′.data, h, dome_like)...)
-end
-
-# A prime indicates that the intersection is in a rotated coordinate system
-function Δϕ′(μ′:: Float64, R:: Float64, 
-             intersection′:: IntersectionArc):: PeriodicInterval
-    n̂′, h, dome_like = intersection′.n̂, intersection′.h, intersection′.dome_like
-    return ring_dome_intersection(μ′, R, n̂′, h, dome_like) 
-end
+include("GeometricStressEnergyTensor/RingDomeIntersection.jl")
 
 function IntervalSet(Δϕ:: PeriodicInterval):: IntervalSet{Interval{Float64, Closed, Closed}}
     # Naive use of intervals ignore the fact that the point 0. is ientified with
@@ -137,7 +122,7 @@ const FullCircleSet:: IntervalSet{Interval{Float64, Closed, Closed}} = IntervalS
 function Δϕ′(μ′:: Float64, R:: Float64,
              intersection_arcs:: Vector{IntersectionArc}):: IntervalSet
     isempty(intersection_arcs) && return FullCircleSet
-    return reduce(∩, (IntervalSet(Δϕ′(μ′, R, intersection_arc)) for intersection_arc in intersection_arcs))
+    return reduce(∩, (IntervalSet(ring_dome_intersection(μ′, R, intersection_arc)) for intersection_arc in intersection_arcs))
 end
 
 function polar_intersection_region(R:: Float64, 
@@ -165,7 +150,7 @@ function polar_limits(R:: Float64, arcs:: Vector{IntersectionArc}):: Vector{Floa
     return push!(regions, 1.)
 end
 
-include("SphericalIntegrands.jl")
+include("GeometricStressEnergyTensor/SphericalIntegrands.jl")
 
 struct BubbleArcSurfaceIntegrand <: SphericalIntegrand{MVector{6, Float64}}
     R:: Float64
@@ -198,7 +183,6 @@ function ∫_ϕ(bapi:: BubbleArcPotentialIntegrand, μ:: Float64):: Float64
     return x
 end
 
-# Assume the rotation is right handed, that is of unit determinant (else it would change the dome_like parameter)
 function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionArc):: IntersectionArc
      return IntersectionArc(arc.h, rotation * arc.n̂, arc.dome_like)
 end
@@ -364,6 +348,6 @@ end
 
 export T_ij
 
-include("StressEneryTensorContractions.jl")
+include("GeometricStressEnergyTensor/StressEneryTensorContractions.jl")
 
 end
