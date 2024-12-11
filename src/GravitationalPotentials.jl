@@ -69,51 +69,6 @@ using QuadGK
 using StaticArrays
 import LinearAlgebra: norm
 
-# In accordance with the T_ij function
-const TensorDirections:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:x, :y), (:x, :z), (:y, :y), (:y, :z), (:z, :z)]
-const AboveDiagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :y), (:x, :z), (:y, :z)]
-const Diagonal:: Vector{Tuple{Symbol, Symbol}} = [(:x, :x), (:y, :y), (:z, :z)]
-
-function v̂(v:: Vec3):: Vec3
-    return v ./ norm(v)
-end
-
-function v̂iv̂j(k:: Vec3, td:: Tuple{Symbol, Symbol})
-    ```math
-    k_ik_j / k^2
-    ```        
-    indices = indexin(td, [:x, :y, :z])
-    return prod(v̂(k)[indices])
-end
-
-function v̂iv̂j(ks:: Vector{Vec3}, tds:: Vector{Tuple{Symbol, Symbol}} = TensorDirections):: Array{Float64, 2}
-    return @. v̂iv̂j($reshape(ks, :, 1), $reshape(tds, 1, :))
-end
-
-function δij(td:: Tuple{Symbol, Symbol}):: Float64
-    (td[1] ≡ td[2]) && return 1.
-    return 0.
-end
-
-function ψ_source(ks:: Vector{Vec3}, 
-                  T:: Matrix{ComplexF64}, 
-                  a = 1., 
-                  G = 1.):: Vector{ComplexF64}
-    ```math
-    ψ'' = 4πG_N a^2 k̂ik̂j Tij
-    ```        
-    k_ik_j = v̂iv̂j(ks, TensorDirections)
-    V = zeros(ComplexF64, length(ks))
-    for (i, td) in enumerate(TensorDirections)
-        if td in AboveDiagonal
-            @. V += (2 * k_ik_j[:, i]) * T[:, i]
-        elseif td in Diagonal
-            @. V += k_ik_j[:, i] * T[:, i] 
-        end
-    end
-    return (4π * a^2 * G) * V  
-end
-
 function ψ_source(ks:: Vector{Vec3}, 
                   snapshot:: BubblesSnapShot, 
                   t:: Float64;
@@ -160,6 +115,21 @@ export Ŋ
 
 function Φ(ŋ:: Vector{ComplexF64}, Ψ:: Vector{ComplexF64}):: Vector{ComplexF64}
     return ŋ - Ψ
+end
+
+function ΦminusΨ(ks:: Vector{Vec3}, 
+                 snapshot:: BubblesSnapShot, 
+                 t:: Float64;
+                 ΔV:: Float64 = 1., 
+                 a:: Float64 = 1., 
+                 G:: Float64 = 1., 
+                 krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                 kwargs...)
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    _ψ = ψ(ks, snapshot, t; ΔV=ΔV, a=a, G=G, krotations=krotations, 
+           kwargs...)
+    _ŋ = Ŋ(ks, current_bubbles(snapshot, t); ΔV=ΔV, a=a, G=G, kwargs...)
+    return @. _ŋ - 2 * _ψ
 end
 
 end
