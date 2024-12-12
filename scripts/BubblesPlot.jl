@@ -8,6 +8,6 @@ import Meshes
 using Observables
 
 @show pwd()
-ensemble = load("./notebooks/evolution_ensemble.jld2", "space_size")
+ensemble = load("evolution_ensemble.jld2", "snapshots")
 snap = ensemble[10, 1]
 viz(snap)

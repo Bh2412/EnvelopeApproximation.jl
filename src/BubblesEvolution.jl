@@ -77,7 +77,7 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
         s = (x -> sqrt(1 - x^2)).(μ)
         @. Vec3(r * s * cos(ϕ), r * s * sin(ϕ), r * μ)
     end
-    return space.center .+ v
+    return @. (space.center, ) + v
 end
     
 function fv_filter(existing_bubbles:: Bubbles):: Function
