@@ -119,3 +119,6 @@ scripts/benchmarks/comparison_to_Maya/gravitational_potential/Tzz_comparison_var
 scripts/benchmarks/comparison_to_Maya/gravitational_potential/ForBenSet5new2.npy
 scripts/benchmarks/comparison_to_Maya/gravitational_potential/ForBenSet6new2.npy
 scripts/numerical_integration.jl
+evolution_ensemble.jld2
+notebooks/evolution_probes.ipynb
+scripts/markdown/test.md
