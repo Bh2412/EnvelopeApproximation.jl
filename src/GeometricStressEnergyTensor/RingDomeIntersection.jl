@@ -22,7 +22,7 @@ end
 
 # A prime indicates that the intersection is in a rotated coordinate system
 function ring_dome_intersection(μ′:: Float64, R:: Float64, 
-                                intersection′:: IntersectionArc):: PeriodicInterval
+                                intersection′:: IntersectionDome):: PeriodicInterval
     n̂′, h, dome_like = intersection′.n̂, intersection′.h, intersection′.dome_like
     return ring_dome_intersection(μ′, R, n̂′, h, dome_like) 
 end
