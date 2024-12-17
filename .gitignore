@@ -122,3 +122,4 @@ scripts/numerical_integration.jl
 evolution_ensemble.jld2
 notebooks/evolution_probes.ipynb
 scripts/markdown/test.md
+scripts/studying_performance/rust_vs_julia_ring_dome_intersection.jl
