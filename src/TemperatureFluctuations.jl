@@ -17,7 +17,7 @@ function spherical_unit_vectors(n:: Int):: Matrix{Vec3}
 end
 
 function k̂ik̂jTij_lm(k:: Float64, n̂s:: Matrix{Vec3}, bubbles:: Bubbles, 
-                    arcs:: Dict{Int64, Vector{IntersectionArc}},
+                    arcs:: Dict{Int64, Vector{IntersectionDome}},
                     n̂_rotations:: Matrix{<: SMatrix{3, 3, Float64}}, 
                     ΔV:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
     V:: Matrix{ComplexF64} = similar(n̂s, ComplexF64)
@@ -28,7 +28,7 @@ function k̂ik̂jTij_lm(k:: Float64, n̂s:: Matrix{Vec3}, bubbles:: Bubbles,
 end
 
 function ŋ_lm(k:: Float64, n̂s:: Matrix{Vec3}, bubbles:: Bubbles, 
-              arcs:: Dict{Int64, Vector{IntersectionArc}},
+              arcs:: Dict{Int64, Vector{IntersectionDome}},
               n̂_rotations:: Matrix{<: SMatrix{3, 3, Float64}}, 
               ΔV:: Float64 = 1.; kwargs...):: Matrix{ComplexF64}
               V:: Matrix{ComplexF64} = similar(n̂s, ComplexF64)
@@ -60,7 +60,7 @@ end
 
 function ŋ_contribution_integrand(κ:: Float64, χ_PT:: Float64,
                                   n̂s:: Matrix{Vec3}, bubbles:: Bubbles,
-                                  arcs:: Dict{Int64, Vector{IntersectionArc}},
+                                  arcs:: Dict{Int64, Vector{IntersectionDome}},
                                   n̂_rotations:: Matrix{<: SMatrix{3, 3, Float64}}, 
                                   ΔV:: Float64 = 1.; kwargs...)
     n, _ = size(n̂s)

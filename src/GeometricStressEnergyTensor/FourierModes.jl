@@ -27,13 +27,13 @@ end
 function fourier_mode(ba:: BubbleArck̂ik̂j∂iφ∂jφ,
     κ:: Float64; kwargs...):: ComplexF64
 _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(ba, μ)
-μ_lims = polar_limits(ba.R, ba.arcs)
+μ_lims = polar_limits(ba.R, ba.domes)
 return quadgk(_f, μ_lims...; kwargs...)[1]
 end
 
 function fourier_mode(ba:: BubbleArcŊ,
     κ:: Float64; kwargs...):: ComplexF64
 _f(μ:: Float64):: ComplexF64 = cis(-κ * μ) * ∫_ϕ(ba, μ)
-μ_lims = polar_limits(ba.R, ba.arcs)
+μ_lims = polar_limits(ba.R, ba.domes)
 return quadgk(_f, μ_lims...; kwargs...)[1]
 end

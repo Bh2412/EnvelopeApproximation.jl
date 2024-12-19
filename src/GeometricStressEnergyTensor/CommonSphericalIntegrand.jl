@@ -1,3 +1,11 @@
+function _buffers(domes:: Vector{IntersectionDome}):: Tuple{Vector{PeriodicInterval}, Vector{Tuple{Float64, Float64}}, Vector{PeriodicInterval}}
+    N = length(domes)
+    arcs_buffer = Vector{PeriodicInterval}(undef, N)
+    limits_buffer = Vector{Tuple{Float64, Float64}}(undef, 2N)
+    intersection_buffer = Vector{PeriodicInterval}(undef, N)
+    return arcs_buffer, limits_buffer, intersection_buffer
+end
+
 struct BubbleArcSurfaceIntegrand <: SphericalIntegrand{MVector{6, Float64}}
     R:: Float64
     domes:: Vector{IntersectionDome}
@@ -6,11 +14,7 @@ struct BubbleArcSurfaceIntegrand <: SphericalIntegrand{MVector{6, Float64}}
     intersection_buffer:: Vector{PeriodicInterval}
 
     function BubbleArcSurfaceIntegrand(R:: Float64, domes:: Vector{IntersectionDome}):: BubbleArcSurfaceIntegrand
-        N = length(domes)
-        arcs_buffer = Vector{PeriodicInterval}(under, N)
-        limits_buffer = Vector{Tuple{Float64, Float64}}(undef, 2N)
-        intersection_buffer = Vector{PeriodicInterval}(undef, N)
-        return new(R, domes, arcs_buffer, limits_buffer, intersection_buffer)
+        return new(R, domes, _buffers(domes)...)
     end
 end
 
@@ -33,16 +37,19 @@ const ZHat:: SphericalZhat = SphericalZhat()
 struct BubbleArcPotentialIntegrand <: SphericalIntegrand{Float64}
     R:: Float64
     domes:: Vector{IntersectionDome}
+    arcs_buffer:: Vector{PeriodicInterval}
+    limits_buffer:: Vector{Tuple{Float64, Float64}}
+    intersection_buffer:: Vector{PeriodicInterval}
+
+    function BubbleArcPotentialIntegrand(R:: Float64, domes:: Vector{IntersectionDome})
+        return new(R, domes, _buffers(domes)...)
+    end
 end
 
 function ∫_ϕ(bapi:: BubbleArcPotentialIntegrand, μ:: Float64):: Float64
-    intervals = Δϕ′(μ, bapi.R, bapi.domes).items
-    _f(i:: Interval{Float64, Closed, Closed}):: Float64 = ∫_ϕ(ZHat, μ, i.first, i.last)
-    x:: Float64 = 0.
-    for i in intervals
-        x += _f(i)
-    end
-    return x
+    intervals = ring_domes_intersection!(μ, bapi.R, bapi.domes, 
+                                         bapi.arcs_buffer, bapi.limits_buffer, bapi.intersection_buffer)
+    return sum((∫_ϕ(ZHat, μ, interval.ϕ1, mod2π(interval.ϕ1 + interval.Δ)) for interval in intervals), init=0.)
 end
 
 const ZZ:: TensorDirection = SphericalZZ()
@@ -51,16 +58,19 @@ const Trace:: TensorDirection = SphericalTrace()
 struct BubbleArck̂ik̂j∂iφ∂jφ <: SphericalIntegrand{Float64}
     R:: Float64
     domes:: Vector{IntersectionDome}
+    arcs_buffer:: Vector{PeriodicInterval}
+    limits_buffer:: Vector{Tuple{Float64, Float64}}
+    intersection_buffer:: Vector{PeriodicInterval}
+
+    function BubbleArck̂ik̂j∂iφ∂jφ(R:: Float64, domes:: Vector{IntersectionDome})
+        return new(R, domes, _buffers(domes)...)
+    end
 end
 
 function ∫_ϕ(ba:: BubbleArck̂ik̂j∂iφ∂jφ, μ:: Float64):: Float64
-    intervals = Δϕ′(μ, ba.R, ba.domes).items
-    _f(i:: Interval{Float64, Closed, Closed}):: Float64 = ∫_ϕ(ZZ, μ, i.first, i.last)
-    x:: Float64 = 0.
-    for i in intervals
-        x += _f(i)
-    end
-    return x
+    intervals = ring_domes_intersection!(μ, ba.R, ba.domes, 
+                                         ba.arcs_buffer, ba.limits_buffer, ba.intersection_buffer)
+    return sum((∫_ϕ(ZZ, μ, interval.ϕ1, mod2π(interval.ϕ1 + interval.Δ)) for interval in intervals), init=0.)
 end
 
 struct Ŋ <: SphericalIntegrand{Float64} end
@@ -74,16 +84,19 @@ const ŋ:: SphericalIntegrand{Float64} = Ŋ()
 struct BubbleArcŊ <: SphericalIntegrand{Float64}
     R:: Float64
     domes:: Vector{IntersectionDome}
+    arcs_buffer:: Vector{PeriodicInterval}
+    limits_buffer:: Vector{Tuple{Float64, Float64}}
+    intersection_buffer:: Vector{PeriodicInterval}
+
+    function BubbleArcŊ(R:: Float64, domes:: Vector{IntersectionDome})
+        return new(R, domes, _buffers(domes)...)
+    end
 end
 
 function ∫_ϕ(ba:: BubbleArcŊ, μ:: Float64):: Float64
-    intervals = Δϕ′(μ, ba.R, ba.domes).items
-    _f(i:: Interval{Float64, Closed, Closed}):: Float64 = ∫_ϕ(ŋ, μ, i.first, i.last)
-    x:: Float64 = 0.
-    for i in intervals
-        x += _f(i)
-    end
-    return x
+    intervals = ring_domes_intersection!(μ, ba.R, ba.domes, 
+                                         ba.arcs_buffer, ba.limits_buffer, ba.intersection_buffer)
+    return sum((∫_ϕ(ŋ, μ, interval.ϕ1, mod2π(interval.ϕ1 + interval.Δ)) for interval in intervals), init=0.)
 end
 
 

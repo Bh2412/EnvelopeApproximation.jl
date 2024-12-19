@@ -50,51 +50,8 @@ end
 
 include("GeometricStressEnergyTensor/BasicSphericalIntegrands.jl")
 include("GeometricStressEnergyTensor/CommonSphericalIntegrand.jl")
-
-
-function ∠(k:: Vec3):: Vec3
-    (k ∥ ẑ) && return Vec3(0., 0., 0.)
-    k_ = norm(k)
-    θ = acos(k[3] / k_)
-    return ((k / (k_ * sin(θ))) * θ) × ẑ
-end
-
-align_ẑ(k:: Vec3):: SMatrix{3, 3, Float64} = SMatrix{3, 3, Float64}(RotationVec(∠(k)...))
-
-export align_ẑ
-
-# The mapping between a 3 x 3 symmetric tensor's double indices and 
-#  a vector of length 6
-const SymmetricTensorMapping:: Dict{Int, Tuple{Int, Int}} = Dict(1 => (1, 1), 2 => (1, 2), 3 => (1, 3), 4 => (2, 2), 5 => (2, 3), 6 => (3, 3))
-
-# The mapping looks like This:
-#=
-   1       2     3
- #undef    4     5
- #undef  #undef  6
-=#
-
-
-#=
-This matrix applies the transformation law:
-x̂_ix̂_j = R_li * Rmj * x̂′_l x̂′_m
-=#
-
-function symmetric_tensor_inverse_rotation(rotation:: SMatrix{3, 3, Float64}):: SMatrix{6, 6, Float64}
-    drot = MMatrix{6, 6, Float64}(undef)
-    @inbounds for n ∈ 1:6, k ∈ 1:6
-        i, j = SymmetricTensorMapping[k]
-        l, m = SymmetricTensorMapping[n]
-        if l == m
-            drot[k, n] = rotation[l, i] * rotation[m, j] 
-        else
-            drot[k, n] = (rotation[l, i] * rotation[m, j]) + (rotation[m, i] * rotation[l, j]) 
-        end
-    end
-    return drot
-end
-
-export symmetric_tensor_inverse_rotation
+include("GeometricStressEnergyTensor/Rotations.jl")
+include("GeometricStressEnergyTensor/FourierModes.jl")
 
 function add_bubble_contribution!(V:: MVector{6, ComplexF64}, k:: Vec3, bubble:: Bubble, domes:: Vector{IntersectionDome},
                                   krotation:: SMatrix{3, 3, Float64}, 
@@ -184,20 +141,20 @@ end
 export T_ij
 
 function bubble_k̂ik̂j∂iφ∂jφ_contribution(k:: Vec3, bubble:: Bubble, 
-    arcs:: Vector{IntersectionArc}, 
+    domes:: Vector{IntersectionDome}, 
     krotation:: SMatrix{3, 3, Float64}, 
     ΔV:: Float64; kwargs...):: ComplexF64
 # Rotate to a coordinate system in which k̂ik̂j = δi3δj3
-mode = fourier_mode(BubbleArck̂ik̂j∂iφ∂jφ(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
+mode = fourier_mode(BubbleArck̂ik̂j∂iφ∂jφ(bubble.radius, (krotation, ) .* domes), bubble.radius * norm(k); kwargs...)
 return mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
 end
 
 function k̂ik̂jTij(k:: Vec3, bubbles:: Bubbles, 
-arcs:: Dict{Int64, Vector{IntersectionArc}},
+domes:: Dict{Int64, Vector{IntersectionDome}},
 krotation:: SMatrix{3, 3, Float64}, 
 ΔV:: Float64; kwargs...):: ComplexF64
 V = 0.
-for (bubble_index, bubble_arcs) in arcs
+for (bubble_index, bubble_arcs) in domes
 V += bubble_k̂ik̂j∂iφ∂jφ_contribution(k, bubbles[bubble_index], 
         bubble_arcs, krotation, ΔV; kwargs...)
 V -= bubble_potential_contribution(k, bubbles[bubble_index], 
@@ -207,43 +164,43 @@ return V
 end
 
 function k̂ik̂jTij(ks:: Vector{Vec3}, bubbles:: Bubbles;
-arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
-krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-ΔV:: Float64 = 1., kwargs...):: Vector{ComplexF64}
-arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
-krotations ≡ nothing && (krotations = align_ẑ.(ks))
-return @. k̂ik̂jTij(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ); kwargs...)
+                 domes:: Union{Nothing, Dict{Int64, Vector{IntersectionDome}}} = nothing, 
+                 krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                 ΔV:: Float64 = 1., kwargs...):: Vector{ComplexF64}
+    domes ≡ nothing && (domes = intersection_domes(bubbles))
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    return @. k̂ik̂jTij(ks, (bubbles, ), (domes, ), krotations, (ΔV, ); kwargs...)
 end
 
 export k̂ik̂jTij
 
 function bubble_Ŋ_contribution(k:: Vec3, bubble:: Bubble, 
-    arcs:: Vector{IntersectionArc}, 
+    domes:: Vector{IntersectionDome}, 
     krotation:: SMatrix{3, 3, Float64}, 
     ΔV:: Float64; kwargs...):: ComplexF64
-mode = fourier_mode(BubbleArcŊ(bubble.radius, (krotation, ) .* arcs), bubble.radius * norm(k); kwargs...)
-return mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
+    mode = fourier_mode(BubbleArcŊ(bubble.radius, (krotation, ) .* domes), bubble.radius * norm(k); kwargs...)
+    return mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
 end
 
 function ŋ_source(k:: Vec3, bubbles:: Bubbles, 
-arcs:: Dict{Int64, Vector{IntersectionArc}},
-krotation:: SMatrix{3, 3, Float64}, 
-ΔV:: Float64; kwargs...):: ComplexF64
-V = 0.
-for (bubble_index, bubble_arcs) in arcs
-V += bubble_Ŋ_contribution(k, bubbles[bubble_index], 
-        bubble_arcs, krotation, ΔV; kwargs...)
-end
-return V
+                  domes:: Dict{Int64, Vector{IntersectionDome}},
+                  krotation:: SMatrix{3, 3, Float64}, 
+                  ΔV:: Float64; kwargs...):: ComplexF64
+    V = 0.
+    for (bubble_index, bubble_arcs) in domes
+        V += bubble_Ŋ_contribution(k, bubbles[bubble_index], 
+            bubble_arcs, krotation, ΔV; kwargs...)
+    end
+    return V
 end
 
 function ŋ_source(ks:: Vector{Vec3}, bubbles:: Bubbles;
-arcs:: Union{Nothing, Dict{Int64, Vector{IntersectionArc}}} = nothing, 
-krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
-ΔV:: Float64 = 1., kwargs...):: Vector{ComplexF64}
-arcs ≡ nothing && (arcs = intersection_arcs(bubbles))
-krotations ≡ nothing && (krotations = align_ẑ.(ks))
-return ŋ_source.(ks, (bubbles, ), (arcs, ), krotations, (ΔV, ); kwargs...)
+                  domes:: Union{Nothing, Dict{Int64, Vector{IntersectionDome}}} = nothing, 
+                  krotations:: Union{Nothing, Vector{<: SMatrix{3, 3, Float64}}} = nothing, 
+                  ΔV:: Float64 = 1., kwargs...):: Vector{ComplexF64}
+    domes ≡ nothing && (domes = intersection_domes(bubbles))
+    krotations ≡ nothing && (krotations = align_ẑ.(ks))
+    return ŋ_source.(ks, (bubbles, ), (domes, ), krotations, (ΔV, ); kwargs...)
 end
 
 export ŋ_source
