@@ -21,13 +21,25 @@ function ring_domes_intersection!(μ′:: Float64, R:: Float64, intersection_dom
                                   arcs_buffer:: Vector{PeriodicInterval}, 
                                   limits_buffer:: Vector{Tuple{Float64, Float64}},
                                   intersection_buffer:: Vector{PeriodicInterval}):: AbstractVector{PeriodicInterval}
-    isempty(intersection_domes) && return @views intersection_buffer[1:0]
-    for (i, arc) in enumerate(intersection_domes)
-        p = ring_dome_intersection(μ′, R, arc)
-        approxempty(p) && return @views intersection_buffer[1:0]
-        arcs_buffer[i] = p
+    isempty(intersection_domes) && begin 
+        intersection_buffer[1] = FullCircle
+        return @views intersection_buffer[1:1]
     end
-    return periodic_intersection!(arcs_buffer, limits_buffer, intersection_buffer)
+    length(intersection_domes) == 1 && begin
+        intersection_buffer[1] = ring_dome_intersection(μ′, R, intersection_domes[1])
+        return @views intersection_buffer[1:1]
+    end
+    i = 1
+    for dome in intersection_domes
+        p = ring_dome_intersection(μ′, R, dome)
+        approxempty(p) && return @views intersection_buffer[1:0]
+        approxentire(p) && continue
+        arcs_buffer[i] = p
+        i += 1
+    end
+    i == 1 && return @views arcs_buffer[1:0]
+    i == 2 && return @views arcs_buffer[1:1]
+    return @views periodic_intersection!(arcs_buffer[1:(i - 1)], limits_buffer, intersection_buffer)
 end
 
 function polar_intersection_region(R:: Float64, 
@@ -141,26 +153,26 @@ end
 export T_ij
 
 function bubble_k̂ik̂j∂iφ∂jφ_contribution(k:: Vec3, bubble:: Bubble, 
-    domes:: Vector{IntersectionDome}, 
-    krotation:: SMatrix{3, 3, Float64}, 
-    ΔV:: Float64; kwargs...):: ComplexF64
-# Rotate to a coordinate system in which k̂ik̂j = δi3δj3
-mode = fourier_mode(BubbleArck̂ik̂j∂iφ∂jφ(bubble.radius, (krotation, ) .* domes), bubble.radius * norm(k); kwargs...)
-return mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
+                                        domes:: Vector{IntersectionDome}, 
+                                        krotation:: SMatrix{3, 3, Float64}, 
+                                        ΔV:: Float64; kwargs...):: ComplexF64
+    # Rotate to a coordinate system in which k̂ik̂j = δi3δj3
+    mode = fourier_mode(BubbleArck̂ik̂j∂iφ∂jφ(bubble.radius, (krotation, ) .* domes), bubble.radius * norm(k); kwargs...)
+    return mode * ((ΔV * (bubble.radius ^ 3) / 3) * cis(-(k ⋅ bubble.center.coordinates)))
 end
 
 function k̂ik̂jTij(k:: Vec3, bubbles:: Bubbles, 
-domes:: Dict{Int64, Vector{IntersectionDome}},
-krotation:: SMatrix{3, 3, Float64}, 
-ΔV:: Float64; kwargs...):: ComplexF64
-V = 0.
-for (bubble_index, bubble_arcs) in domes
-V += bubble_k̂ik̂j∂iφ∂jφ_contribution(k, bubbles[bubble_index], 
-        bubble_arcs, krotation, ΔV; kwargs...)
-V -= bubble_potential_contribution(k, bubbles[bubble_index], 
-       bubble_arcs, krotation, ΔV; kwargs...)
-end
-return V
+                 domes:: Dict{Int64, Vector{IntersectionDome}},
+                 krotation:: SMatrix{3, 3, Float64}, 
+                 ΔV:: Float64; kwargs...):: ComplexF64
+    V = 0.
+    for (bubble_index, bubble_arcs) in domes
+        V += bubble_k̂ik̂j∂iφ∂jφ_contribution(k, bubbles[bubble_index], 
+                                            bubble_arcs, krotation, ΔV; kwargs...)
+        V -= bubble_potential_contribution(k, bubbles[bubble_index], 
+                                           bubble_arcs, krotation, ΔV; kwargs...)
+    end
+    return V
 end
 
 function k̂ik̂jTij(ks:: Vector{Vec3}, bubbles:: Bubbles;
