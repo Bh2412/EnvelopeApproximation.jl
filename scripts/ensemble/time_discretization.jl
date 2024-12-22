@@ -10,10 +10,14 @@ using EnvelopeApproximation.Visualization
 import EnvelopeApproximation.BubblesEvolution.sample
 ENV["JULIA_DEBUG"] = EnvelopeApproximation
 
+#=
+Parameters taken from Kosowsky and Turner
+=#
+
 β = 1.
 Δt = β / 100
-eg = ExponentialGrowth(β, Δt, Γ_0 = 1.)
-bs = BallSpace(1., Point3(0., 0., 0.))
+eg = ExponentialGrowth(β, Δt, Γ_0 = 1.38 * 1e-3 * β ^ 4)
+bs = BallSpace(4.46 / β, Point3(0., 0., 0.))
 
 N = 100
 η = 0.8
@@ -47,4 +51,4 @@ custom_xticks = 10. .^(-3, -2, -1, 0)
 custom_xticks_strs = ["$f" for f in custom_xticks]
 scatter(Δts, nucs, xscale=:log10, xticks=(custom_xticks, custom_xticks_strs), xlabel="Δt [β]", ylabel="N")
 
-jldsave("evolution_ensemble.jld2"; snapshots=evolves, β=β)
+jldsave("./time_discretization_ensemble.jld2"; snapshots=evolves, β=β)
