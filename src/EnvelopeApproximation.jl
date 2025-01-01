@@ -17,6 +17,7 @@ struct Point3
 end
 
 Point3(args...) = Point3(Vec3(args...))
+Point3(x:: Float64, y:: Float64, z:: Float64) = Point3(Vec3((x, y, z)))
 
 export Point3
 
@@ -37,37 +38,9 @@ end
 
 export Bubble
 
-struct Bubbles
-    bubbles:: Vector{Bubble}
-end
-
-function Bubbles(centers:: Vector{Point3}, 
-                 radii:: Vector{Float64}):: Bubbles
-    length(centers) != length(radii) && throw(ArgumentError("The bubble centers and bubble radii must have
-                                                             the same length.")) 
-    return Bubbles([Bubble(center, radius) for (center, radius) in zip(centers, radii)])
-end
+Bubbles = AbstractVector{Bubble}
 
 export Bubbles
-
-function length(bubbles:: Bubbles):: Int64
-    return length(bubbles.bubbles)
-end
-
-export length
-
-function Base.iterate(bs:: Bubbles)
-    return Base.iterate(bs.bubbles)
-end
-
-function Base.iterate(bs:: Bubbles, state)
-    return Base.iterate(bs.bubbles, state)
-end
-
-lastindex(bs:: Bubbles) = lastindex(bs.bubbles)
-keys(bs:: Bubbles) = keys(bs.bubbles)
-
-Base.getindex(b:: Bubbles, index:: Int64):: Bubble = b.bubbles[index]
 
 euc(p1:: Point3, p2:: Point3):: Float64 = norm(coordinates(p1) - coordinates(p2))
 
@@ -80,18 +53,18 @@ end
 export ≲
 
 ∈(point:: Point3, bubble:: Bubble) :: Bool = euc(point, bubble.center) ≲ bubble.radius
-∈(point:: Point3, bubbles:: Bubbles):: Bool = any(point in b for b in bubbles.bubbles)
+∈(point:: Point3, bubbles:: Bubbles):: Bool = any(point in b for b in bubbles)
 
 export ∈
 
 function radii(bubbles:: Bubbles):: Vector{Float64}
-    return [bubble.radius for bubble in bubbles.bubbles]
+    return [bubble.radius for bubble in bubbles]
 end
 
 export radii
 
 function centers(bubbles:: Bubbles):: Vector{Point3}
-    return [bubble.center for bubble in bubbles.bubbles]
+    return [bubble.center for bubble in bubbles]
 end
 
 export centers

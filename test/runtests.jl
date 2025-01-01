@@ -51,6 +51,8 @@ end
 end
 end
 
+include("periodic_intersection_tests.jl")
+
 @testset "BubblesEvolution.jl" begin
     using EnvelopeApproximation.BubblesEvolution
     bs = BallSpace(1., Point3(0., 0., 0.))

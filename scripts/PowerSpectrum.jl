@@ -14,10 +14,13 @@ snapshots =  load("evolution_ensemble.jld2", "snapshots")
 β = load("evolution_ensemble.jld2", "β")
 k_0 = β 
 random_k = Vec3(k_0 / 10, 0., 0.)
+bubbles = current_bubbles(snapshots[1])
+@btime $current_bubbles($snapshots[1])
+domes = intersection_domes(bubbles)
 
 # Precompiling
 @btime k̂ik̂jTij([random_k], current_bubbles(snapshots[1]); rtol=1e-2)
-@profview for _ in 1:100 k̂ik̂jTij([random_k], current_bubbles(snapshots[1]); rtol=1e-2) end
+@profview for _ in 1:1000 k̂ik̂jTij([random_k], current_bubbles(snapshots[1]); rtol=1e-2) end
 @btime ψ = _ψ([random_k], snapshots[1], snapshots[1].t; rtol=1e-2)
 @btime ΦminusΨ([random_k], snapshots[1], snapshots[1].t; rtol=1e-2)
 

@@ -41,11 +41,11 @@ end
 
 function intersection_domes(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionDome}}
     d = Dict{Int, Vector{IntersectionDome}}()
-    for i in eachindex(bubbles.bubbles)
+    for i in eachindex(bubbles)
         d[i] = Vector{IntersectionDome}()
     end
-    for (i, bubble1) in enumerate(bubbles.bubbles)
-        for (j̃, bubble2) in enumerate(bubbles.bubbles[(i + 1):end])
+    for (i, bubble1) in enumerate(bubbles)
+        for (j̃, bubble2) in enumerate(bubbles[(i + 1):end])
             j = j̃ + i
             if intersecting(bubble1, bubble2)
                 intersection1, intersection2 = bubble1 ∩ bubble2
