@@ -127,3 +127,11 @@ scripts/intersection.jl
 scripts/intersection_play.jl
 scripts/integrand_play.jl
 test/periodic_intersection_tests.jl
+scripts/FFT.jl
+scripts/2bubble_PowerSpectrum.jl
+scripts/2bubble_PowerSpectrum.jl
+scripts/approxfun/2_bubbles_approxfun.jl
+scripts/developing_chebyshev/chebyshev_integration.jl
+scripts/developing_FFT/integrand_play.jl
+scripts/developing_FFT/general_approximation_of_CFT.jl
+scripts/developing_FFT/trying_FFT_approximation.jl

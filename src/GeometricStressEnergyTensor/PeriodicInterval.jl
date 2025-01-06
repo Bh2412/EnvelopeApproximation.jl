@@ -1,3 +1,4 @@
+export PeriodicInterval
 
 struct PeriodicInterval
     ϕ1:: Float64
