@@ -57,16 +57,16 @@ end
     
 export fractional_fftfreq
 
+function fractional_fftfreq(γ:: Float64, M:: Int)
+    # γ is the k resolution, usually relate to the α parameter in the fractional FFT (see above mentioned reference)
+    return γ .* range(0, M-1)
+end
+
 function fractional_fftfreq(α:: Float64, M:: Int, Δt:: Float64):: AbstractVector{Float64}
     # This assumes the vector v are evenly spaced samples in the range - [0., length(v) * Δt]
     # with endpoints included. 
     γ = α * 2π * Δt # The k resolution
-    return γ .* range(0, M - 1)
+    return fractional_fftfreq(γ, M)
 end
-
-#=
-We take as a default the time range to be [0., 1.]
-=#
-fractional_fftfreq(α:: Float64, M:: Int) = fractional_fftfreq(α, M, 1 / (M - 1))  # The substraction of 1. is due ot the inclusion of end points
 
 end
