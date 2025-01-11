@@ -10,11 +10,15 @@ Note that indices run from 1 here and 0 there.
 struct FractionalFFTBuffer{M}
     y:: Vector{ComplexF64}
     z:: Vector{ComplexF64}
+    P:: FFTW.cFFTWPlan{ComplexF64, -1, true, 1, Tuple{Int64}}
+    inverse_P:: AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, true, 1, Tuple{Int64}}, Float64}
 
     function FractionalFFTBuffer{M}() where M
         y = zeros(ComplexF64, 2M)
         z = zeros(ComplexF64, 2M)
-        return new{M}(y, z)
+        P = plan_fft!(y)
+        inverse_P = inv(P)
+        return new{M}(y, z, P, inverse_P)
     end
 end
 
@@ -35,10 +39,10 @@ end
 function fractional_fft(v:: Vector{Float64}, α:: Float64, buffer:: FractionalFFTBuffer{M}):: AbstractVector{ComplexF64} where M
     @assert M == length(v) "FractionalFFTBuffer size must be 2*M."
     prepare!(v, α, buffer)
-    fft!(buffer.y)
-    fft!(buffer.z)
+    buffer.P * buffer.y
+    buffer.P * buffer.z
     @. buffer.y *= buffer.z
-    ifft!(buffer.y)
+    buffer.inverse_P * buffer.y
     @inbounds for k in 0:(M-1)
         k̃ = k + 1
         buffer.y[k̃] *= cispi(-α * (k ^ 2))
