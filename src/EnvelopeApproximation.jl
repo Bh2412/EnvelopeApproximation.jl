@@ -75,6 +75,10 @@ include("BubblesEvolution.jl")
 
 include("SurfaceTesselation.jl")
 
+include("FractionalFFT.jl")
+
+include("FilonQuadrature.jl")
+
 include("StressEnergyTensor.jl")
 
 include("StressEnergyTensorFFT.jl")
