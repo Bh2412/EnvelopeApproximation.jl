@@ -4,7 +4,7 @@ using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor
 import EnvelopeApproximation.GeometricStressEnergyTensor: intersection_domes, BubbleArck̂ik̂j∂iφ∂jφ, ∫_ϕ
 import EnvelopeApproximation.GeometricStressEnergyTensor: align_ẑ, polar_limits, ring_dome_intersection
-import EnvelopeApproximation.GeometricStressEnergyTensor: fourier_mode
+import EnvelopeApproximation.GeometricStressEnergyTensor: fourier_mode, polar_limits
 import EnvelopeApproximation.GeometricStressEnergyTensor: _buffers, ring_domes_intersection!
 import LinearAlgebra: norm
 using Plots
