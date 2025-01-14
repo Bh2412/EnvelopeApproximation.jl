@@ -79,6 +79,8 @@ include("FractionalFFT.jl")
 
 include("FilonQuadrature.jl")
 
+include("ChebyshevCFT.jl")
+
 include("StressEnergyTensor.jl")
 
 include("StressEnergyTensorFFT.jl")
