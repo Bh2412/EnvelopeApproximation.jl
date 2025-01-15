@@ -42,6 +42,23 @@ function ring_domes_intersection!(μ′:: Float64, R:: Float64, intersection_dom
     return @views periodic_intersection!(arcs_buffer[1:(i - 1)], limits_buffer, intersection_buffer)
 end
 
+struct Δ
+    arcs_buffer:: Vector{PeriodicInterval}
+    limits_buffer:: Vector{Tuple{Float64, Float64}}
+    intersection_buffer:: Vector{PeriodicInterval}
+end
+
+Δ(n:: Int64) = Δ(_buffers(n)...)
+
+function (δ:: Δ)(μ:: Float64, bubble:: Bubble, 
+                 intersection_domes:: Vector{IntersectionDome}):: Float64
+                 periodic_intervals = ring_domes_intersection!(μ, bubble.radius, intersection_domes, 
+                                                               δ.arcs_buffer, δ.limits_buffer, δ.intersection_buffer)
+    return sum((p.Δ for p in periodic_intervals), init=0.)
+end
+
+export Δ
+
 function polar_intersection_region(R:: Float64, 
                                    dome:: IntersectionDome):: Tuple{Float64, Float64}
     # This function assumes h < R
