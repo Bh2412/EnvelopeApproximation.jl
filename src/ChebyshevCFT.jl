@@ -7,16 +7,20 @@ using FastTransforms
 
 # Following chapter 2.10.5 in "methods of numerical integration"
 
+export ChebyshevPlan
+
 struct ChebyshevPlan{N}
     points:: Vector{Float64}
     coeffs0_buffer:: Vector{Float64}
     bessels_buffer:: Vector{Float64}
+    transform_plan:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
 
     function ChebyshevPlan{N}() where N
         points = chebyshevpoints(Float64, N, Val(1))
         coeffs0_buffer = Vector{Float64}(undef, N)
         bessels_buffer = Vector{Float64}(undef, N)
-        return new{N}(points, coeffs0_buffer, bessels_buffer)
+        transform_plan = plan_chebyshevtransform!(zeros(N), Val(1))
+        return new{N}(points, coeffs0_buffer, bessels_buffer, transform_plan)
     end
 end
 
@@ -36,8 +40,10 @@ function values!(f, a:: Float64, b:: Float64,
     return chebyshev_plan.coeffs0_buffer
 end
 
+export chebyshev_coeffs!
+
 function chebyshev_coeffs!(f, a:: Float64, b:: Float64, chebyshev_plan:: ChebyshevPlan{N}):: Vector{Float64} where N
-    return chebyshevtransform!(values!(f, a, b, chebyshev_plan), Val(1))
+    return chebyshev_plan.transform_plan * values!(f, a, b, chebyshev_plan)
 end
 
 # Following equation 2.10.5.1 and 2.10.5.2 in "methods of numerical integration"
@@ -140,6 +146,8 @@ function multiplication_weights(N:: Int):: Vector{ComplexF64}
     return V
 end
 
+export First3MomentsChebyshevPlan
+
 struct First3MomentsChebyshevPlan{N}
     points:: Vector{Float64}
     coeffs0_buffer:: Vector{Float64}
@@ -150,6 +158,7 @@ struct First3MomentsChebyshevPlan{N}
     M_2:: Matrix{Float64}
     multiplication_weights:: Vector{ComplexF64}
     multiplication_buffer:: Vector{ComplexF64}
+    transform_plan:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
 
     function First3MomentsChebyshevPlan{N}() where N
         points = chebyshevpoints(Float64, N, Val(1))
@@ -161,8 +170,9 @@ struct First3MomentsChebyshevPlan{N}
         M_2 = mul_x_squared(N)
         weights = multiplication_weights(N + 2)
         multiplication_buffer = Vector{ComplexF64}(undef, N + 2)
+        transform_plan = plan_chebyshevtransform!(zeros(N), Val(1))
         return new{N}(points, coeffs0_buffer, coeffs1_buffer, coeffs2_buffer, 
-                      bessels_buffer, M_1, M_2, weights, multiplication_buffer)
+                      bessels_buffer, M_1, M_2, weights, multiplication_buffer, transform_plan)
     end
 end
 
@@ -176,12 +186,16 @@ function values!(f, a:: Float64, b:: Float64,
     chebyshev_plan.coeffs0_buffer
 end
 
+export chebyshev_coeffs!
+
 function chebyshev_coeffs!(f, a:: Float64, b:: Float64, 
                            chebyshev_plan:: First3MomentsChebyshevPlan{N}) where N
-    chebyshevtransform!(values!(f, a, b, chebyshev_plan), Val(1))
+    chebyshev_plan.transform_plan * values!(f, a, b, chebyshev_plan)
     mul!(chebyshev_plan.coeffs1_buffer, chebyshev_plan.M_1, chebyshev_plan.coeffs0_buffer)
     mul!(chebyshev_plan.coeffs2_buffer, chebyshev_plan.M_2, chebyshev_plan.coeffs0_buffer);
 end
+
+export fourier_mode
 
 function fourier_mode(k:: Float64, 
                       chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
