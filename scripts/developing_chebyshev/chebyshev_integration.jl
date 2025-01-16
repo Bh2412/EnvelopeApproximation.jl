@@ -6,6 +6,7 @@ using QuadGK
 using ApproxFun
 using BenchmarkTools
 using Plots
+import LinearAlgebra.mul!
 
 const ChebyshevInterval:: Intervals.Interval = Intervals.Interval(-1. ,1.)
 
@@ -13,12 +14,14 @@ struct ChebyshevPlan{N}
     points:: Vector{Float64}
     coeffs_buffer:: Vector{Float64}
     bessels_buffer:: Vector{Float64}
+    transform_plan:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
 
     function ChebyshevPlan{N}() where N
         points = chebyshevpoints(Float64, N, Val(1))
         coeffs_buffer = Vector{Float64}(undef, N)
         bessels_buffer = Vector{Float64}(undef, N)
-        return new{N}(points, coeffs_buffer, bessels_buffer)
+        transform_plan = plan_chebyshevtransform!(zeros(N), Val(1))
+        return new{N}(points, coeffs_buffer, bessels_buffer, transform_plan)
     end
 end
 
@@ -39,7 +42,7 @@ function values!(f, a:: Float64, b:: Float64,
 end
 
 function chebyshev_coeffs!(f, a:: Float64, b:: Float64, chebyshev_plan:: ChebyshevPlan{N}):: Vector{Float64} where N
-    return chebyshevtransform!(values!(f, a, b, chebyshev_plan), Val(1))
+    return chebyshev_plan.transform_plan * values!(f, a, b, chebyshev_plan)
 end
 
 # Followins equation 2.10.5.1 and 2.10.5.2 in "methods of numerical integration"
@@ -201,11 +204,11 @@ f̃(κ) = quadgk(μ -> f(μ) * cis(-κ * μ),  μ_limits[1], μ_limits[2])[1]
 n = 2^5
 chebyshev_plan = ChebyshevPlan{n}()
 a, b = μ_limits
-ks = range(0.01, 100., 1000)
-coeffs = chebyshev_coeffs!(f, a, b, chebyshev_plan)
+ks = range(0.01, 100., 100)
+@btime $chebyshev_coeffs!($f, $a, $b, $chebyshev_plan)
 fourier_modes(ks, f, a, b, chebyshev_plan) - f̃.(ks)
 plot(ks, fourier_modes(ks, f, a, b, chebyshev_plan) .|> real)
 plot!(ks, f̃.(ks) .|> real)
 @btime $fourier_modes($ks, $f, $a, $b, $chebyshev_plan) 
 @btime $f̃.($ks)
-@profview for _ in 1:10_000 f̃.(ks) end
+# @profview for _ in 1:10_000 f̃.(ks) end

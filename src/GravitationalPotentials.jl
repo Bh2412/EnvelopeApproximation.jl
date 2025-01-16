@@ -132,4 +132,46 @@ function ΦminusΨ(ks:: Vector{Vec3},
     return @. _ŋ - 2 * _ψ
 end
 
+function ψ_source(ks:: AbstractVector{Float64}, 
+                  bubbles:: AbstractVector{Bubble}, 
+                  chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                  _Δ:: Δ;
+                  ΔV:: Float64 = 1., 
+                  a:: Float64 = 1.,
+                  G:: Float64 = 1.) where N
+return (4π * a ^ 2 * G) * k̂ik̂jTij(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV)                  
+end
+
+function ψ(ks:: AbstractVector{Float64}, 
+           snapshot:: BubblesSnapShot,
+           chebyshev_plan:: First3MomentsChebyshevPlan{N},
+           _Δ:: Δ;
+           ΔV:: Float64 = 1., 
+           a:: Float64 = 1.,
+           G:: Float64 = 1., 
+           kwargs...) where N
+    t = snapshot.t
+    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, current_bubbles(snapshot, τ), 
+                                                   chebyshev_plan, _Δ; ΔV=ΔV, a=a, G=G) * (t - τ)            
+    return quadgk(f, 0., t; kwargs...)[1]
+end
+
+function Ŋ(ks:: AbstractVector{Float64}, 
+           bubbles:: AbstractVector{Bubble}, 
+           chebyshev_plan:: First3MomentsChebyshevPlan{N},
+           _Δ:: Δ;
+           ΔV:: Float64 = 1.,
+           a:: Float64 = 1.,
+           G:: Float64 = 1.) where N
+    V = zeros(ComplexF64, length(ks))
+    domes = intersection_domes(bubbles)
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_Ŋ_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                               chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+    c = -12π * G * a ^ 2
+    return @. V * c / (ks ^ 2)
+end
+
+
 end

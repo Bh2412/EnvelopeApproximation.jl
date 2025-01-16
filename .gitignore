@@ -134,3 +134,6 @@ scripts/approxfun/2_bubbles_approxfun.jl
 scripts/developing_FFT/integrand_play.jl
 scripts/developing_FFT/general_approximation_of_CFT.jl
 scripts/developing_FFT/trying_FFT_approximation.jl
+scripts/developing_chebyshev/interpolating_bessels.jl
+scripts/benchmarks/beating_julia.jl
+scripts/developing_chebyshev/real_system.jl

@@ -48,6 +48,8 @@ end
 
 # Following equation 2.10.5.1 and 2.10.5.2 in "methods of numerical integration"
 
+export fourier_mode
+
 function fourier_mode(k:: Float64, 
                       chebyshev_plan:: ChebyshevPlan{N}, 
                       scale:: Float64 = 1.,

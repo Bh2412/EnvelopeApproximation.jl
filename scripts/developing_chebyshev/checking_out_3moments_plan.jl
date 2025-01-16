@@ -28,7 +28,7 @@ x = -1. : 0.001: 1.
 # plot!(x, Fun(Chebyshev(), plan.coeffs2_buffer).(x), label="Approximation")
 
 a, b = -1., 1.
-# @btime chebyshev_coeffs!($e0, $a, $b, $plan)
+@btime chebyshev_coeffs!($e0, $a, $b, $plan)
 # @profview for _ in 1:10_000 chebyshev_coeffs!(e0, a, b, plan) end
 
 chebyshev_coeffs!(e0, -1., 1., plan)
@@ -59,6 +59,8 @@ modes2 = modes .|> x -> x[3]
 
 a, b = 1., 2.
 chebyshev_coeffs!(e0, a, b, plan)
+# @btime chebyshev_coeffs!($e0, $a, $b, $plan)
+# @profview for _ in 1:10_000 chebyshev_coeffs!(e0, a, b, plan) end
 scale, translation = (b - a) / 2, (a + b) / 2
 ks = range(0., 10., 1_000)
 modes = fourier_mode.(ks, (plan, ), (scale, ), (translation, ))

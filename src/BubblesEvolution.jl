@@ -44,9 +44,8 @@ export evolve
 
 function current_bubbles!(snap:: BubblesSnapShot, t:: Float64, 
                           bubbles_buffer:: Vector{Bubble}):: Bubbles
-    t = snap.t
     i = 1
-    for nuc in snap.nucleations
+    for nuc in at_earlier_time(snap, t).nucleations
         bubbles_buffer[i] = Bubble(nuc[:site], snap.radial_profile(t - nuc[:time]))
         i += 1
     end
