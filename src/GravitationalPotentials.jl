@@ -64,6 +64,9 @@ using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor
+import EnvelopeApproximation.GeometricStressEnergyTensor: Ŋ
+import EnvelopeApproximation.GeometricStressEnergyTensor: bubble_Ŋ_contribution!
+import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
 import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
 using QuadGK
 using StaticArrays

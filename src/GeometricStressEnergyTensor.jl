@@ -3,7 +3,7 @@ module GeometricStressEnergyTensor
 import EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.ChebyshevCFT
-import EnvelopeApproximation.ChebyshevCFT.fourier_mode
+import EnvelopeApproximation.ChebyshevCFT: fourier_mode, scale, translation
 using StaticArrays
 using LinearAlgebra
 using Intervals
@@ -201,6 +201,20 @@ function k̂ik̂jTij(ks:: Vector{Vec3}, bubbles:: Bubbles;
     domes ≡ nothing && (domes = intersection_domes(bubbles))
     krotations ≡ nothing && (krotations = align_ẑ.(ks))
     return @. k̂ik̂jTij(ks, (bubbles, ), (domes, ), krotations, (ΔV, ); kwargs...)
+end
+
+function k̂ik̂jTij(ks:: AbstractVector{Float64}, 
+                 bubbles:: AbstractVector{Bubble}, 
+                 chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                 _Δ:: Δ;
+                 ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+    V = zeros(ComplexF64, length(ks))
+    domes = intersection_domes(bubbles)
+    @inbounds for (bubble_index, _domes) in domes
+    bubble_k̂ik̂jTij_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                                 chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+    return V
 end
 
 export k̂ik̂jTij

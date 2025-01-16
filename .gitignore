@@ -137,3 +137,5 @@ scripts/developing_FFT/trying_FFT_approximation.jl
 scripts/developing_chebyshev/interpolating_bessels.jl
 scripts/benchmarks/beating_julia.jl
 scripts/developing_chebyshev/real_system.jl
+RealSystemPowerSpectrum.jld2
+.vscode/launch.json
