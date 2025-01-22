@@ -81,7 +81,7 @@ _ψ = ψ(ks, snapshot, chebyshev_plan, _Δ; rtol=1e-2)
 # plot(ks, _ΦminusΨ .|> real, label="current")
 # plot!(ks, legacy_ΦminusΨ .|> real, label="legacy")
 
-ks = range(β / 10, β * 10, 1_00)
+ks = range(β / 10, β * 10, 1_000)
 
 function __P(ks, snapshot)
     plan = First3MomentsChebyshevPlan{32}()
@@ -89,22 +89,29 @@ function __P(ks, snapshot)
     return P(ks, snapshot, plan, __Δ; rtol=1e-2)
 end
 
-@time _P = __P(ks, snapshot)
+# @time _P = __P(ks, snapshot)
 
-d = Dict()
-Threads.@threads for (i, snap) in enumerate(snapshots[1:2])
-    d[i] = _p(ks, snap)
+ensemble_keys = 1:60
+d = Vector{Vector{ComplexF64}}(undef, length(ensemble_keys))
+@time (Threads.@threads for i in ensemble_keys
+    @info "Starting the $i computatiton"
+    @time d[i] = __P(ks, snapshots[i])
+    @info "The $i 'th computation completed"
+end)
+
+plot(ks .|> log10, (d[1]) .|> log10, label=false)
+for i in 2:2
+    plot!(ks .|> log10, (d[i]) .|> log10, label=false)
 end
-
-plot(ks .|> log10, (_P) .|> log10, label=false)
+plot!(ks .|> log10, mean([d[i] for i in ensemble_keys]) .|> log10, label="Ensemble Average")
 xlabel!("log(k)")
 ylabel!("log(P)")
 title!("Power Spectrum")
-savefig("~/Pictures/FullPowerSpectrum.png")
-jldopen("RealSystemPowerSpectrum.jld2", "w") do f
+# savefig("~/Pictures/FullPowerSpectrum.png")
+jldopen("runs/RealSystemPowerSpectrum.jld2", "w") do f
     f["k"] = ks
-    f["P"] = _P
+    f["P"] = d
+    f["ensemble"] = snapshots[1:60]
 end
-jldsave("RealSystemPowerSpectrum.jld2", Dict("k" => ks, "P" => _P))
 
-viz(snapshot)
+viz(snapshots[2])

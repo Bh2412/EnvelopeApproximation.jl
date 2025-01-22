@@ -30,7 +30,7 @@ function integrand(ks:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return @. 8 .* abs2.($ψ(ks, _snap, chebyshev_plan, _Δ; 
+    return @. 8 * abs2($ψ(ks, _snap, chebyshev_plan, _Δ; 
                            ΔV=ΔV, a=a, G=G, kwargs...))
 end
 
