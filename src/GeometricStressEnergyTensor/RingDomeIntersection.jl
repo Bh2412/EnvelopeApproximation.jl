@@ -1,6 +1,6 @@
 
 
-const lib_path = "$(dirname(dirname(pathof(EnvelopeApproximation))))/rust_extensions/benrust/obj/fastrust.so"
+const lib_path = "$(dirname(pathof(EnvelopeApproximation)))/GeometricStressEnergyTensor/fastrust.so"
 
 struct Vector3
     x:: Float64
