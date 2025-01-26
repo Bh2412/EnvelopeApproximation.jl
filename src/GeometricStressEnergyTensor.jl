@@ -219,6 +219,22 @@ end
 
 export k̂ik̂jTij
 
+function k̂ik̂j∂_iφ∂_jφ(ks:: AbstractVector{Float64}, 
+                      bubbles:: AbstractVector{Bubble}, 
+                      chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                      _Δ:: Δ;
+                      ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+    V = zeros(ComplexF64, length(ks))
+    domes = intersection_domes(bubbles)
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_k̂ik̂j∂_iφ∂_jφ_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                                          chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+    return V
+end
+
+export k̂ik̂j∂_iφ∂_jφ
+
 function bubble_Ŋ_contribution(k:: Vec3, bubble:: Bubble, 
     domes:: Vector{IntersectionDome}, 
     krotation:: SMatrix{3, 3, Float64}, 
@@ -267,6 +283,27 @@ function bubble_k̂ik̂jTij_contribution!(V:: AbstractVector{ComplexF64},
             _, c1, c2 = fourier_mode(k * bubble.radius, chebyshev_plan, s, t)
             V[i] += c2 * (ΔV * (bubble.radius ^ 3) / 3) * e # ∂_iφ∂_jφ contribution
             V[i] -= c1 * (-im * ΔV) * e / k * (bubble.radius ^ 2) # potential contribution
+        end
+    end
+    return V
+end
+
+function bubble_k̂ik̂j∂_iφ∂_jφ_contribution!(V:: AbstractVector{ComplexF64},
+                                           ks:: AbstractVector{Float64}, 
+                                           bubble:: Bubble, 
+                                           domes:: Vector{IntersectionDome}, 
+                                           chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                                           _Δ:: Δ; 
+                                           ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+    @assert length(V) == length(ks) "The output vector must be of the same length of the input k vector"
+    _polar_limits = polar_limits(bubble.radius, domes)
+    @inbounds for (μ1, μ2) in partition(_polar_limits, 2, 1)
+        s, t = scale(μ1, μ2), translation(μ1, μ2)
+        chebyshev_coeffs!(μ -> _Δ(μ, bubble, domes), μ1, μ2, chebyshev_plan)
+        @inbounds for (i, k) in enumerate(ks)
+            e = cis(-k * bubble.center.coordinates[3])
+            _, _, c2 = fourier_mode(k * bubble.radius, chebyshev_plan, s, t)
+            V[i] += c2 * (ΔV * (bubble.radius ^ 3) / 3) * e # ∂_iφ∂_jφ contribution
         end
     end
     return V

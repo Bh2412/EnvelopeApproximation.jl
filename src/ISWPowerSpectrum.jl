@@ -47,4 +47,29 @@ function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1]
 end
 
+function surface_integrand(ks:: AbstractVector{Float64}, 
+                           ΦΘ:: SVector{2, Float64}, 
+                           snapshot:: BubblesSnapShot, 
+                           chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                           _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+                           G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+    rot = align_ẑ(n̂(ΦΘ))
+    _snap = rot * snapshot
+# This ignores the difference between ψ and ϕ, because at the 
+# end of the PT, the anisotropic stress is null
+    return @. 8 * abs2(surface_ψ(ks, _snap, chebyshev_plan, _Δ; 
+                                 ΔV=ΔV, a=a, G=G, kwargs...))
+end
+
+function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
+                   chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                   _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+                    G:: Float64 = 1., kwargs...):: Vector{Float64} where N
+    p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = _integrand(ks, ΦΘ, snapshot, 
+                                                                  chebyshev_plan, _Δ; ΔV=ΔV,
+                                                                  a=a, G=G, kwargs...)
+    return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1]
+end
+
+
 end
