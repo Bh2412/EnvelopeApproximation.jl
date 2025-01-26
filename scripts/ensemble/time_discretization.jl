@@ -16,8 +16,10 @@ Parameters taken from Kosowsky and Turner
 
 β = 1.
 Δt = β / 100
-eg = ExponentialGrowth(β, Δt, Γ_0 = 1.38 * 1e-3 * β ^ 4)
 bs = BallSpace(4.46 / β, Point3(0., 0., 0.))
+bs_volume = bs.radius ^ 3 * (4π / 3)
+eg = ExponentialGrowth(β, Δt, Γ_0 = bs_volume * 1.38 * 1e-3 * β ^ 4)
+
 
 N = 100
 η = 0.8

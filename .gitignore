@@ -139,3 +139,16 @@ scripts/benchmarks/beating_julia.jl
 scripts/developing_chebyshev/real_system.jl
 RealSystemPowerSpectrum.jld2
 .vscode/launch.json
+plot_17.svg
+Project.toml
+RealSystemPowerSpectrum_2.jld2
+runs/SurfaceTermsRealSystemPowerSpectrum.jld2
+scripts/analysis.jl
+scripts/ensemble/Analysis.jl
+scripts/ensemble/space_size_dependence.jl
+scripts/ensemble/termination_parameter_analysis.jl
+scripts/ensemble/termination_parameter_dependence.jl
+scripts/ensemble/time_discretization.jl
+scripts/runs/varying_space_size/ParallelPowerSpectrum.jl
+scripts/runs/varying_space_size/PowerSpectrum.jl
+scripts/surface_contribution_analysis/analysis.jl

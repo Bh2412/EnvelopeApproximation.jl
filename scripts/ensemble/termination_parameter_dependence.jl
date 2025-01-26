@@ -20,10 +20,10 @@ Parameters taken from Kosowsky and Turner
 ball_space = BallSpace(4.46 / β, Point3(0., 0., 0.))
 ball_space_volume = (4π / 3) * ball_space.radius ^ 3
 eg = ExponentialGrowth(β, Δt, Γ_0 = ball_space_volume * 1.38 * 1e-3 * β ^ 4)
-ensemble_size = 1000
+ensemble_size = 100
 
 N = 100
-ηs = 0.5: 0.05: 0.95
+ηs = 1. .- logrange(1e-4, 1e-1, 5)
 rng = StableRNG(1)
 
 function termination_strategy(η:: Float64):: Function
@@ -39,7 +39,7 @@ end
 
 rngs = StableRNG.(1:ensemble_size)
 @btime evolve($eg, $ball_space, termination_strategy=$termination_strategy(ηs[1]), rng=$rngs[1])
-evolves = [evolve(eg, ball_space, termination_strategy=termination_strategy(η), rng=rng) for rng in rngs for η in ηs]
+@time evolves = [evolve(eg, ball_space, termination_strategy=termination_strategy(η), rng=rng) for rng in rngs for η in ηs]
 evolves = reshape(evolves, length(ηs), ensemble_size)
 
 ## Mean number of nucleations
@@ -51,12 +51,12 @@ best_estimate(x) = mean(x) ± std(x)
 # mean number of nucleations
 nucleations(x) = length(x.nucleations)
 nucleations_sample = @. best_estimate($eachrow(nucleations(evolves)))
-scatter(ηs, nucleations_sample, xscale=:log10, xlabel="η", ylabel="N")
+scatter(1. .- ηs, nucleations_sample, xscale=:log10, xlabel="η", ylabel="N")
 
 
 # mean time of PT as defined by time of last nucleation
 completion_time(x) = x.nucleations[end].time
 completion_times_sample =  @. best_estimate($eachrow(completion_time(evolves)))
-scatter(ηs, completion_times_sample, xscale=:log10, xlabel="η", ylabel="T[1/β]")
+scatter(1. .- ηs, completion_times_sample, xscale=:log10, xlabel="η", ylabel="T[1/β]")
 
-jldsave("./termination_fraction_dependence_ensemble.jld2"; snapshots=evolves, β=β)
+jldsave("./termination_fraction_dependence_ensemble.jld2"; snapshots=evolves, β=β, η=ηs)
