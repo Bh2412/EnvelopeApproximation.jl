@@ -28,6 +28,7 @@ function λ(r1:: Float64, r2:: Float64, d:: Float64)
 end
 
 function ∩(bubble1:: Bubble, bubble2:: Bubble):: Tuple{IntersectionDome, IntersectionDome}
+    # This function assumes neither of the bubbles is contained in the other
     n = bubble2.center - bubble1.center
     d = norm(n)
     n̂ = n / d 
@@ -58,6 +59,28 @@ function intersection_domes(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionDo
         end
     end
     return d
+end
+
+function ⊆(bubble:: Bubble, ball_space:: BallSpace):: Bool
+    return euc(bubble.center, ball_space.center) ≲ abs(ball_space.radius - bubble.radius)
+end
+
+function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome
+    n = bubble.center - ball_space.center
+    d = norm(n)
+    n̂ = n / d 
+    h = -λ(bubble.radius, ball_space.radius, d)  # The intersection is guarenteed to be dome like.
+    return IntersectionDome(h, n̂, true)
+end
+
+function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
+    domes = intersection_domes(bubbles)
+    for (i, bubble) in enumerate(bubbles)
+        if ~(bubble ⊆ ball_space)
+            push!(domes[i], bubble ∩ ball_space)
+        end
+    end
+    return domes
 end
 
 export intersection_domes

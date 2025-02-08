@@ -68,6 +68,7 @@ import EnvelopeApproximation.GeometricStressEnergyTensor: Ŋ
 import EnvelopeApproximation.GeometricStressEnergyTensor: bubble_Ŋ_contribution!, k̂ik̂j∂_iφ∂_jφ
 import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
 import EnvelopeApproximation.BubbleBasics: Point3, coordinates, Vec3
+import EnvelopeApproximation.BubblesEvolution: BallSpace
 using QuadGK
 using StaticArrays
 import LinearAlgebra: norm
@@ -142,7 +143,18 @@ function ψ_source(ks:: AbstractVector{Float64},
                   ΔV:: Float64 = 1., 
                   a:: Float64 = 1.,
                   G:: Float64 = 1.) where N
-return (4π * a ^ 2 * G) * k̂ik̂jTij(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV)                  
+    return (4π * a ^ 2 * G) * k̂ik̂jTij(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV)                  
+end
+
+function ψ_source(ks:: AbstractVector{Float64}, 
+                  bubbles:: AbstractVector{Bubble},
+                  ball_space:: BallSpace, 
+                  chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                  _Δ:: Δ;
+                  ΔV:: Float64 = 1., 
+                  a:: Float64 = 1.,
+                  G:: Float64 = 1.) where N
+    return (4π * a ^ 2 * G) * k̂ik̂jTij(ks, bubbles, ball_space, chebyshev_plan, _Δ; ΔV=ΔV)                  
 end
 
 function ψ(ks:: AbstractVector{Float64}, 
@@ -155,6 +167,21 @@ function ψ(ks:: AbstractVector{Float64},
            kwargs...) where N
     t = snapshot.t
     f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, current_bubbles(snapshot, τ), 
+                                                   chebyshev_plan, _Δ; ΔV=ΔV, a=a, G=G) * (t - τ)            
+    return quadgk(f, 0., t; kwargs...)[1]
+end
+
+function ψ(ks:: AbstractVector{Float64}, 
+           snapshot:: BubblesSnapShot,
+           ball_space:: BallSpace,
+           chebyshev_plan:: First3MomentsChebyshevPlan{N},
+           _Δ:: Δ;
+           ΔV:: Float64 = 1., 
+           a:: Float64 = 1.,
+           G:: Float64 = 1., 
+           kwargs...) where N
+    t = snapshot.t
+    f(τ:: Float64):: Vector{ComplexF64} = ψ_source(ks, current_bubbles(snapshot, τ), ball_space,
                                                    chebyshev_plan, _Δ; ΔV=ΔV, a=a, G=G) * (t - τ)            
     return quadgk(f, 0., t; kwargs...)[1]
 end
@@ -186,6 +213,17 @@ function surface_ψ_source(ks:: AbstractVector{Float64},
     return (4π * a ^ 2 * G) * k̂ik̂j∂_iφ∂_jφ(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV)                  
 end
 
+function surface_ψ_source(ks:: AbstractVector{Float64}, 
+                          bubbles:: AbstractVector{Bubble}, 
+                          ball_space:: BallSpace,
+                          chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                          _Δ:: Δ;
+                          ΔV:: Float64 = 1., 
+                          a:: Float64 = 1.,
+                          G:: Float64 = 1.) where N
+return (4π * a ^ 2 * G) * k̂ik̂j∂_iφ∂_jφ(ks, bubbles, ball_space, chebyshev_plan, _Δ; ΔV=ΔV)                  
+end
+
 function surface_ψ(ks:: AbstractVector{Float64}, 
                    snapshot:: BubblesSnapShot,
                    chebyshev_plan:: First3MomentsChebyshevPlan{N},
@@ -196,6 +234,21 @@ function surface_ψ(ks:: AbstractVector{Float64},
                    kwargs...) where N
     t = snapshot.t
     f(τ:: Float64):: Vector{ComplexF64} = surface_ψ_source(ks, current_bubbles(snapshot, τ), 
+                                                           chebyshev_plan, _Δ; ΔV=ΔV, a=a, G=G) * (t - τ)            
+    return quadgk(f, 0., t; kwargs...)[1]
+end
+
+function surface_ψ(ks:: AbstractVector{Float64}, 
+                   snapshot:: BubblesSnapShot,
+                   ball_space:: BallSpace,
+                   chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                   _Δ:: Δ;
+                   ΔV:: Float64 = 1., 
+                   a:: Float64 = 1.,
+                   G:: Float64 = 1., 
+                   kwargs...) where N
+    t = snapshot.t
+    f(τ:: Float64):: Vector{ComplexF64} = surface_ψ_source(ks, current_bubbles(snapshot, τ), ball_space, 
                                                            chebyshev_plan, _Δ; ΔV=ΔV, a=a, G=G) * (t - τ)            
     return quadgk(f, 0., t; kwargs...)[1]
 end

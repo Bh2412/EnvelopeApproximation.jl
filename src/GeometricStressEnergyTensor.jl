@@ -2,6 +2,7 @@ module GeometricStressEnergyTensor
 
 import EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
+import EnvelopeApproximation.BubblesEvolution: BallSpace
 using EnvelopeApproximation.ChebyshevCFT
 import EnvelopeApproximation.ChebyshevCFT: fourier_mode, scale, translation
 using StaticArrays
@@ -9,7 +10,7 @@ using LinearAlgebra
 using Intervals
 import Intervals: IntervalSet
 using Rotations
-import Base: *, ∈, isempty, ~, ∩, convert
+import Base: *, ∈, isempty, ~, ∩, convert, ⊆
 using QuadGK
 using IterTools
 using DoubleExponentialFormulas
@@ -217,6 +218,21 @@ function k̂ik̂jTij(ks:: AbstractVector{Float64},
     return V
 end
 
+function k̂ik̂jTij(ks:: AbstractVector{Float64}, 
+                 bubbles:: AbstractVector{Bubble}, 
+                 ball_space:: BallSpace,
+                 chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                 _Δ:: Δ;
+                 ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+    V = zeros(ComplexF64, length(ks))
+    domes = intersection_domes(bubbles, ball_space)
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_k̂ik̂jTij_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                                     chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+    return V
+end
+
 export k̂ik̂jTij
 
 function k̂ik̂j∂_iφ∂_jφ(ks:: AbstractVector{Float64}, 
@@ -229,6 +245,21 @@ function k̂ik̂j∂_iφ∂_jφ(ks:: AbstractVector{Float64},
     @inbounds for (bubble_index, _domes) in domes
         bubble_k̂ik̂j∂_iφ∂_jφ_contribution!(V, ks, bubbles[bubble_index], _domes, 
                                           chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+    return V
+end
+
+function k̂ik̂j∂_iφ∂_jφ(ks:: AbstractVector{Float64}, 
+                      bubbles:: AbstractVector{Bubble}, 
+                      ball_space:: BallSpace,
+                      chebyshev_plan:: First3MomentsChebyshevPlan{N},
+                      _Δ:: Δ;
+                      ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+    V = zeros(ComplexF64, length(ks))
+    domes = intersection_domes(bubbles, ball_space)
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_k̂ik̂j∂_iφ∂_jφ_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                                chebyshev_plan, _Δ; ΔV=ΔV)
     end
     return V
 end

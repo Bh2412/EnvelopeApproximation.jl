@@ -4,11 +4,13 @@ import Base.*
 using StaticArrays
 using EnvelopeApproximation.BubbleBasics
 import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
-import EnvelopeApproximation.BubblesEvolution: BubblesSnapShot
+import EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, BallSpace
 import EnvelopeApproximation.GeometricStressEnergyTensor: align_ẑ, Δ
 import EnvelopeApproximation.GravitationalPotentials: ψ, surface_ψ
 
 *(rot:: SMatrix{3, 3, Float64}, p:: Point3):: Point3 = Point3(rot * p.coordinates)
+
+V(ball_space:: BallSpace):: Float64 = (4π / 3) * (ball_space.radius ^ 3)
 
 function *(rot:: SMatrix{3, 3, Float64}, snapshot:: BubblesSnapShot):: BubblesSnapShot
     new_nucleations = [(time=nuc.time, site=rot * nuc.site) for nuc in snapshot.nucleations]
@@ -47,6 +49,33 @@ function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1]
 end
 
+function integrand(ks:: AbstractVector{Float64}, 
+                   ΦΘ:: SVector{2, Float64}, 
+                   snapshot:: BubblesSnapShot,
+                   ball_space:: BallSpace, 
+                   chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                   _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+                   G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+    rot = align_ẑ(n̂(ΦΘ))
+    _snap = rot * snapshot
+    # This ignores the difference between ψ and ϕ, because at the 
+    # end of the PT, the anisotropic stress is null
+    return @. 8 * abs2($ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
+                          ΔV=ΔV, a=a, G=G, kwargs...))
+end
+
+function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
+           ball_space:: BallSpace,
+           chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+           _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+           G:: Float64 = 1., kwargs...):: Vector{Float64} where N
+    p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = integrand(ks, ΦΘ, snapshot, ball_space,
+                                                                 chebyshev_plan, _Δ; ΔV=ΔV,
+                                                                 a=a, G=G, kwargs...)
+    return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1] ./ V(ball_space)
+end
+
+
 function surface_integrand(ks:: AbstractVector{Float64}, 
                            ΦΘ:: SVector{2, Float64}, 
                            snapshot:: BubblesSnapShot, 
@@ -61,6 +90,21 @@ function surface_integrand(ks:: AbstractVector{Float64},
                                   ΔV=ΔV, a=a, G=G, kwargs...))
 end
 
+function surface_integrand(ks:: AbstractVector{Float64}, 
+                           ΦΘ:: SVector{2, Float64}, 
+                           snapshot:: BubblesSnapShot,
+                           ball_space:: BallSpace, 
+                           chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                           _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+                           G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+    rot = align_ẑ(n̂(ΦΘ))
+    _snap = rot * snapshot
+    # This ignores the difference between ψ and ϕ, because at the 
+    # end of the PT, the anisotropic stress is null
+    return @. 8 * abs2($surface_ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
+                                  ΔV=ΔV, a=a, G=G, kwargs...))
+end
+
 function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
                    chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
@@ -71,5 +115,15 @@ function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1]
 end
 
+function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
+                   ball_space:: BallSpace, 
+                   chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                   _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
+                   G:: Float64 = 1., kwargs...):: Vector{Float64} where N
+    p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = surface_integrand(ks, ΦΘ, snapshot, ball_space, 
+                                                                         chebyshev_plan, _Δ; ΔV=ΔV,
+                                                                         a=a, G=G, kwargs...)
+    return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1] ./ V(ball_space)
+end
 
 end
