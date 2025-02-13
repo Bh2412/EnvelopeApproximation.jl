@@ -27,7 +27,7 @@ function integrand(ks:: AbstractVector{Float64},
                    snapshot:: BubblesSnapShot, 
                    chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
-                   G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+                   G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     rot = align_ẑ(n̂(ΦΘ))
     θ = ΦΘ[2]
     _snap = rot * snapshot
@@ -46,7 +46,7 @@ function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
            chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
            G:: Float64 = 1., kwargs...):: Vector{Float64} where N
-    p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = integrand(ks, ΦΘ, snapshot, 
+    p(ΦΘ:: SVector{2, Float64}):: Vector{Float64} = integrand(ks, ΦΘ, snapshot, 
                                                                  chebyshev_plan, _Δ; ΔV=ΔV,
                                                                  a=a, G=G, kwargs...)
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1]
@@ -58,7 +58,7 @@ function integrand(ks:: AbstractVector{Float64},
                    ball_space:: BallSpace, 
                    chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
-                   G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+                   G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     rot = align_ẑ(n̂(ΦΘ))
     θ = ΦΘ[2]
     _snap = rot * snapshot
@@ -73,7 +73,7 @@ function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
            chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
            G:: Float64 = 1., kwargs...):: Vector{Float64} where N
-    p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = integrand(ks, ΦΘ, snapshot, ball_space,
+    p(ΦΘ:: SVector{2, Float64}):: Vector{Float64} = integrand(ks, ΦΘ, snapshot, ball_space,
                                                                  chebyshev_plan, _Δ; ΔV=ΔV,
                                                                  a=a, G=G, kwargs...)
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1] ./ V(ball_space)
@@ -85,7 +85,7 @@ function surface_integrand(ks:: AbstractVector{Float64},
                            snapshot:: BubblesSnapShot, 
                            chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
                            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
-                           G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+                           G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     rot = align_ẑ(n̂(ΦΘ))
     θ = ΦΘ[2]
     _snap = rot * snapshot
@@ -101,7 +101,7 @@ function surface_integrand(ks:: AbstractVector{Float64},
                            ball_space:: BallSpace, 
                            chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
                            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
-                           G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
+                           G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     rot = align_ẑ(n̂(ΦΘ))
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
