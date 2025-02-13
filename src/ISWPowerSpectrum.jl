@@ -29,15 +29,18 @@ function integrand(ks:: AbstractVector{Float64},
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
                    G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
     rot = align_ẑ(n̂(ΦΘ))
+    θ = ΦΘ[2]
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
     return @. 8 * abs2($ψ(ks, _snap, chebyshev_plan, _Δ; 
-                           ΔV=ΔV, a=a, G=G, kwargs...))
+                           ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
 end
 
 const TopHemisphereLowerLeft:: SVector{2, Float64} = SVector{2, Float64}(0., 0.)
 const TopHemisphereUpperRight:: SVector{2, Float64} = SVector{2, Float64}(2π, π / 2)
+
+export P
 
 function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
            chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
@@ -57,11 +60,12 @@ function integrand(ks:: AbstractVector{Float64},
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
                    G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
     rot = align_ẑ(n̂(ΦΘ))
+    θ = ΦΘ[2]
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
     return @. 8 * abs2($ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
-                          ΔV=ΔV, a=a, G=G, kwargs...))
+                          ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
 end
 
 function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
@@ -83,11 +87,12 @@ function surface_integrand(ks:: AbstractVector{Float64},
                            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
                            G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
     rot = align_ẑ(n̂(ΦΘ))
+    θ = ΦΘ[2]
     _snap = rot * snapshot
-# This ignores the difference between ψ and ϕ, because at the 
-# end of the PT, the anisotropic stress is null
+    # This ignores the difference between ψ and ϕ, because at the 
+    # end of the PT, the anisotropic stress is null
     return @. 8 * abs2($surface_ψ(ks, _snap, chebyshev_plan, _Δ; 
-                                  ΔV=ΔV, a=a, G=G, kwargs...))
+                                  ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
 end
 
 function surface_integrand(ks:: AbstractVector{Float64}, 
@@ -102,8 +107,10 @@ function surface_integrand(ks:: AbstractVector{Float64},
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
     return @. 8 * abs2($surface_ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
-                                  ΔV=ΔV, a=a, G=G, kwargs...))
+                                  ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
 end
+
+export surface_P
 
 function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
                    chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
