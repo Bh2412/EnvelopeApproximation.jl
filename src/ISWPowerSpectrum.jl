@@ -103,6 +103,7 @@ function surface_integrand(ks:: AbstractVector{Float64},
                            _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
                            G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     rot = align_ẑ(n̂(ΦΘ))
+    θ = ΦΘ[2]
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
