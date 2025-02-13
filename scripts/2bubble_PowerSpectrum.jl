@@ -2,86 +2,89 @@ using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor
+import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
+import EnvelopeApproximation.GeometricStressEnergyTensor: Δ, k̂ik̂j∂_iφ∂_jφ, k̂ik̂jTij
 import LinearAlgebra: norm
-using Plots
+using CairoMakie
 using BenchmarkTools
 using HCubature
 using StaticArrays
+using EnvelopeApproximation.ISWPowerSpectrum
+import EnvelopeApproximation.ISWPowerSpectrum: align_ẑ
+using CSV
 
-R = 2.
-d = 2.4
-nucleations = [(time=0., site=Point3(0., 0., -d / 2)), (time=0., site=Point3(0., 0., d / 2))]
-snapshot = BubblesSnapShot(nucleations, R)
-bubbles = current_bubbles(snapshot)
-k_0 = 2π / (R + d / 2)
-ks = LinRange(k_0 / 10, k_0 * 10, 100)
-k_vecs = (x -> Vec3(0., 0., x)).(ks)
-k_0
-ks
-ts = LinRange(0., R, 10) |> collect
-η_PT = R
-
-# Precompiling
-
-# @btime k̂ik̂jTij(k_vecs[[1]], bubbles; rtol=1e-2)
-# @profview for _ in 1:100_000 k̂ik̂jTij(k_vecs[[1]], bubbles; rtol=1e-2) end
-
-
-@btime potential_integral(k_vecs[[1]], bubbles;rtol=1e-3)
-
-
-import EnvelopeApproximation.GravitationalPotentials: ψ as _ψ, ΦminusΨ
-
-
-# Precompiling
-# @btime ψ = _ψ(k_vecs[[100]], snapshot, R; rtol=1e-2)
-# @profview for _ in 1:1_000 _ψ(k_vecs[[100]], snapshot, R; rtol=1e-2) end
-# @btime ΦminusΨ(k_vecs[[1]], snapshot, R; rtol=1e-2)
-
-function kvec(k:: Float64, x:: SVector{2, Float64}):: Vec3
-    ϕ, θ = x
-    return Vec3((k * sin(θ) * cos(ϕ), k * sin(θ) * sin(ϕ), k * cos(θ))) 
-end 
-
-n̂ = SVector{2, Float64}(π / 2, π / 2)
-_k = 2.
-# @btime kvec($_k, $n̂)
-# @btime k̂ik̂jTij([kvec(ks[1], n̂)], bubbles; rtol=1e-2)
-
-# Studying why _ψ takes so long
-# @btime ψ = _ψ([kvec(ks[1], n̂)], snapshot, R; rtol=1e-2)
-# @profview for _ in 1:100 ψ = _ψ([kvec(ks[1], n̂)], snapshot, R; rtol=1e-2) end
-# @profview for _ in 1:100 ΦminusΨ(k_vecs[[1]], snapshot, R; rtol=1e-2) end
-
-# Studying why computing _ψ takes so long
-function source(k:: Vec3, t:: Float64):: ComplexF64
-    bubbles = current_bubbles(snapshot, t)
-    return k̂ik̂jTij([k], bubbles; rtol=1e-2)[1] * (η_PT - t)
+begin 
+    R = 4.79
+    d = 1.2
+    nucleations = [(time=0., site=Point3(0., 0., -d / 2)), (time=0., site=Point3(0., 0., d / 2))]
+    snapshot = BubblesSnapShot(nucleations, R)
+    bubbles = current_bubbles(snapshot)
+    k_0 = 2π / (R + d / 2)
+    ks = logrange(k_0 / 1000, k_0 * 10, 2_000)
 end
 
-
-V = 1.  # The volume
-
-function integrand(k:: Float64, ΦΘ:: SVector{2, Float64}; kwargs...):: ComplexF64
-    k_vector = kvec(k, ΦΘ)
-    v = ΦminusΨ([k_vector, -k_vector], snapshot, η_PT; kwargs...)
-    return v[1] * v[2] / V
+begin
+    ΔV = 1.
+    k̂ik̂j∂_iφ∂_jφ(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV)
 end
 
-# @btime integrand(ks[1], n̂; rtol=1e-2)
-
-ll = SVector{2, Float64}(0., 0.)
-ur = SVector{2, Float64}(2π, π)
-
-function P(k:: Float64; kwargs...):: ComplexF64
-    return hcubature(x -> integrand(k, x; kwargs...), ll, ur; kwargs...)[1]
+begin
+    bubbles = current_bubbles(snapshot)
+    figure = Figure()
+    ax = Axis(figure[1, 1], xlabel="k", ylabel="P(k)", 
+              xscale=log10,
+              yticks=0:50:150,
+              limits = ((min(ks...), max(ks...)), (0, 200)),
+              title="2 Bubble Surface-Surface, R=$R, d=$d")
+    lines!(ax, ks, k̂ik̂j∂_iφ∂_jφ(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV) .|> abs ,label=L"T_{zz}")
+    lines!(ax, ks, k̂ik̂j∂_iφ∂_jφ(ks, current_bubbles(align_ẑ(Vec3(1., 0., 0.)) * snapshot), chebyshev_plan, _Δ; ΔV=ΔV) .|> abs, label=L"T_{xx}")
+    lines!(ax, ks, k̂ik̂j∂_iφ∂_jφ(ks, current_bubbles(align_ẑ(Vec3(0., 1., 0.)) * snapshot), chebyshev_plan, _Δ; ΔV=ΔV) .|> abs, label=L"T_{yy}", linestyle=:dash)
+    # lines!(ax, ks, k̂ik̂j∂_iφ∂_jφ(ks, bubbles, chebyshev_plan, _Δ; ΔV=ΔV) .|> abs, label=L"$(\frac{\partial \varphi}{\partial z})^2$")
+    axislegend(ax)
+    save("/home/ben/Pictures/2_bubble_Tzz.png", figure)
+    figure
 end
 
-@btime P(ks[100]; rtol=1e-2)
-@profview P(ks[1]; rtol=1e-2)
-@time P(ks[ks .<= k_0][end]; rtol=1e-2)
+begin
+    chebyshev_plan = First3MomentsChebyshevPlan{32}()
+    _Δ = Δ(4)
+    # @profview for _ in 1:10 surface_P(ks, snapshot, chebyshev_plan, _Δ; rtol=1e-3) end
+    @time sp = surface_P(ks, snapshot, chebyshev_plan, _Δ; rtol=1e-3)
+    x̂ = Vec3(1., 0., 0.)
+    ŷ = Vec3(0., 1., 0.)
+    @time xsp = surface_P(ks, align_ẑ(x̂) * snapshot, chebyshev_plan, _Δ; rtol=1e-3)
+    @time ysp = surface_P(ks, align_ẑ(ŷ) * snapshot, chebyshev_plan, _Δ; rtol=1e-3)
+end
 
-ks = LinRange(k_0 / 10, k_0, 100)
-PS = P.(ks; rtol=1e-2)
-plot(ks, PS .|> real)
-plot!(ks, (@. 1 / (ks ^ 2)) .|> log)
+begin
+    μ = rand() * 2 - 1 
+    ϕ = rand() * 2π
+    random_n̂ = Vec3(sqrt(1 - μ ^ 2) * cos(ϕ), sqrt(1 - μ ^ 2) * sin(ϕ), μ)
+    @show random_n̂
+    @time n̂sp = surface_P(ks, align_ẑ(random_n̂) * snapshot, chebyshev_plan, _Δ; rtol=1e-3)
+end
+
+begin 
+    figure = Figure()
+    ax = Axis(figure[1, 1], xlabel="k", ylabel="P(k)", 
+              xscale=log10, yscale=log10,
+              title="2 Bubble Surface-Surface, R=$R, d=$d")
+    lines!(ax, ks, sp, label="ẑ")
+    # lines!(ax, ks, xsp, label="x̂")
+    # lines!(ax, ks, ysp, linestyle=:dash, label="ŷ")
+    lines!(ax, ks, n̂sp, linestyle=:dash, color="red", label="μ=$μ, ϕ=$ϕ")
+    # scatter!(ax, ks, n̂sp, color=(:blue, 0.1))
+    axislegend(ax, position=:lb)
+    save("2_bubble_surface_surface.svg", figure)
+    figure
+end
+
+begin 
+    figure = Figure()
+    ax = Axis(figure[1, 1], xlabel="k", ylabel="P(k)", 
+              xscale=log10, yscale=log10,
+              title="2 Bubble Surface-Surface, R=$R, d=$d")
+    lines!(ax, ks, sp)
+    save("2_bubble_surface_surface.png", figure)
+    figure
+end
