@@ -33,8 +33,8 @@ function integrand(ks:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return @. 8 * abs2($ψ(ks, _snap, chebyshev_plan, _Δ; 
-                           ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
+    return @. abs2($ψ(ks, _snap, chebyshev_plan, _Δ; 
+                      ΔV=ΔV, a=a, G=G, kwargs...)) * (sin(θ) / 2π)
 end
 
 const TopHemisphereLowerLeft:: SVector{2, Float64} = SVector{2, Float64}(0., 0.)
@@ -64,8 +64,8 @@ function integrand(ks:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return @. 8 * abs2($ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
-                          ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
+    return @. abs2($ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
+                      ΔV=ΔV, a=a, G=G, kwargs...)) * (sin(θ) / 2π)
 end
 
 function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
@@ -91,8 +91,8 @@ function surface_integrand(ks:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return @. 8 * abs2($surface_ψ(ks, _snap, chebyshev_plan, _Δ; 
-                                  ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
+    return @. abs2($surface_ψ(ks, _snap, chebyshev_plan, _Δ; 
+                              ΔV=ΔV, a=a, G=G, kwargs...)) * (sin(θ) / 2π)
 end
 
 function surface_integrand(ks:: AbstractVector{Float64}, 
@@ -106,8 +106,8 @@ function surface_integrand(ks:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return @. 8 * abs2($surface_ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
-                                  ΔV=ΔV, a=a, G=G, kwargs...)) * sin(θ)
+    return @. abs2($surface_ψ(ks, _snap, ball_space, chebyshev_plan, _Δ; 
+                              ΔV=ΔV, a=a, G=G, kwargs...)) * (sin(θ) / 2π)
 end
 
 export surface_P
