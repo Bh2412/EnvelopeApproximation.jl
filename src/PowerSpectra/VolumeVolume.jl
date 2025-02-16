@@ -6,7 +6,7 @@ using EnvelopeApproximation.GeometricStressEnergyTensor
 import EnvelopeApproximation.GeometricStressEnergyTensor: potential_integral
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
-import EnvelopeApproximation.ISWPowerSpectrum: V, *, TopHemisphereLowerLeft, TopHemisphereUpperRight, align_ẑ, n̂s
+import EnvelopeApproximation.ISWPowerSpectrum: V, *, TopHemisphereLowerLeft, TopHemisphereUpperRight, align_ẑ, n̂
 using HCubature
 using StaticArrays
 using QuadGK
