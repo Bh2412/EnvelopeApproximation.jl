@@ -125,7 +125,7 @@ end
 
 function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
                    ball_space:: BallSpace, 
-                   chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                   chebysshev_plan:: First3MomentsChebyshevPlan{N}, 
                    _Δ:: Δ; ΔV:: Float64 = 1., a:: Float64 = 1.,
                    G:: Float64 = 1., kwargs...):: Vector{Float64} where N
     p(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = surface_integrand(ks, ΦΘ, snapshot, ball_space, 
@@ -133,5 +133,7 @@ function surface_P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
                                                                          a=a, G=G, kwargs...)
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1] ./ V(ball_space)
 end
+
+include("PowerSpectra/VolumeVolume.jl")
 
 end
