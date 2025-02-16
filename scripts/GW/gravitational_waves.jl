@@ -32,7 +32,7 @@ function values!(f, a:: Float64, b:: Float64,
                  chebyshev_plan:: VectorChebyshevPlan{N, K}) where {N, K}
     scale_factor = scale(a, b)
     t = translation(a, b)
-    for (i, u) in enumerate(chebyshev_plan.points)
+    @inbouds for (i, u) in enumerate(chebyshev_plan.points)
         icw = inverse_chebyshev_weight(u) 
         @views @. chebyshev_plan.coeffs_buffer[i, :] = $f($inverse_u(u, scale_factor, t)) * icw
     end     
@@ -43,7 +43,7 @@ export chebyshev_coeffs!
 function chebyshev_coeffs!(f, a:: Float64, b:: Float64, 
                            chebyshev_plan:: VectorChebyshevPlan{N, K}) where {N, K}
     values!(f, a, b, chebyshev_plan)
-    for i in 1:K
+    @inbounds for i in 1:K
         chebyshev_plan.transform_plan! * (@views chebyshev_plan.coeffs_buffer[:, i])
     end 
 end
@@ -58,7 +58,7 @@ function fourier_mode(k:: Float64,
     besselj!(chebyshev_plan.bessels_buffer, 0:(N-1), k̃)
     e = cis(-k * translation) * scale
     @. chebyshev_plan.multiplication_buffer = e * chebyshev_plan.bessels_buffer * chebyshev_plan.multiplication_weights
-    for i in 1:K
+    @inbounds for i in 1:K
         chebyshev_plan.mode_buffer[i] = (@views chebyshev_plan.coeffs_buffer[:, i]) ⋅ chebyshev_plan.multiplication_buffer
     end
     return chebyshev_plan.mode_buffer
