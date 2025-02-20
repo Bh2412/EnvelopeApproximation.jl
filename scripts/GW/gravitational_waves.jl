@@ -7,10 +7,14 @@ using LinearAlgebra
 using Test
 using StaticArrays
 using EnvelopeApproximation.BubbleBasics
-import EnvelopeApproximation.GeometricStressEnergyTensor: ∫_ϕ, upper_right, _buffers, PeriodicInterval, IntersectionDome
+import EnvelopeApproximation.GeometricStressEnergyTensor: ∫_ϕ, upper_right, _buffers, PeriodicInterval, IntersectionDome, align_ẑ, intersection_domes, polar_limits, ring_domes_intersection!
+using EnvelopeApproximation.BubblesEvolution
 import EnvelopeApproximation.BubblesEvolution: BallSpace, BubblesSnapShot
+import EnvelopeApproximation.ISWPowerSpectrum: n̂
 using QuadGK
 using HCubature
+using IterTools
+import Base.rand
 
 struct VectorChebyshevPlan{N, K}
     points:: Vector{Float64}
@@ -142,6 +146,37 @@ end
 # @profview for _ in 1:10_000 fourier_modes(ks, vector_f, -1., 1., vector_chebyshev_plan) end
 # @profview for _ in 1:10_000 fourier_modes(ks, f, -1., 1., moments_chebyshev_plan) end
 
+function ∫_ϕ_x̂_ix̂_j(μ:: Float64, p:: PeriodicInterval):: NTuple{6, Float64}
+    ϕ1, ϕ2 = p.ϕ1, p.ϕ1 + p.Δ
+    s2 = 1 - μ ^ 2
+    s = sqrt(s2)
+    return s2 * ((1 / 2) * (ϕ2 - ϕ1) + (1/4) * (sin(2ϕ2) - sin(2ϕ1))), s2 * (1 / 4) * (cos(2ϕ1) - cos(2ϕ2)), (μ * s) * (sin(ϕ2) - sin(ϕ1)), s2 * ((1/2) * (ϕ2 - ϕ1) - (1/4) * (sin(2ϕ2) - sin(2ϕ1))), μ * s * (cos(ϕ1) - cos(ϕ2)), μ ^ 2 * (ϕ2 - ϕ1) 
+end
+
+begin 
+
+    function rand(p:: Type{PeriodicInterval}):: PeriodicInterval
+        x1, x2 = 2π .* rand(Float64, 2)
+        return PeriodicInterval(x1, x2)
+    end
+
+    function rand(p:: Type{PeriodicInterval}, n:: Int64):: Vector{PeriodicInterval}
+        V = Vector{PeriodicInterval}(undef, n)
+        for i in 1:n
+            V[i] = rand(p)
+        end
+        return V
+    end
+
+    ps = rand(PeriodicInterval, 1_000)
+    μs = range(-1., 1., 1_000)
+    @test all([all(∫_ϕ_x̂_ix̂_j(μ, p) .≈ ∫_ϕ(upper_right, μ, p.ϕ1, p.ϕ1 + p.Δ)) for μ in μs for p in ps])
+
+end
+
+begin
+    
+
 struct x̂_ix̂_j
     arcs_buffer:: Vector{PeriodicInterval}
     limits_buffer:: Vector{Tuple{Float64, Float64}}
@@ -150,13 +185,14 @@ end
 
 x̂_ix̂_j(n:: Int64) = x̂_ix̂_j(_buffers(n)...)
 
+
 function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble, 
-                      intersection_domes:: Vector{IntersectionDome}):: MVector{Float64}
+                      intersection_domes:: Vector{IntersectionDome}):: MVector{6, Float64}
     V = zeros(MVector{6, Float64})
     periodic_intervals = ring_domes_intersection!(μ, bubble.radius, intersection_domes, 
                                                   f.arcs_buffer, f.limits_buffer, f.intersection_buffer)
     @inbounds for interval in periodic_intervals
-        V .+= ∫_ϕ(upper_right, μ, interval.ϕ1, interval.ϕ1 + interval.Δ)
+        V .+= ∫_ϕ_x̂_ix̂_j(μ, interval)
     end
     return V
 end
@@ -167,7 +203,7 @@ function bubble_Tij_contribution!(V:: AbstractMatrix{ComplexF64},
                                   domes:: Vector{IntersectionDome}, 
                                   chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
                                   _x̂_ix̂_j:: x̂_ix̂_j; 
-                                  ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+                                  ΔV:: Float64 = 1.) where N
     @assert size(V) == (length(ks), 6) "The output vector must be of the same length of the input k vector"
     _polar_limits = polar_limits(bubble.radius, domes)
     @inbounds for (μ1, μ2) in partition(_polar_limits, 2, 1)
@@ -175,10 +211,9 @@ function bubble_Tij_contribution!(V:: AbstractMatrix{ComplexF64},
         chebyshev_coeffs!(μ -> _x̂_ix̂_j(μ, bubble, domes), μ1, μ2, chebyshev_plan)
         @inbounds for (i, k) in enumerate(ks)
             e = cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3)
-            @. V[i, :] += e * fourier_mode(k, chebyshev_plan, s, t) # ∂_iφ∂_jφ contribution
+            @. V[i, :] += e * $fourier_mode(k, chebyshev_plan, s, t) # ∂_iφ∂_jφ contribution
         end
     end
-    return V
 end
 
 function Tij(ks:: AbstractVector{Float64}, 
@@ -186,7 +221,7 @@ function Tij(ks:: AbstractVector{Float64},
              ball_space:: BallSpace,
              chebyshev_plan:: VectorChebyshevPlan{N, 6},
              _x̂_ix̂_j:: x̂_ix̂_j;
-             ΔV:: Float64 = 1.):: Vector{ComplexF64} where N
+             ΔV:: Float64 = 1.):: Matrix{ComplexF64} where N
     V = zeros(ComplexF64, length(ks), 6)
     domes = intersection_domes(bubbles, ball_space)
     @inbounds for (bubble_index, _domes) in domes
@@ -232,15 +267,15 @@ function Λ(T1:: AbstractVector{ComplexF64}, T2:: AbstractVector{ComplexF64}):: 
     return r
 end
 
-function Λ(T:: AbstractVector{ComplexF64}):: ComplexF64
+function Λ(T:: AbstractVector{ComplexF64}):: Float64
     return Λ(T, T)
 end
 
 function _TΛT(t:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
               ball_space:: BallSpace, chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
-              _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., G:: Float64 = 1.):: Vector{ComplexF64} where N
+              _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., G:: Float64 = 1.):: Vector{Float64} where N
     # Eq. 15 in Kosowsky and Turner
-    T = Tij(ωs, current_bubble(snapshot, t), ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
+    T = Tij(ωs, current_bubbles(snapshot, t), ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
     return @. Λ($eachrow(T)) * (2G * (ωs ^ 2))
 end
 
@@ -251,14 +286,14 @@ function TΛT(ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
     function f(t:: Float64):: Vector{ComplexF64}
         return @. (cis(ωs * t) / 2π) * $_TΛT(t, ωs, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV, G=G)
     end
-    return quadgk(f, 0., snapshot.t; kwargs...)
+    return quadgk(f, 0., snapshot.t; kwargs...)[1]
 end
 
 function integrand(ωs:: AbstractVector{Float64}, 
                    ΦΘ:: SVector{2, Float64}, 
                    snapshot:: BubblesSnapShot,
                    ball_space:: BallSpace, 
-                   chebyshev_plan:: First3MomentsChebyshevPlan{N}, 
+                   chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
                    _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., 
                    G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
     rot = align_ẑ(n̂(ΦΘ))
@@ -266,7 +301,7 @@ function integrand(ωs:: AbstractVector{Float64},
     _snap = rot * snapshot
     # This ignores the difference between ψ and ϕ, because at the 
     # end of the PT, the anisotropic stress is null
-    return TΛT(ωs, _snap, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV, G=G, kwargs...) * (sin(θ) / 2π)
+    return TΛT(ωs, _snap, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV, G=G, kwargs...) * sin(θ) # Note that this is not an average over sky point
 end
 
 const UnitSphereLowerLeft:: SVector{2, Float64} = SVector{2, Float64}(0., 0.)
@@ -276,5 +311,44 @@ function P(ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
            ball_space:: BallSpace, chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
            _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., G:: Float64 = 1., kwargs...):: Vector{ComplexF64} where N
     _integrand(ΦΘ:: SVector{2, Float64}):: Vector{ComplexF64} = integrand(ωs, ΦΘ, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV, G=G, kwargs...) 
-    return hcubature(_integrand, UnitSphereLowerLeft, UnitSphereUpperRight; kwargs...)
+    return hcubature(_integrand, UnitSphereLowerLeft, UnitSphereUpperRight; kwargs...)[1]
+end 
 end
+
+begin 
+    R = 4.79
+    d = 1.2
+    nucleations = [(time=0., site=Point3(0., 0., -d / 2)), (time=0., site=Point3(0., 0., d / 2))]
+    snapshot = BubblesSnapShot(nucleations, R)
+    bubbles = current_bubbles(snapshot)
+    k_0 = 2π / (R + d / 2)
+    ks = logrange(k_0 / 100, k_0 * 10, 2)
+    chebyshev_plan = VectorChebyshevPlan{32, 6}()
+    _x̂_ix̂_j = x̂_ix̂_j(4)
+    ball_space = BallSpace(2.1R + d, Point3(0., 0., 0.))
+end
+
+begin
+    domes = intersection_domes(bubbles)
+    _domes = domes[1]
+    bubble = bubbles[1]
+    μc = _domes[1].h / R
+    μs = range(-1., 1., 1_000)
+    f(μ) = begin
+        if μ <= μc
+            return [π * (1 - μ ^ 2), 0., 0., π * (1 - μ ^ 2), 0., 2π * μ ^ 2]
+        else
+            return zeros(6)
+        end
+    end
+    @test _x̂_ix̂_j.(μs, (bubble, ), (_domes, )) ≈ f.(μs) 
+end
+
+begin
+    @btime _x̂_ix̂_j(0., $bubble, $_domes)
+    # @profview for _ in 1:10_000_000  _x̂_ix̂_j(0., bubble, _domes) end
+end
+
+
+@time TΛT(ks, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; rtol=1e-3)
+# @time P(ks, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; rtol=1e-3)
