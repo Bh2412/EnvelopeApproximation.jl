@@ -1,5 +1,8 @@
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
-    return euc(bubble1.center, bubble2.center) < bubble1.radius + bubble2.radius
+    d = euc(bubble1.center, bubble2.center)
+    radius_sum = bubble1.radius + bubble2.radius
+    d ≈ radius_sum && return false
+    return d < radius_sum
 end
 
 struct IntersectionDome
