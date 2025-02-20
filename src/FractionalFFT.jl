@@ -7,15 +7,15 @@ Specifically, equation 18.
 Note that indices run from 1 here and 0 there.
 =#
 
-export FractionalFFTBuffer
+export FractionalFFTPlan
 
-struct FractionalFFTBuffer{M}
+struct FractionalFFTPlan{M}
     y:: Vector{ComplexF64}
     z:: Vector{ComplexF64}
     P:: FFTW.cFFTWPlan{ComplexF64, -1, true, 1, Tuple{Int64}}
     inverse_P:: AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, true, 1, Tuple{Int64}}, Float64}
 
-    function FractionalFFTBuffer{M}() where M
+    function FractionalFFTPlan{M}() where M
         y = zeros(ComplexF64, 2M)
         z = zeros(ComplexF64, 2M)
         P = plan_fft!(y)
@@ -24,39 +24,39 @@ struct FractionalFFTBuffer{M}
     end
 end
 
-function prepare!(v:: Vector{Float64}, α:: Float64, buffer:: FractionalFFTBuffer{M}) where M
+function prepare!(v:: Vector{Float64}, α:: Float64, plan:: FractionalFFTPlan{M}) where M
     @assert M == length(v) "FractionalFFTBuffer size must be 2*N."
     @inbounds for j in 0:(M-1)
         j̃ = j + 1
-        buffer.y[j̃] = v[j̃] * cispi(-α * (j^2))
-        buffer.z[j̃] = cispi(α * (j^2))
+        plan.y[j̃] = v[j̃] * cispi(-α * (j^2))
+        plan.z[j̃] = cispi(α * (j^2))
     end
     @inbounds for j in M:(2M - 1)
         j̃ = j + 1
-        buffer.y[j̃] = 0.
-        buffer.z[j̃] = cispi(α * ((j - 2M) ^ 2))
+        plan.y[j̃] = 0.
+        plan.z[j̃] = cispi(α * ((j - 2M) ^ 2))
     end
 end
 
-function fractional_fft(v:: Vector{Float64}, α:: Float64, buffer:: FractionalFFTBuffer{M}):: AbstractVector{ComplexF64} where M
+function fractional_fft(v:: Vector{Float64}, α:: Float64, plan:: FractionalFFTPlan{M}):: AbstractVector{ComplexF64} where M
     @assert M == length(v) "FractionalFFTBuffer size must be 2*M."
-    prepare!(v, α, buffer)
-    buffer.P * buffer.y
-    buffer.P * buffer.z
-    @. buffer.y *= buffer.z
-    buffer.inverse_P * buffer.y
+    prepare!(v, α, plan)
+    plan.P * plan.y
+    plan.P * plan.z
+    @. plan.y *= plan.z
+    plan.inverse_P * plan.y
     @inbounds for k in 0:(M-1)
         k̃ = k + 1
-        buffer.y[k̃] *= cispi(-α * (k ^ 2))
+        plan.y[k̃] *= cispi(-α * (k ^ 2))
     end
-    @views return buffer.y[1:M]
+    @views return plan.y[1:M]
 end
 
 export fractional_fft
 
 function fractional_fft(v:: Vector{Float64}, α:: Float64):: AbstractVector{ComplexF64}
-    buffer = FractionalFFTBuffer{length(v)}()
-    return fractional_fft(v, α, buffer)
+    plan = FractionalFFTPlan{length(v)}()
+    return fractional_fft(v, α, plan)
 end
     
 export fractional_fftfreq
