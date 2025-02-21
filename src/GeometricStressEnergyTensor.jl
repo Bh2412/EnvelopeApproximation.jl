@@ -20,21 +20,21 @@ include("GeometricStressEnergyTensor/PeriodicInterval.jl")
 include("GeometricStressEnergyTensor/RingDomeIntersection.jl")
 include("GeometricStressEnergyTensor/PeriodicIntersection.jl")
 
-function ring_domes_intersection!(μ′:: Float64, R:: Float64, intersection_domes:: Vector{IntersectionDome}, 
-                                  arcs_buffer:: Vector{PeriodicInterval}, 
-                                  limits_buffer:: Vector{Tuple{Float64, Float64}},
-                                  intersection_buffer:: Vector{PeriodicInterval}):: AbstractVector{PeriodicInterval}
+function ring_domes_complement_intersection!(μ′:: Float64, R:: Float64, intersection_domes:: Vector{IntersectionDome}, 
+                                             arcs_buffer:: Vector{PeriodicInterval}, 
+                                             limits_buffer:: Vector{Tuple{Float64, Float64}},
+                                             intersection_buffer:: Vector{PeriodicInterval}):: AbstractVector{PeriodicInterval}
     isempty(intersection_domes) && begin 
         intersection_buffer[1] = FullCircle
         return @views intersection_buffer[1:1]
     end
     length(intersection_domes) == 1 && begin
-        intersection_buffer[1] = ring_dome_intersection(μ′, R, intersection_domes[1])
+        intersection_buffer[1] = ring_dome_complement_intersection(μ′, R, intersection_domes[1])
         return @views intersection_buffer[1:1]
     end
     i = 1
     for dome in intersection_domes
-        p = ring_dome_intersection(μ′, R, dome)
+        p = ring_dome_complement_intersection(μ′, R, dome)
         approxempty(p) && return @views intersection_buffer[1:0]
         approxentire(p) && continue
         arcs_buffer[i] = p
@@ -55,8 +55,8 @@ end
 
 function (δ:: Δ)(μ:: Float64, bubble:: Bubble, 
                  intersection_domes:: Vector{IntersectionDome}):: Float64
-                 periodic_intervals = ring_domes_intersection!(μ, bubble.radius, intersection_domes, 
-                                                               δ.arcs_buffer, δ.limits_buffer, δ.intersection_buffer)
+                 periodic_intervals = ring_domes_complement_intersection!(μ, bubble.radius, intersection_domes, 
+                                                                          δ.arcs_buffer, δ.limits_buffer, δ.intersection_buffer)
     return sum((p.Δ for p in periodic_intervals), init=0.)
 end
 
