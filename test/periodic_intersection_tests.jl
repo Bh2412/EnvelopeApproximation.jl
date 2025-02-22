@@ -5,7 +5,7 @@ using Test
 import EnvelopeApproximation.GeometricStressEnergyTensor.periodic_intersection!
 using Intervals
 import Intervals.IntervalSet
-import Base: ≈, ==
+import Base: ≈, ==, ∈   
 using StableRNGs
 using Random
 import Base.rand
@@ -53,5 +53,13 @@ for i in eachindex(subsets)
     subset = subsets[i]
     bools[i] = (Δ(periodic_intersection!(subset)) ≈ Δ(manual_intersect(subset)))
 end
+ϕs = (0.:0.1:2π)[1:(end-1)]
+
+within(ϕ:: Float64, ps:: AbstractVector{PeriodicInterval}) = any(ϕ in p for p in ps)
+
+@testset "periodic intersection" begin
+@test all((within(ϕ, periodic_intersection!(subset))) ≡ (ϕ ∈ manual_intersect(subset)) for subset in subsets for ϕ in ϕs)
 @test all(bools)
+end
+
 end
