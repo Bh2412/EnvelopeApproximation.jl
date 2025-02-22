@@ -14,7 +14,7 @@ using Combinatorics
 import Base.length
 end
 
-begin
+@time begin
 
 function IntervalSet(p:: PeriodicInterval)
     _a = a(p)
@@ -53,12 +53,18 @@ for i in eachindex(subsets)
     subset = subsets[i]
     bools[i] = (Δ(periodic_intersection!(subset)) ≈ Δ(manual_intersect(subset)))
 end
-ϕs = (0.:0.1:2π)[1:(end-1)]
+ϕs = (0.:0.001:2π)[1:(end-1)]
 
 within(ϕ:: Float64, ps:: AbstractVector{PeriodicInterval}) = any(ϕ in p for p in ps)
 
+function equal_on_subset(ps:: AbstractVector{PeriodicInterval})
+    _nominal_intersect = periodic_intersection!(ps)
+    _manual_intersect = manual_intersect(ps)
+    return all(within.(ϕs, (_nominal_intersect, )) .≡ (ϕs .∈ (_manual_intersect, )))
+end
+
 @testset "periodic intersection" begin
-@test all((within(ϕ, periodic_intersection!(subset))) ≡ (ϕ ∈ manual_intersect(subset)) for subset in subsets for ϕ in ϕs)
+@test all(equal_on_subset(subset) for subset in subsets)
 @test all(bools)
 end
 
