@@ -40,7 +40,7 @@ function ring_domes_complement_intersection!(μ′:: Float64, R:: Float64, inter
         arcs_buffer[i] = p
         i += 1
     end
-    i == 1 && return @views arcs_buffer[1:0]
+    i == 1 && ((intersection_buffer[1] = FullCircle); return @views intersection_buffer[1:1])
     i == 2 && return @views arcs_buffer[1:1]
     return @views periodic_intersection!(arcs_buffer[1:(i - 1)], limits_buffer, intersection_buffer)
 end

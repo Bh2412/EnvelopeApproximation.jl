@@ -1,14 +1,16 @@
-using EnvelopeApproximation
-using EnvelopeApproximation.GeometricStressEnergyTensor: ring_dome_complement_intersection, IntersectionDome, Vec3, EmptyArc, FullCircle
-using EnvelopeApproximation.GeometricStressEnergyTensor: PeriodicInterval, a, b
-using Test
-using Intervals
-import Intevals.IntervalSet
-import Base.≈
-using StableRNGs
-using Random
-import Base.rand
-using Distributions
+begin
+    using EnvelopeApproximation
+    using EnvelopeApproximation.GeometricStressEnergyTensor: ring_dome_complement_intersection, IntersectionDome, Vec3, EmptyArc, FullCircle
+    using EnvelopeApproximation.GeometricStressEnergyTensor: PeriodicInterval, a, b
+    using Test
+    using Intervals
+    import Intervals.IntervalSet
+    import Base.≈
+    using StableRNGs
+    using Random
+    import Base.rand
+    using Distributions
+end
 
 ≈(p1:: PeriodicInterval, p2:: PeriodicInterval) = (p1.ϕ1 ≈ p2.ϕ1) & (p1.Δ ≈ p2.Δ)
 
@@ -39,8 +41,13 @@ function numeric_intersection(μ)
     return ring_dome_complement_intersection(μ, R, n̂, h, true)
 end
 
+function numeric_not_domelike_intersection(μ)
+    return ring_dome_complement_intersection(μ, R, n̂, h, false)
+end
+
 complement(p:: PeriodicInterval) = PeriodicInterval(mod(p.ϕ1 + p.Δ, 2π), 2π - p.Δ)
 
 @test all(complement.(analytic_intersection.(μs)) .≈ numeric_intersection.(μs))
+@test all(numeric_not_domelike_intersection.(μs) .≈ complement.(numeric_intersection.(μs)))
 end
 
