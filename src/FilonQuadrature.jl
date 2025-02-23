@@ -43,7 +43,7 @@ sample!(f, a:: Real, b:: Real, p:: Int, β:: Float64, γ:: Float64,  buffer:: Ve
 
 function dft_portion(v:: Vector{Float64}, Δk:: Float64, a:: Float64, 
                      b:: Float64, p:: Int, 
-                     fractional_fft_buffer:: FractionalFFTBuffer{M}) where M
+                     fractional_fft_buffer:: FractionalFFTPlan{M}) where M
     @assert M == 2p + 1 "The buffer length must be equal 2p + 1 where p is the number 
                          of points in the Filon approximation"
     Δx = (b-a) / 2p
