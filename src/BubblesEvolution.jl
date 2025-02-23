@@ -88,7 +88,6 @@ struct BallSpace <: AbstractSpace
     center:: Point3
 end
 
-
 const RADIAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 1.)
 const AZYMUTHAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 2π)
 const POLAR_DISTRIBUTION:: Uniform{Float64} = Uniform(-1., 1.)
