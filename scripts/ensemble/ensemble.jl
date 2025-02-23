@@ -1,19 +1,21 @@
-using EnvelopeApproximation
-using EnvelopeApproximation.BubbleBasics
-using EnvelopeApproximation.BubblesEvolution
-using StableRNGs
-using Base.Iterators
-using Measurements
-using JLD2
-using Plots
-using EnvelopeApproximation.Visualization
-import EnvelopeApproximation.BubblesEvolution.sample
-using BenchmarkTools
+begin
+    using EnvelopeApproximation
+    using EnvelopeApproximation.BubbleBasics
+    using EnvelopeApproximation.BubblesEvolution
+    using StableRNGs
+    using Base.Iterators
+    using Measurements
+    using JLD2
+    using EnvelopeApproximation.Visualization
+    import EnvelopeApproximation.BubblesEvolution.sample
+    using BenchmarkTools
+end
 
 #=
 Parameters taken from Kosowsky and Turner
 =#
 
+begin
 β = 1.
 Δt = (1 / β) / 1000
 ball_space = BallSpace(4.46 / β, Point3(0., 0., 0.))
@@ -36,23 +38,11 @@ function termination_strategy(state, space, _):: Bool
     return inside / N ≥ η 
 end
 
-rngs = StableRNG.(1:ensemble_size)
-
 _evolve(rng) = evolve(eg, ball_space, termination_strategy=termination_strategy, rng=rng)
-@btime _evolve(rngs[1])
-@profview for _ in 1:100 _evolve(rngs[1]) end
+end
+
+begin
+rngs = StableRNG.(1:ensemble_size)
 evolves = _evolve.(rngs)
-
-## Mean number of nucleations
-
-mean(x) = sum(x) / length(x)
-std(x) = sqrt(sum(x .^ 2) .- mean(x) ^ 2) / (sqrt(length(x) * (length(x) - 1)))
-best_estimate(x) = mean(x) ± std(x) 
-mean_nucleations(x) = average((z -> length(z.nucleations)).(x))
-
-# mean number of nucleations
-best_estimate((z -> length(z.nucleations)).(evolves))
-
-# mean time of PT as defined by time of last nucleation
-best_estimate((z -> z.nucleations[end].time).(evolves))
-jldsave("evolution_ensemble.jld2"; snapshots=evolves, β=β)
+jldsave("evolution_ensemble.jld2"; snapshots=evolves, β=β, ball_space=ball_space)
+end
