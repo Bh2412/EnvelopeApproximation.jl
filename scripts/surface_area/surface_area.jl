@@ -168,10 +168,12 @@ begin
         push!(sa2s, mc_bubble_area(b, bubbles, N))
     end
     fig = Figure()
-    ax = Axis(fig[1, 1], xscale=log10)
-    scatter!(ax, Ns, value.(sa2s))
+    ax = Axis(fig[1, 1], xscale=log10, xlabel="N samples", ylabel=L"Surface Area $[\frac{1}{β^2}]$")
+    scatter!(ax, Ns, value.(sa2s), label="Monte Carlo Estimation")
     errorbars!(ax, Ns, value.(sa2s), uncertainty.(sa2s))
-    hlines!(ax, [sa1], linestyle=:dash, color="black")
+    hlines!(ax, [sa1], linestyle=:dash, color="black", label="Code evaluation")
+    axislegend(ax)
+    # save("surface_area_verification.png", fig)
     fig
 end
 

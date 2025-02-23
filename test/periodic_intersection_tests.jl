@@ -38,11 +38,11 @@ subsets = collect(powerset(random_periodic_intervals, 2, 5))
 limits_buffer = Vector{Tuple{Float64, Float64}}(undef, 2N + 2)
 intersection_buffer = Vector{PeriodicInterval}(undef, 2N + 2)
 
-function Δ(intervalset:: IntervalSet)
+function interval_length(intervalset:: IntervalSet)
     return sum(inter.last - inter.first for inter in intervalset.items; init=0.)
 end
 
-function Δ(ps:: AbstractVector{PeriodicInterval})
+function interval_length(ps:: AbstractVector{PeriodicInterval})
     return sum(p.Δ for p in ps; init=0.)
 end
 
@@ -51,7 +51,7 @@ periodic_intersection!(ps:: AbstractVector{PeriodicInterval}) = periodic_interse
 bools = Vector{Bool}(undef, length(subsets))
 for i in eachindex(subsets)
     subset = subsets[i]
-    bools[i] = (Δ(periodic_intersection!(subset)) ≈ Δ(manual_intersect(subset)))
+    bools[i] = (interval_length(periodic_intersection!(subset)) ≈ interval_length(manual_intersect(subset)))
 end
 ϕs = (0.:0.001:2π)[1:(end-1)]
 
