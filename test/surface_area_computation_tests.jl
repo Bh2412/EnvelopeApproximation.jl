@@ -176,6 +176,7 @@ begin
     @testset "General Ensemble With Reflective Boundary Conditions" begin
     for bubbles in bubbless
         sa1 = surface_area(bubbles, ball_space, _Δ)
+        @assert sa1 < surface_area(bubbles, _Δ)
         sa2 = mc_surface_area(bubbles, ball_space, N)
         @assert (uncertainty(sa2) / value(sa2)) <= 0.01
         @test abs(value(sa2) - sa1) < (5 * uncertainty(sa2))

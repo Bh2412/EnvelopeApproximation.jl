@@ -17,9 +17,12 @@ function *(rot:: SMatrix{3, 3, Float64}, snapshot:: BubblesSnapShot):: BubblesSn
     return BubblesSnapShot(new_nucleations, snapshot.t, snapshot.radial_profile)
 end
 
-function n̂(x:: SVector{2, Float64}):: Vec3
-    ϕ, θ = x
+function n̂(ϕ:: Float64, θ:: Float64):: Vec3
     return Vec3((sin(θ) * cos(ϕ), sin(θ) * sin(ϕ), cos(θ))) 
+end 
+
+function n̂(x:: SVector{2, Float64}):: Vec3
+    n̂(x[1], x[2]) 
 end 
 
 function integrand(ks:: AbstractVector{Float64}, 
