@@ -1,7 +1,7 @@
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     d = euc(bubble1.center, bubble2.center)
     radius_sum = bubble1.radius + bubble2.radius
-    d ≈ radius_sum && return false
+    isapprox(d, radius_sum; rtol=1e12) && return false
     return d < radius_sum
 end
 
@@ -65,7 +65,9 @@ function intersection_domes(bubbles:: Bubbles):: Dict{Int, Vector{IntersectionDo
 end
 
 function ⊆(bubble:: Bubble, ball_space:: BallSpace):: Bool
-    return euc(bubble.center, ball_space.center) ≲ abs(ball_space.radius - bubble.radius)
+    d = euc(bubble.center, ball_space.center)
+    (isapprox(d, ball_space.radius - bubble.radius; rtol=1e-12)) && return true
+    return euc(bubble.center, ball_space.center) < abs(ball_space.radius - bubble.radius)
 end
 
 function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome
