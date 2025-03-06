@@ -1,7 +1,9 @@
+const RTOL:: Float64 = 1e-12
+
 function intersecting(bubble1:: Bubble, bubble2:: Bubble):: Bool
     d = euc(bubble1.center, bubble2.center)
     radius_sum = bubble1.radius + bubble2.radius
-    isapprox(d, radius_sum; rtol=1e12) && return false
+    isapprox(d, radius_sum; rtol=RTOL) && return false
     return d < radius_sum
 end
 
@@ -70,7 +72,7 @@ end
 
 function ⊆(bubble:: Bubble, ball_space:: BallSpace):: Bool
     d = euc(bubble.center, ball_space.center)
-    (isapprox(d, ball_space.radius - bubble.radius; rtol=1e-12)) && return true
+    (isapprox(d, ball_space.radius - bubble.radius; rtol=RTOL)) && return true
     return euc(bubble.center, ball_space.center) < abs(ball_space.radius - bubble.radius)
 end
 
