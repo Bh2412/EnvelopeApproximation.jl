@@ -16,6 +16,10 @@ function IntersectionDome(n:: Vec3, dome_like:: Bool)
     return IntersectionDome(h, n / h, dome_like)
 end
 
+function complement(dome:: IntersectionDome)
+    return IntersectionDome(dome.h, dome.n̂, ~dome.dome_like)
+end
+
 function *(rotation:: SMatrix{3, 3, Float64}, arc:: IntersectionDome):: IntersectionDome
     return IntersectionDome(arc.h, rotation * arc.n̂, arc.dome_like)
 end
@@ -70,19 +74,22 @@ function ⊆(bubble:: Bubble, ball_space:: BallSpace):: Bool
     return euc(bubble.center, ball_space.center) < abs(ball_space.radius - bubble.radius)
 end
 
-function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome
+function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome # This gives the *intersection*, as it is mathematically defined, of the bubble and a ball_space
     n = bubble.center - ball_space.center
     d = norm(n)
     n̂ = n / d 
-    h = -λ(bubble.radius, ball_space.radius, d)  # The intersection is guarenteed to be dome like.
-    return IntersectionDome(h, n̂, true)
+    h = -λ(bubble.radius, ball_space.radius, d)  # The intersection *complement* is guarenteed to be dome like.
+    return IntersectionDome(h, n̂, false)
 end
 
 function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
     domes = intersection_domes(bubbles)
     for (i, bubble) in enumerate(bubbles)
         if ~(bubble ⊆ ball_space)
-            push!(domes[i], bubble ∩ ball_space)
+            # Since in all other cases an "intersection_dome" is a region excluded from integration,  
+            # and because we want to integrate the region of the bubble within the ball_space, we take here the complement of the interection.
+            # This is equivalent to having a reflective bubble that collides with a bubble that reaches the surface.
+            push!(domes[i], complement(bubble ∩ ball_space))  
         end
     end
     return domes
