@@ -1,6 +1,5 @@
 module GravitationalPotentials
  
-using EnvelopeApproximation.GravitationalPotentials.SecondOrderODESolver
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor
