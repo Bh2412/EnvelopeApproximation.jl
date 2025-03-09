@@ -213,6 +213,8 @@ function fourier_mode(k:: Float64,
     return m0, translation * m0 + scale * m1, (translation ^ 2) * m0 + 2 * translation * scale * m1 + (scale ^ 2) * m2 
 end
 
+export VectorChebyshevPlan
+
 struct VectorChebyshevPlan{N, K}
     points:: Vector{Float64}
     coeffs_buffer:: Matrix{Float64}
