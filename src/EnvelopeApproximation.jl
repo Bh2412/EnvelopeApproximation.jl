@@ -73,23 +73,15 @@ end
 
 include("BubblesEvolution.jl")
 
-include("SurfaceTesselation.jl")
-
 include("FractionalFFT.jl")
 
 include("FilonQuadrature.jl")
 
 include("ChebyshevCFT.jl")
 
-include("StressEnergyTensor.jl")
-
-include("StressEnergyTensorFFT.jl")
-
 include("GeometricStressEnergyTensor.jl")
 
 include("GravitationalPotentials.jl")
-
-include("TemperatureFluctuations.jl")
 
 include("ISWPowerSpectrum.jl")
 
