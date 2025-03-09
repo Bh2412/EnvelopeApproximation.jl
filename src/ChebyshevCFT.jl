@@ -213,4 +213,87 @@ function fourier_mode(k:: Float64,
     return m0, translation * m0 + scale * m1, (translation ^ 2) * m0 + 2 * translation * scale * m1 + (scale ^ 2) * m2 
 end
 
+struct VectorChebyshevPlan{N, K}
+    points:: Vector{Float64}
+    coeffs_buffer:: Matrix{Float64}
+    bessels_buffer:: Vector{Float64}
+    multiplication_weights:: Vector{ComplexF64}
+    multiplication_buffer:: Vector{ComplexF64}
+    transform_plan!:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
+    mode_buffer:: Vector{ComplexF64}
+
+    function VectorChebyshevPlan{N, K}() where {N, K}
+        points = chebyshevpoints(Float64, N, Val(1))
+        coeffs_buffer = Matrix{Float64}(undef, N, K)
+        bessels_buffer = Vector{Float64}(undef, N)
+        weights = multiplication_weights(N)
+        multiplication_buffer = Vector{ComplexF64}(undef, N)
+        transform_plan! = plan_chebyshevtransform!(zeros(N), Val(1))
+        mode_buffer = Vector{ComplexF64}(undef, K)
+        return new{N, K}(points, coeffs_buffer,  
+                         bessels_buffer, weights, multiplication_buffer, transform_plan!, mode_buffer)
+    end
+end
+
+function values!(f, a:: Float64, b:: Float64, 
+                 chebyshev_plan:: VectorChebyshevPlan{N, K}) where {N, K}
+    scale_factor = scale(a, b)
+    t = translation(a, b)
+    @inbounds for (i, u) in enumerate(chebyshev_plan.points)
+        icw = inverse_chebyshev_weight(u) 
+        @views @. chebyshev_plan.coeffs_buffer[i, :] = $f($inverse_u(u, scale_factor, t)) * icw
+    end     
+end
+
+export chebyshev_coeffs!
+
+function chebyshev_coeffs!(f, a:: Float64, b:: Float64, 
+                           chebyshev_plan:: VectorChebyshevPlan{N, K}) where {N, K}
+    values!(f, a, b, chebyshev_plan)
+    @inbounds for i in 1:K
+        chebyshev_plan.transform_plan! * (@views chebyshev_plan.coeffs_buffer[:, i])
+    end 
+end
+
+export fourier_mode
+
+function fourier_mode(k:: Float64, 
+                      chebyshev_plan:: VectorChebyshevPlan{N, K}, 
+                      scale:: Float64 = 1.,
+                      translation:: Float64 = 0.):: Vector{ComplexF64} where {N, K}
+    k̃ = scale * k
+    besselj!(chebyshev_plan.bessels_buffer, 0:(N-1), k̃)
+    e = cis(-k * translation) * scale
+    @. chebyshev_plan.multiplication_buffer = e * chebyshev_plan.bessels_buffer * chebyshev_plan.multiplication_weights
+    @inbounds for i in 1:K
+        chebyshev_plan.mode_buffer[i] = (@views chebyshev_plan.coeffs_buffer[:, i]) ⋅ chebyshev_plan.multiplication_buffer
+    end
+    return chebyshev_plan.mode_buffer
+end
+
+function fourier_modes(ks:: AbstractVector{Float64}, f, a:: Real, b:: Real, 
+    plan:: VectorChebyshevPlan{N, K}):: Matrix{ComplexF64} where {N, K}
+    M = Matrix{ComplexF64}(undef, length(ks), K)
+    chebyshev_coeffs!(f, a, b, plan)
+    s = scale(a, b)
+    t = translation(a, b)
+    for (i, k) in enumerate(ks)
+        @views M[i, :] .= fourier_mode(k, plan, s, t)
+    end
+    return M
+end
+
+function fourier_modes(ks:: AbstractVector{Float64}, f, a:: Real, b:: Real, 
+    plan:: First3MomentsChebyshevPlan{N}):: Matrix{ComplexF64} where N
+    M = Matrix{ComplexF64}(undef, length(ks), 3)
+    chebyshev_coeffs!(f, a, b, plan)
+    s = scale(a, b)
+    t = translation(a, b)
+    for (i, k) in enumerate(ks)
+        @views M[i, :] .= fourier_mode(k, plan, s, t)
+    end
+    return M
+end
+
+
 end
