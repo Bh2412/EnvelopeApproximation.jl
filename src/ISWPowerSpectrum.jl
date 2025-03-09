@@ -3,12 +3,15 @@ using HCubature
 import Base.*
 using StaticArrays
 using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BubblesEvolution
 import EnvelopeApproximation.ChebyshevCFT: First3MomentsChebyshevPlan
 import EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, BallSpace
-import EnvelopeApproximation.GeometricStressEnergyTensor: align_ẑ, Δ
+import EnvelopeApproximation.GeometricStressEnergyTensor: align_ẑ, Δ, k̂ik̂jTij, k̂ik̂j∂_iφ∂_jφ
 import EnvelopeApproximation.GravitationalPotentials: ψ, surface_ψ
 
 *(rot:: SMatrix{3, 3, Float64}, p:: Point3):: Point3 = Point3(rot * p.coordinates)
+*(rot:: SMatrix{3, 3, Float64}, b:: Bubble):: Bubble = Bubble(rot * b.center, b.radius)
+*(rot:: SMatrix{3, 3, Float64}, bubbles:: Bubbles):: Bubbles = map(x -> rot * x, bubbles)
 
 V(ball_space:: BallSpace):: Float64 = (4π / 3) * (ball_space.radius ^ 3)
 
@@ -81,7 +84,6 @@ function P(ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot,
                                                                  a=a, G=G, kwargs...)
     return hcubature(p, TopHemisphereLowerLeft, TopHemisphereUpperRight; kwargs...)[1] ./ V(ball_space)
 end
-
 
 function surface_integrand(ks:: AbstractVector{Float64}, 
                            ΦΘ:: SVector{2, Float64}, 

@@ -4,6 +4,7 @@ using Bessels
 import Bessels: besselj!
 using LinearAlgebra
 using FastTransforms
+using StaticArrays
 
 # Following chapter 2.10.5 in "methods of numerical integration"
 

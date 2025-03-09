@@ -93,6 +93,8 @@ include("TemperatureFluctuations.jl")
 
 include("ISWPowerSpectrum.jl")
 
+include("GravitationalWaves.jl")
+
 include("Visualization.jl")
 
 end
