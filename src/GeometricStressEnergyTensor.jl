@@ -13,7 +13,6 @@ using Rotations
 import Base: *, ∈, isempty, ~, ∩, convert, ⊆
 using QuadGK
 using IterTools
-using DoubleExponentialFormulas
 
 include("GeometricStressEnergyTensor/IntersectionDome.jl")
 include("GeometricStressEnergyTensor/PeriodicInterval.jl")
