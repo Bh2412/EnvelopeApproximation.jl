@@ -2,12 +2,13 @@ module GravitationalWaves
 
 using EnvelopeApproximation.BubbleBasics: Bubble, Vec3
 using EnvelopeApproximation.BubblesEvolution
-using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, PeriodicInterval, polar_limits, IntersectionDome
+using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, PeriodicInterval, polar_limits, IntersectionDome, intersection_domes
 import IterTools: partition
 import EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlan, chebyshev_coeffs!, scale, translation, fourier_mode
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
+using HCubature
 
 function ∫_ϕ_x̂_ix̂_j(μ:: Float64, p:: PeriodicInterval):: NTuple{6, Float64}
     ϕ1, ϕ2 = p.ϕ1, p.ϕ1 + p.Δ
@@ -116,18 +117,19 @@ function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractV
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
-    T1 = Tij(ωs, bubbles1, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
-    T2 = Tij(ωs, bubbles2, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
+    T1 = ∂iϕ∂jϕ(ωs, bubbles1, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
+    T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
     return @. Λ($eachrow(T1), $eachrow(T2)) 
 end
 
 function Π(t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
            ball_space:: BallSpace, chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
            _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64} where N
-    function f(_n̂:: SVector{2, Float64}):: Vector{ComplexF64}
-        return Directional_Π(n̂(_n̂), t1, t2, ωs, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
+    function f(_n̂:: SVector{2, Float64}):: Vector{Float64}
+        ϕ, θ = _n̂
+        return @. 2 * real($Directional_Π($n̂(ϕ, θ), t1, t2, ωs, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV) * $sin(θ))
     end
-    v, err = hcubature(f, SVector(0., 0.,), SVector(2π, π); kwargs...)
+    v, err = hcubature(f, SVector(0., 0.,), SVector(2π, π / 2); kwargs...)  # It is enough to integrate over half the ski
     return v ./ 4π, err / 4π
 end
 
