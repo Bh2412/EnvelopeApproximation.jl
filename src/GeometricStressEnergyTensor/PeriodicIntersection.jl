@@ -11,9 +11,34 @@ function all_limits!(intervals:: AbstractVector{PeriodicInterval},
     return @views sort!(limits_buffer[1: 2 * (i - 1)], by=z -> z[2])
 end
 
-#= This function assumes at least two intervals are input, 
-    and that no interval is of length >= 2π.
-=# 
+"""
+    periodic_intersection!(intervals:: AbstractVector{PeriodicInterval}, 
+                           limits_buffer:: Vector{Tuple{Float64, Float64}}, 
+                           intersection_buffer:: Vector{PeriodicInterval}):: AbstractVector{PeriodicInterval}
+
+Calculate the intersection of a collection of periodic intervals on the circle [0, 2π).
+
+This function assumes at least two intervals are input, and that no interval is of length >= 2π.
+It efficiently computes the intersection by tracking interval boundaries and maintaining a count
+of active intervals at each boundary crossing.
+
+# Arguments
+- `intervals`: A vector of `PeriodicInterval`s to intersect
+- `limits_buffer`: Pre-allocated buffer for storing interval limits
+- `intersection_buffer`: Pre-allocated buffer for storing the resulting intersection intervals
+
+# Returns
+- A slice of the `intersection_buffer` containing the intersection intervals
+
+# Note
+The function modifies the input buffers and returns a view into `intersection_buffer`.
+In addition, this function assumes that the buffers are large enough to store the results.
+The function does not check the buffer sizes and may cause undefined behavior if the buffers are too small.
+In practice, this is guranteed by choosing buffers with at least twice the length of the input intervals.
+
+# See Also
+- [`PeriodicInterval`](@ref): A data structure representing an interval on the periodic domain [0, 2π)
+"""
 function periodic_intersection!(intervals:: AbstractVector{PeriodicInterval}, 
                                 limits_buffer:: Vector{Tuple{Float64, Float64}}, 
                                 intersection_buffer:: Vector{PeriodicInterval}):: AbstractVector{PeriodicInterval}

@@ -19,6 +19,44 @@ include("GeometricStressEnergyTensor/PeriodicInterval.jl")
 include("GeometricStressEnergyTensor/RingDomeIntersection.jl")
 include("GeometricStressEnergyTensor/PeriodicIntersection.jl")
 
+"""
+    ring_domes_complement_intersection!(μ′::Float64, R::Float64, intersection_domes::Vector{IntersectionDome}, 
+                                        arcs_buffer::Vector{PeriodicInterval}, 
+                                        limits_buffer::Vector{Tuple{Float64, Float64}},
+                                        intersection_buffer::Vector{PeriodicInterval})::AbstractVector{PeriodicInterval}
+
+Calculate the intersection of the complements of multiple dome projections with a ring. 
+The ring is parallel to the z direction, and is a portion of a bubble of radius `R`.
+
+This function computes the angular regions of a ring with radius `R` that do not fall within 
+any of the provided `intersection_domes`. The result represents the angular intervals on the ring 
+that are outside all domes.
+
+# Arguments
+- `μ′::Float64`: The ring's parameter. I.E, the value `z/R - 1` for each of the points that make up a ring perpendicular to the z direction
+    And is contained in the bubble of radius `R`.
+- `R::Float64`: The radius of the bubble that contains the ring.
+- `intersection_domes::Vector{IntersectionDome}`: Collection of domes. These domes are the portion of the intersection of bubbles that 
+    lies within the input bubble of radius R
+- `arcs_buffer::Vector{PeriodicInterval}`: Pre-allocated buffer for storing intermediate periodic intervals.
+- `limits_buffer::Vector{Tuple{Float64, Float64}}`: Pre-allocated buffer for storing angle limits.
+- `intersection_buffer::Vector{PeriodicInterval}`: Pre-allocated buffer for storing intersection results.
+
+# Returns
+A view into `intersection_buffer` containing the resulting periodic intervals representing 
+the parts of the ring outside all domes.
+
+# Notes
+- If `intersection_domes` is empty, returns the full circle as there are no domes to exclude.
+- If there's only one dome, directly returns the complement of its intersection with the ring.
+- For multiple domes, computes the intersection of all complements efficiently using the provided buffers.
+- Returns an empty view if the result is empty (the ring is completely covered by domes).
+
+# See Also
+- [`IntersectionDome`](@ref): The representation of intersections between bubbles.
+- [`ring_dome_complement_intersection`](@ref): Function to find the complement of a single dome's intersection with a ring.
+- [`periodic_intersection!`](@ref): Function used to compute the intersection of multiple periodic intervals.
+"""
 function ring_domes_complement_intersection!(μ′:: Float64, R:: Float64, intersection_domes:: Vector{IntersectionDome}, 
                                              arcs_buffer:: Vector{PeriodicInterval}, 
                                              limits_buffer:: Vector{Tuple{Float64, Float64}},
@@ -61,6 +99,38 @@ end
 
 export Δ
 
+"""
+    polar_intersection_region(R::Float64, dome::IntersectionDome)::Tuple{Float64, Float64}
+
+Calculates the polar angle boundaries of a dome's intersection region with a bubble.
+
+Given a bubble of radius `R` and an intersection dome, this function computes
+the range of cosines of polar angles where the dome intersects the bubble.
+
+# Arguments
+- `R::Float64`: The radius of the bubble
+- `dome::IntersectionDome`: The intersection dome representing the intersection
+  between bubbles
+
+# Returns
+A tuple `(min, max)` of Float64 values representing the cosines of the polar angles
+that bound the intersection region.
+
+# Notes
+This function assumes that `dome.h < R` (the dome height is less than the radius),
+which should be ensured before calling this function.
+
+The calculation is performed by:
+1. Computing the z-component of the dome's normal vector (`n̂_z`)
+2. Computing the xy-component magnitude of the normal vector (`n̂_xy`)
+3. Finding the central value of the cosine range using the ratio of dome height to radius
+4. Calculating the span of the intersection region
+And is based on geometrical analysis.
+
+# See Also
+- [`IntersectionDome`](@ref): The representation of intersections between bubbles.
+- [`polar_limits`](@ref): Function to collect all intersection region boundaries from multiple domes.
+"""
 function polar_intersection_region(R:: Float64, 
                                    dome:: IntersectionDome):: Tuple{Float64, Float64}
     # This function assumes h < R
@@ -72,6 +142,35 @@ function polar_intersection_region(R:: Float64,
     return (c - Δ, c + Δ)
 end
 
+"""
+    polar_limits(R::Float64, domes::Vector{IntersectionDome})::Vector{Float64}
+
+Calculates the cosines of polar angle limits of intersection regions between a bubble and multiple domes.
+
+Given a bubble with radius `R` and a collection of intersection domes, this function
+computes all distinct angular limits that define regions of intersection in polar coordinates.
+The returned values represent the cosines of the polar angles that bound these regions.
+A usual application of this function is to gather regions of polar angle in which any smooth integrand
+over the bubble remains smooth.
+
+# Arguments
+- `R::Float64`: The radius of the bubble
+- `domes::Vector{IntersectionDome}`: A collection of intersection domes representing the intersections
+  between the bubble and other geometric structures
+
+# Returns
+A sorted vector of Float64 values in the range [-1, 1], representing the cosines of 
+polar angles that define the boundaries of intersection regions. The vector always 
+starts with -1 and ends with 1 to ensure the entire angular range is covered.
+
+# See Also
+- [`IntersectionDome`](@ref): The representation of intersections between bubbles.
+- [`polar_intersection_region`](@ref): Function that calculates intersection regions for a single dome.
+
+# Notes
+This function filters out values outside the valid range for cosines [-1, 1] and
+ensures uniqueness of the boundary points.
+"""
 function polar_limits(R:: Float64, domes:: Vector{IntersectionDome}):: Vector{Float64}    
     regions = (x for dome in domes for t in polar_intersection_region(R, dome) for x in t if abs(x) <= 1.)
     regions = regions |> collect |> unique! |> sort!
