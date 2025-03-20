@@ -101,8 +101,6 @@ function mc_surface_area(bubbles:: Bubbles, ball_space:: BallSpace, N:: Int):: M
     return (_mean ± _std) * uncollieded_surface_area
 end
 
-∈(p:: Point3, space:: BallSpace) = norm(p - space.center) <= space.radius
-
 end
 
 @testset "Surface Area Integration" begin

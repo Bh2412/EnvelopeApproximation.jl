@@ -8,48 +8,64 @@ using StaticArrays
 
 # Following chapter 2.10.5 in "methods of numerical integration"
 
-export ChebyshevPlan
-
-struct ChebyshevPlan{N}
-    points:: Vector{Float64}
-    coeffs0_buffer:: Vector{Float64}
-    bessels_buffer:: Vector{Float64}
-    transform_plan:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
-
-    function ChebyshevPlan{N}() where N
-        points = chebyshevpoints(Float64, N, Val(1))
-        coeffs0_buffer = Vector{Float64}(undef, N)
-        bessels_buffer = Vector{Float64}(undef, N)
-        transform_plan = plan_chebyshevtransform!(zeros(N), Val(1))
-        return new{N}(points, coeffs0_buffer, bessels_buffer, transform_plan)
-    end
-end
-
 translation(a:: Float64, b:: Float64):: Float64 = (a + b) / 2
 scale(a:: Float64, b:: Float64):: Float64 = (b - a) / 2
 u(x:: Float64, scale:: Float64, translation:: Float64):: Float64 = (x - translation) / scale
 inverse_u(u:: Float64, scale:: Float64, translation:: Float64):: Float64 = translation + scale * u
 inverse_chebyshev_weight(u:: Float64):: Float64 = sqrt(1 - u ^ 2)
 
+function multiplication_weights(N:: Int):: Vector{ComplexF64}
+    V = Vector{ComplexF64}(undef, N)
+    @inbounds for ĩ in 1:N
+        i = ĩ - 1
+        l = i ÷ 2
+        if iseven(i)
+            V[ĩ] = ((-1) ^ l) * π 
+        else
+            V[ĩ] = -im * ((-1) ^ l) * π 
+        end
+    end
+    return V
+end
+
+export ChebyshevPlan
+
+struct ChebyshevPlan{N}
+    points:: Vector{Float64}
+    coeffs_buffer:: Vector{Float64}
+    bessels_buffer:: Vector{Float64}
+    multiplication_weights:: Vector{ComplexF64}
+    multiplication_buffer:: Vector{ComplexF64}
+    transform_plan!:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
+
+    function ChebyshevPlan{N}() where N
+        points = chebyshevpoints(Float64, N, Val(1))
+        coeffs_buffer = Vector{Float64}(undef, N)
+        bessels_buffer = Vector{Float64}(undef, N)
+        weights = multiplication_weights(N)
+        multiplication_buffer = Vector{ComplexF64}(undef, N)
+        transform_plan! = plan_chebyshevtransform!(zeros(N), Val(1))
+        return new{N}(points, coeffs_buffer,  
+                      bessels_buffer, weights, multiplication_buffer, transform_plan!)
+    end
+end
+
 function values!(f, a:: Float64, b:: Float64, 
-                 chebyshev_plan:: ChebyshevPlan{N}):: AbstractVector{Float64} where N
+                 chebyshev_plan:: ChebyshevPlan{N}) where N
     scale_factor = scale(a, b)
     t = translation(a, b)
     for (i, u) in enumerate(chebyshev_plan.points)
-        chebyshev_plan.coeffs0_buffer[i] = f(inverse_u(u, scale_factor, t)) * inverse_chebyshev_weight(u) 
+        chebyshev_plan.coeffs_buffer[i] = f(inverse_u(u, scale_factor, t)) * inverse_chebyshev_weight(u) 
     end     
-    return chebyshev_plan.coeffs0_buffer
+    return chebyshev_plan.coeffs_buffer
 end
 
 export chebyshev_coeffs!
 
-function chebyshev_coeffs!(f, a:: Float64, b:: Float64, chebyshev_plan:: ChebyshevPlan{N}):: Vector{Float64} where N
-    return chebyshev_plan.transform_plan * values!(f, a, b, chebyshev_plan)
+function chebyshev_coeffs!(f, a:: Float64, b:: Float64, 
+                           chebyshev_plan:: ChebyshevPlan{N}) where N
+    chebyshev_plan.transform_plan! * values!(f, a, b, chebyshev_plan)
 end
-
-# Following equation 2.10.5.1 and 2.10.5.2 in "methods of numerical integration"
-
-export fourier_mode
 
 function fourier_mode(k:: Float64, 
                       chebyshev_plan:: ChebyshevPlan{N}, 
@@ -57,50 +73,9 @@ function fourier_mode(k:: Float64,
                       translation:: Float64 = 0.):: ComplexF64 where N
     k̃ = scale * k
     besselj!(chebyshev_plan.bessels_buffer, 0:(N-1), k̃)
-    c, s = 0., 0.
-    @inbounds for ((ĩ, coeff), bessel_value) in zip(enumerate(chebyshev_plan.coeffs0_buffer), chebyshev_plan.bessels_buffer)
-        i = ĩ - 1
-        l = i ÷ 2
-        if iseven(i)
-            c += ((-1) ^ l) * π * coeff * bessel_value
-        else
-            s += ((-1) ^ l) * π * coeff * bessel_value
-        end
-    end
-    return (c - im * s) * cis(-k * translation) * scale
-end
-
-function fourier_modes!(ks:: AbstractVector{Float64}, 
-                        f, a:: Float64, b:: Float64, 
-                        chebyshev_plan:: ChebyshevPlan{N}, 
-                        buffer:: Vector{ComplexF64}) where N
-    chebyshev_coeffs!(f, a, b, chebyshev_plan)
-    t = translation(a, b)
-    a = scale(a, b)
-    @inbounds for (j, k) in enumerate(ks)
-        buffer[j] = fourier_mode(k, chebyshev_plan, a, t)
-    end
-    return buffer
-end
-
-function add_fourier_modes!(ks:: AbstractVector{Float64}, 
-                            f, a:: Float64, b:: Float64, 
-                            chebyshev_plan:: ChebyshevPlan{N}, 
-                            buffer:: Vector{ComplexF64}) where N
-    chebyshev_coeffs!(f, a, b, chebyshev_plan)
-    t = translation(a, b)
-    a = scale(a, b)
-    @inbounds for (j, k) in enumerate(ks)
-        buffer[j] += fourier_mode(k, chebyshev_plan, a, t)
-    end
-end
-
-function fourier_modes(ks:: AbstractVector{Float64}, 
-                       f, a:: Float64, b:: Float64, chebyshev_plan:: ChebyshevPlan{N}) where N
-    chebyshev_coeffs!(f, a, b, chebyshev_plan)
-    t = translation(a, b)
-    a = scale(a, b)
-    return fourier_mode.(ks, (chebyshev_plan, ), (a, ), (t, ))
+    e = cis(-k * translation) * scale
+    @. chebyshev_plan.multiplication_buffer = e * chebyshev_plan.bessels_buffer * chebyshev_plan.multiplication_weights
+    return chebyshev_plan.coeffs_buffer ⋅ chebyshev_plan.multiplication_buffer
 end
 
 function mul_x(N:: Int):: Matrix{Float64}
@@ -133,20 +108,6 @@ function mul_x_squared(N:: Int):: Matrix{Float64}
     M[N + 1, N - 1] = 1. / 4
     M[N + 2, N] = 1. / 4
     return M
-end
-
-function multiplication_weights(N:: Int):: Vector{ComplexF64}
-    V = Vector{ComplexF64}(undef, N)
-    @inbounds for ĩ in 1:N
-        i = ĩ - 1
-        l = i ÷ 2
-        if iseven(i)
-            V[ĩ] = ((-1) ^ l) * π 
-        else
-            V[ĩ] = -im * ((-1) ^ l) * π 
-        end
-    end
-    return V
 end
 
 export First3MomentsChebyshevPlan
