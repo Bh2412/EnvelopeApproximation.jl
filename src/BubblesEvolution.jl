@@ -10,6 +10,7 @@ import Base.∈
 using Distributions
 import Base.isless
 import Random
+using LinearAlgebra
 
 Nucleation = @NamedTuple{time:: Float64, site:: Point3}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
@@ -87,6 +88,8 @@ struct BallSpace <: AbstractSpace
     radius:: Float64
     center:: Point3
 end
+
+∈(p:: Point3, ball_space:: BallSpace) = norm(p - ball_space.center) <= ball_space.radius
 
 const RADIAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 1.)
 const AZYMUTHAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 2π)

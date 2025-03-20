@@ -37,12 +37,12 @@ function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble,
 end
 
 function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
-                                  ks:: AbstractVector{Float64}, 
-                                  bubble:: Bubble, 
-                                  domes:: Vector{IntersectionDome}, 
-                                  chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
-                                  _x̂_ix̂_j:: x̂_ix̂_j; 
-                                  ΔV:: Float64 = 1.) where N
+                                     ks:: AbstractVector{Float64}, 
+                                     bubble:: Bubble, 
+                                     domes:: Vector{IntersectionDome}, 
+                                     chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
+                                     _x̂_ix̂_j:: x̂_ix̂_j; 
+                                     ΔV:: Float64 = 1.) where N
     @assert size(V) == (length(ks), 6) "The output vector must be of the same length of the input k vector"
     _polar_limits = polar_limits(bubble.radius, domes)
     @inbounds for (μ1, μ2) in partition(_polar_limits, 2, 1)
@@ -119,7 +119,7 @@ function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractV
     bubbles2 = current_bubbles(_snap, t2)
     T1 = ∂iϕ∂jϕ(ωs, bubbles1, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
     T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
-    return @. Λ($eachrow(T1), $eachrow(T2)) 
+    return @. Λ($eachrow(T1), $eachrow(T2)) / ball_space.volume
 end
 
 function Π(t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
