@@ -1,6 +1,6 @@
 using Test
 using EnvelopeApproximation.ChebyshevCFT
-import EnvelopeApproximation.ChebyshevCFT: chebyshev_coeffs!, fourier_mode, scale, translation
+import EnvelopeApproximation.ChebyshevCFT: chebyshev_coeffs!, fourier_mode, scale, translation, fourier_modes
 using QuadGK
 
 @testset "ChebyshevCFT Tests" begin
@@ -104,4 +104,75 @@ using QuadGK
         end
     end
 
+    @testset "TailoredChebyshevPlan Tests" begin
+        @testset "Constant function" begin
+            f(x) = 1.0
+            a, b = -1.0, 1.0
+            
+            # Analytical Fourier transform of constant function: ∫e^(-ikx)dx = 2*sin(k)/(k)
+            expected_ft(k) = k ≈ 0.0 ? 2.0 + 0.0im : 2*sin(k)/k
+            
+            ks = [0.0, 0.5, 1.0, 2.0, 5.0]
+            plan = TailoredChebyshevPlan{8192}(ks, a, b)
+            
+            # Compute with TailoredChebyshevPlan
+            chebyshev_coeffs!(f, plan)
+            results = fourier_modes(plan)
+            
+            # Test each value
+            for (i, k) in enumerate(ks)
+                exact = expected_ft(k)
+                @test isapprox(results[i], exact, rtol=1e-8)
+            end
+        end
+    end
+
+    @testset "Gaussian function" begin
+        σ = 0.5
+        μ = 0.0
+        f(x) = exp(-(x-μ)^2/(2*σ^2))
+        a, b = -3.0, 3.0
+        
+        # Analytical Fourier transform of Gaussian: σ*sqrt(2π)*exp(-k^2*σ^2/2)*exp(-ikμ)
+        expected_ft(k) = σ*sqrt(2*π)*exp(-k^2*σ^2/2)*exp(-im*k*μ)
+        
+        ks = [0.0, 0.5, 1.0, 2.0, 5.0]
+        plan = TailoredChebyshevPlan{64}(ks, a, b)
+        
+        # Compute with TailoredChebyshevPlan
+        chebyshev_coeffs!(f, plan)
+        results = fourier_modes(plan)
+        
+        for (i, k) in enumerate(ks)
+            # The exact transform would be over the infinite domain
+            # But our function is effectively zero outside our interval
+            numerical, _ = quadgk(x -> f(x) * exp(-im*k*x), a, b, rtol=1e-12)
+            @test isapprox(results[i], numerical, rtol=1e-8)
+            
+            # For small k, we can compare with the analytical result
+            if abs(k) < 3.0
+                @test isapprox(results[i], expected_ft(k), rtol=1e-3)
+            end
+        end
+    end
+
+    @testset "Multiple k values simultaneously" begin
+        # Test that we can compute multiple k values at once efficiently
+        f(x) = sin(x) + cos(2x)
+        a, b = 0.0, Float64(π)
+        
+        # Test with a large number of k values
+        ks = collect(0.0:0.25:10.0)
+        plan = TailoredChebyshevPlan{4096}(ks, a, b)
+        
+        chebyshev_coeffs!(f, plan)
+        results = fourier_modes(plan)
+        
+        # Check a random subset for accuracy
+        for idx in [1, 5, 10, 20, 40]
+            k = ks[idx]
+            numerical, _ = quadgk(x -> f(x) * exp(-im*k*x), a, b, rtol=1e-12)
+            @test isapprox(results[idx], numerical, rtol=1e-6)
+        end
+    end
 end

@@ -259,6 +259,8 @@ function fourier_modes(ks:: AbstractVector{Float64}, f, a:: Real, b:: Real,
     return M
 end
 
+export TailoredChebyshevPlan
+
 struct TailoredChebyshevPlan{N}
     points:: Vector{Float64}
     coeffs_buffer:: Vector{Float64}
@@ -269,7 +271,6 @@ struct TailoredChebyshevPlan{N}
     ks:: Vector{Float64}
     a:: Float64
     b:: Float64
-    translation_factors:: Vector{ComplexF64}
 
     function TailoredChebyshevPlan{N}(ks:: Vector{Float64}, 
                                       a:: Float64 = -1., 
@@ -279,18 +280,18 @@ struct TailoredChebyshevPlan{N}
         scale_factor = scale(a, b)
         t = translation(a, b)
         translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
-        weights = reshape(multiplication_weights(N), 1, :)
-        multiplication_weights = @. weights * translation_factors
+        _weights = reshape(multiplication_weights(N), :, 1)
+        weights = @. _weights * translation_factors
         # Constructing the precomputed bessels, weighted by all other factors
         for (i, k) in enumerate(ks)
-            multiplication_weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
+            weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
         end
         multiplication_buffer = Matrix{ComplexF64}(undef, N, length(ks))
         modes_buffer = Matrix{ComplexF64}(undef, 1, length(ks))
         transform_plan! = plan_chebyshevtransform!(zeros(N), Val(1))
         return new{N}(points, coeffs_buffer,  
-                      multiplication_weights, multiplication_buffer, modes_buffer, transform_plan!, 
-                      ks, a, b, translation_factors)
+                      weights, multiplication_buffer, modes_buffer, transform_plan!, 
+                      ks, a, b)
     end
 end
 
