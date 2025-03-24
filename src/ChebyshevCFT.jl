@@ -259,5 +259,61 @@ function fourier_modes(ks:: AbstractVector{Float64}, f, a:: Real, b:: Real,
     return M
 end
 
+struct TailoredChebyshevPlan{N}
+    points:: Vector{Float64}
+    coeffs_buffer:: Vector{Float64}
+    multiplication_weights:: Matrix{ComplexF64}
+    multiplication_buffer:: Matrix{ComplexF64}
+    modes_buffer:: Matrix{ComplexF64}
+    transform_plan!:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
+    ks:: Vector{Float64}
+    a:: Float64
+    b:: Float64
+    translation_factors:: Vector{ComplexF64}
+
+    function TailoredChebyshevPlan{N}(ks:: Vector{Float64}, 
+                                      a:: Float64 = -1., 
+                                      b:: Float64 = 1.) where N
+        points = chebyshevpoints(Float64, N, Val(1))
+        coeffs_buffer = Vector{Float64}(undef, N)
+        scale_factor = scale(a, b)
+        t = translation(a, b)
+        translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
+        weights = reshape(multiplication_weights(N), 1, :)
+        multiplication_weights = @. weights * translation_factors
+        # Constructing the precomputed bessels, weighted by all other factors
+        for (i, k) in enumerate(ks)
+            multiplication_weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
+        end
+        multiplication_buffer = Matrix{ComplexF64}(undef, N, length(ks))
+        modes_buffer = Matrix{ComplexF64}(undef, 1, length(ks))
+        transform_plan! = plan_chebyshevtransform!(zeros(N), Val(1))
+        return new{N}(points, coeffs_buffer,  
+                      multiplication_weights, multiplication_buffer, modes_buffer, transform_plan!, 
+                      ks, a, b, translation_factors)
+    end
+end
+
+scale(chebyshev_plan:: TailoredChebyshevPlan{N}) where N = scale(chebyshev_plan.a, chebyshev_plan.b)
+translation(chebyshev_plan:: TailoredChebyshevPlan{N}) where N = translation(chebyshev_plan.a, chebyshev_plan.b)
+
+function values!(f, chebyshev_plan:: TailoredChebyshevPlan{N}) where N
+    scale_factor = scale(chebyshev_plan)
+    t = translation(chebyshev_plan)
+    for (i, u) in enumerate(chebyshev_plan.points)
+        chebyshev_plan.coeffs_buffer[i] = f(inverse_u(u, scale_factor, t)) * inverse_chebyshev_weight(u) 
+    end     
+    return chebyshev_plan.coeffs_buffer
+end
+
+function chebyshev_coeffs!(f, chebyshev_plan:: TailoredChebyshevPlan{N}) where N
+    chebyshev_plan.transform_plan! * values!(f, chebyshev_plan)
+end
+
+function fourier_modes(chebyshev_plan:: TailoredChebyshevPlan):: Vector{ComplexF64}
+    @. chebyshev_plan.multiplication_buffer = chebyshev_plan.multiplication_weights * chebyshev_plan.coeffs_buffer 
+    sum!(chebyshev_plan.modes_buffer, chebyshev_plan.multiplication_buffer)
+    return chebyshev_plan.modes_buffer[:]
+end
 
 end
