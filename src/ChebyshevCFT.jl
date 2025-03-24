@@ -264,9 +264,7 @@ export TailoredChebyshevPlan
 struct TailoredChebyshevPlan{N}
     points:: Vector{Float64}
     coeffs_buffer:: Vector{Float64}
-    multiplication_weights:: Matrix{ComplexF64}
-    multiplication_buffer:: Matrix{ComplexF64}
-    modes_buffer:: Matrix{ComplexF64}
+    weights:: Matrix{ComplexF64}
     transform_plan!:: FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 1, Tuple{Int64}}
     ks:: Vector{Float64}
     a:: Float64
@@ -279,18 +277,16 @@ struct TailoredChebyshevPlan{N}
         coeffs_buffer = Vector{Float64}(undef, N)
         scale_factor = scale(a, b)
         t = translation(a, b)
-        translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
-        _weights = reshape(multiplication_weights(N), :, 1)
+        translation_factors = reshape((@. cis(-ks * t) * scale_factor), :, 1)
+        _weights = reshape(multiplication_weights(N), 1, :)
         weights = @. _weights * translation_factors
         # Constructing the precomputed bessels, weighted by all other factors
         for (i, k) in enumerate(ks)
-            weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
+            weights[i, :] .*= besselj(0:(N-1), scale_factor * k)
         end
-        multiplication_buffer = Matrix{ComplexF64}(undef, N, length(ks))
-        modes_buffer = Matrix{ComplexF64}(undef, 1, length(ks))
         transform_plan! = plan_chebyshevtransform!(zeros(N), Val(1))
         return new{N}(points, coeffs_buffer,  
-                      weights, multiplication_buffer, modes_buffer, transform_plan!, 
+                      weights, transform_plan!, 
                       ks, a, b)
     end
 end
@@ -312,9 +308,7 @@ function chebyshev_coeffs!(f, chebyshev_plan:: TailoredChebyshevPlan{N}) where N
 end
 
 function fourier_modes(chebyshev_plan:: TailoredChebyshevPlan{N}):: Vector{ComplexF64} where N
-    @. chebyshev_plan.multiplication_buffer = chebyshev_plan.multiplication_weights * chebyshev_plan.coeffs_buffer 
-    sum!(chebyshev_plan.modes_buffer, chebyshev_plan.multiplication_buffer)
-    return chebyshev_plan.modes_buffer[:]
+    return chebyshev_plan.weights * chebyshev_plan.coeffs_buffer
 end
 
 export TailoredVectorChebyshevPlan
