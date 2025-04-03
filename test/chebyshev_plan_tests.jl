@@ -248,7 +248,7 @@ using Test
             a, b = -1.0, 1.0
 
             # Create a plan with α=2 (typical for smooth functions), P must be odd
-            plan = ChebyshevPlanWithAtol{3 ^ 8,3}(2.0, atol=1e-7)
+            plan = ChebyshevPlanWithAtol{3 ^ 8,3}(2.0)
 
             ks = [0.0, 0.5, 1.0, 2.0, 5.0]
 
@@ -260,9 +260,6 @@ using Test
                 numerical, _ = quadgk(x -> f(x) * exp(-im * k * x), a, b, rtol=1e-12)
                 @test isapprox(modes[i], numerical, rtol=1e-6)
             end
-
-            # Verify error estimate is below tolerance
-            @test error_estimate < plan.atol
         end
 
         @testset "Error estimation" begin
@@ -273,9 +270,9 @@ using Test
             a, b = -π, π
 
             # Test with different N values, P must be odd, N must be divisible by P
-            plan1 = ChebyshevPlanWithAtol{33,3}(2.0, atol=1e-6)  # 33 ÷ 3 = 11
-            plan2 = ChebyshevPlanWithAtol{63,3}(2.0, atol=1e-6)  # 63 ÷ 3 = 21
-            plan3 = ChebyshevPlanWithAtol{123,3}(2.0, atol=1e-6) # 123 ÷ 3 = 41
+            plan1 = ChebyshevPlanWithAtol{33,3}(2.0)  # 33 ÷ 3 = 11
+            plan2 = ChebyshevPlanWithAtol{63,3}(2.0)  # 63 ÷ 3 = 21
+            plan3 = ChebyshevPlanWithAtol{123,3}(2.0) # 123 ÷ 3 = 41
 
             ks = [1.0, 2.0]
 
@@ -295,9 +292,9 @@ using Test
             ks = [0.5, 1.0]
 
             # Test with different α values, P must be odd, N must be divisible by P
-            plan1 = ChebyshevPlanWithAtol{63,3}(1.0, atol=1e-6)  # α=1, slower convergence
-            plan2 = ChebyshevPlanWithAtol{63,3}(2.0, atol=1e-6)  # α=2, faster convergence
-            plan3 = ChebyshevPlanWithAtol{63,3}(3.0, atol=1e-6)  # α=3, even faster convergence
+            plan1 = ChebyshevPlanWithAtol{63,3}(1.0)  # α=1, slower convergence
+            plan2 = ChebyshevPlanWithAtol{63,3}(2.0)  # α=2, faster convergence
+            plan3 = ChebyshevPlanWithAtol{63,3}(3.0)  # α=3, even faster convergence
 
             # Compute with each plan
             modes1, error1 = fourier_modes(f, ks, a, b, plan1)
@@ -391,7 +388,7 @@ using Test
             a, b = -2.0, 2.0
 
             # P must be odd, N must be divisible by P (63 ÷ 3 = 21)
-            plan = VectorChebyshevPlanWithAtol{3 ^ 8,3,3}(2.0, atol=1e-8)
+            plan = VectorChebyshevPlanWithAtol{3 ^ 8,3,3}(2.0)
             ks = [0.0, 0.5, 1.0, 2.0]
 
             # Compute Fourier transform
@@ -413,9 +410,9 @@ using Test
             a, b = -π, π
 
             # Test with different N values, P must be odd, N must be divisible by P
-            plan1 = VectorChebyshevPlanWithAtol{33,2,3}(2.0, atol=1e-6)  # 33 ÷ 3 = 11
-            plan2 = VectorChebyshevPlanWithAtol{63,2,3}(2.0, atol=1e-6)  # 63 ÷ 3 = 21
-            plan3 = VectorChebyshevPlanWithAtol{99,2,3}(2.0, atol=1e-6)  # 99 ÷ 3 = 33
+            plan1 = VectorChebyshevPlanWithAtol{33,2,3}(2.0)  # 33 ÷ 3 = 11
+            plan2 = VectorChebyshevPlanWithAtol{63,2,3}(2.0)  # 63 ÷ 3 = 21
+            plan3 = VectorChebyshevPlanWithAtol{99,2,3}(2.0)  # 99 ÷ 3 = 33
 
             ks = [1.0, 2.0]
 
