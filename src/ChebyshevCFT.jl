@@ -202,7 +202,7 @@ struct VectorChebyshevPlan{N,K}
         bessels_buffer = Vector{Float64}(undef, N)
         weights = multiplication_weights(N)
         multiplication_buffer = Vector{ComplexF64}(undef, N)
-        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1)
+        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1) # The last entry is the dimension on which the transformation acts
         mode_buffer = Vector{ComplexF64}(undef, K)
         return new{N,K}(points, coeffs_buffer,
             bessels_buffer, weights, multiplication_buffer, transform_plan!, mode_buffer)
@@ -505,7 +505,7 @@ struct VectorChebyshevPlanWithAtol{N,K,P}
         bessels_buffer = Vector{Float64}(undef, N)
         weights = multiplication_weights(N)
         multiplication_buffer = Vector{ComplexF64}(undef, N)
-        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1)
+        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1)  # The last entry is the dimension on which the transformation acts
         lower_order_transform_plan! = plan_chebyshevtransform!(zeros(N ÷ P, K), Val(1), 1)
         mode_buffer = Vector{ComplexF64}(undef, K)
         lower_mode_buffer = Vector{ComplexF64}(undef, K)

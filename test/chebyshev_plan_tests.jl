@@ -355,6 +355,55 @@ using Test
             end
         end
 
+        @testset "Lower orderedness" begin
+            # Use a Gaussian function
+            σ = 0.5
+            μ = 0.0
+            f(x) = exp(-(x - μ)^2 / (2 * σ^2))
+            a, b = -3.0, 3.0
+            
+            # Analytical Fourier transform of Gaussian: σ*sqrt(2π)*exp(-k^2*σ^2/2)*exp(-ikμ)
+            k = 1.0
+            expected_ft = quadgk(x -> f(x) * cis(-k * x), a, b, rtol=1e-13)[1]
+            
+            # Test with increasing degrees, all with P=3
+            degrees = 5 .* (3 .^ (1:4))  # Must be divisible by 3
+            modes = ComplexF64[]
+            lower_modes = ComplexF64[]
+            errors_full = Float64[]
+            errors_lower = Float64[]
+            
+            for N in degrees
+                plan = ChebyshevPlanWithAtol{N,3}(2.0)
+                chebyshev_coeffs!(f, a, b, plan)
+                s = scale(a, b)
+                t = translation(a, b)
+                
+                # Get both the full and lower order approximations
+                full_mode, lower_mode = fourier_mode(k, plan, s, t)
+                push!(modes, full_mode)
+                push!(lower_modes, lower_mode)
+                # Record absolute errors
+                push!(errors_full, abs(full_mode - expected_ft))
+                push!(errors_lower, abs(lower_mode - expected_ft))
+            end
+
+            for i in 1:(length(degrees) - 1)
+                @test isapprox(modes[i], lower_modes[i+1])
+            end
+            
+            # Check that errors decrease with increasing degree
+            for i in 1:(length(degrees)-1)
+                @test errors_full[i] > errors_full[i+1]
+                @test errors_lower[i] > errors_lower[i+1]
+            end
+            
+            # Check that the full approximation is always better than lower
+            for i in 1:length(degrees)
+                @test errors_full[i] < errors_lower[i]
+            end
+        end
+
         @testset "Comparison with standard ChebyshevPlan" begin
             # Test that results match with standard ChebyshevPlan for same N
             f(x) = exp(-x^2)
@@ -447,6 +496,69 @@ using Test
 
             for j in 1:2
                 @test isapprox(modes3[1, j], modes5[1, j], rtol=1e-7)
+            end
+        end
+
+        @testset "Vector lower orderedness" begin
+            # Use a vector of Gaussian functions with different parameters
+            σ_values = [0.5, 0.8, 1.0]
+            μ_values = [0.0, 0.5, -0.5]
+            
+            f(x) = [exp(-(x - μ)^2 / (2 * σ^2)) for (σ, μ) in zip(σ_values, μ_values)]
+            a, b = -5.0, 5.0  # Large enough domain for all gaussians
+            
+            # Calculate expected Fourier transform using numerical integration
+            k = 1.0
+            expected_ft = Vector{ComplexF64}(undef, 3)
+            for j in 1:3
+                σ, μ = σ_values[j], μ_values[j]
+                gaussian_f(x) = exp(-(x - μ)^2 / (2 * σ^2))
+                expected_ft[j] = quadgk(x -> gaussian_f(x) * cis(-k * x), a, b, rtol=1e-13)[1]
+            end
+            
+            # Test with increasing degrees, all with P=3
+            degrees = 5 .* (3 .^ (1:3))  # Must be divisible by 3
+            modes = Vector{Vector{ComplexF64}}()
+            lower_modes = Vector{Vector{ComplexF64}}()
+            errors_full = Vector{Vector{Float64}}()
+            errors_lower = Vector{Vector{Float64}}()
+            
+            for N in degrees
+                plan = VectorChebyshevPlanWithAtol{N,3,3}(2.0)
+                chebyshev_coeffs!(f, a, b, plan)
+                s = scale(a, b)
+                t = translation(a, b)
+                
+                # Get both the full and lower order approximations
+                full_mode, lower_mode = fourier_mode(k, plan, s, t)
+                push!(modes, copy(full_mode))
+                push!(lower_modes, copy(lower_mode))
+                
+                # Record absolute errors for each component
+                push!(errors_full, [abs(full_mode[j] - expected_ft[j]) for j in 1:3])
+                push!(errors_lower, [abs(lower_mode[j] - expected_ft[j]) for j in 1:3])
+            end
+            
+            # Lower order of higher degree should match full order of lower degree
+            for i in 1:(length(degrees) - 1)
+                for j in 1:3
+                    @test isapprox(modes[i][j], lower_modes[i+1][j])
+                end
+            end
+            
+            # Check that errors decrease with increasing degree for all components
+            for i in 1:(length(degrees)-1)
+                for j in 1:3
+                    @test errors_full[i][j] > errors_full[i+1][j]
+                    @test errors_lower[i][j] > errors_lower[i+1][j]
+                end
+            end
+            
+            # Check that the full approximation is always better than lower for all components
+            for i in 1:length(degrees)
+                for j in 1:3
+                    @test errors_full[i][j] < errors_lower[i][j]
+                end
             end
         end
 
