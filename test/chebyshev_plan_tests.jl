@@ -404,6 +404,58 @@ using Test
             end
         end
 
+        @testset "Compatibility between ChebyshevPlan and ChebyshevPlanWithAtol" begin
+            # Test function - using a function with a known smooth profile
+            f(x) = exp(-x^2) * cos(3x)
+            a, b = -2.0, 2.0
+        
+            # Test with different N values (must be divisible by P=3)
+            N_values = [48, 96, 192]
+            P = 3
+        
+            for N in N_values
+                # Create standard plan
+                std_plan = ChebyshevPlan{N}()
+                lower_std_plan = ChebyshevPlan{N ÷ 3}()
+                
+                # Create withAtol plan with the same parameters
+                atol_plan = ChebyshevPlanWithAtol{N,P}(1.)
+                
+                # Calculate Chebyshev coefficients for both plans
+                chebyshev_coeffs!(f, a, b, std_plan)
+                chebyshev_coeffs!(f, a, b, lower_std_plan)
+                chebyshev_coeffs!(f, a, b, atol_plan)
+                
+                # Define scaling and translation parameters
+                s = scale(a, b)
+                t = translation(a, b)
+                
+                # Test different wavenumbers
+                ks = [0.1, 1.0, 5.0, 10.0]
+                
+                for k in ks
+                    # Get Fourier transform using standard plan
+                    std_result = fourier_mode(k, std_plan, s, t)
+                    lower_std_result = fourier_mode(k, lower_std_plan, s, t)
+
+                    # Get Fourier transform using atol plan (first element of the tuple)
+                    atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
+                    
+                    # Verify results match
+                    @test isapprox(std_result, atol_result)
+                    @test isapprox(lower_std_result, lower_atol_result)
+                end
+                
+                # Also test the collection method
+                std_results = fourier_modes(f, ks, a, b, std_plan)
+                atol_results, _= fourier_modes(f, ks, a, b, atol_plan)
+                
+                for i in 1:length(ks)
+                    @test isapprox(std_results[i], atol_results[i])
+                end
+            end
+        end
+
         @testset "Comparison with standard ChebyshevPlan" begin
             # Test that results match with standard ChebyshevPlan for same N
             f(x) = exp(-x^2)
@@ -558,6 +610,63 @@ using Test
             for i in 1:length(degrees)
                 for j in 1:3
                     @test errors_full[i][j] < errors_lower[i][j]
+                end
+            end
+        end
+
+        @testset "Compatibility between VectorChebyshevPlan and VectorChebyshevPlanWithAtol" begin
+            # Test function - vector-valued function
+            f(x) = [exp(-x^2), sin(x), cos(x)]
+            a, b = -2.0, 2.0
+        
+            # Test parameters
+            N_values = [48, 96, 192]
+            K = 3  # Vector dimension
+            P = 3
+        
+            for N in N_values
+                # Create standard vector plan
+                std_plan = VectorChebyshevPlan{N,K}()
+                lower_std_plan = VectorChebyshevPlan{N ÷ 3,K}()
+                
+                # Create withAtol vector plan with the same parameters
+                atol_plan = VectorChebyshevPlanWithAtol{N,K,P}(1.0)
+                
+                # Calculate Chebyshev coefficients for both plans
+                chebyshev_coeffs!(f, a, b, std_plan)
+                chebyshev_coeffs!(f, a, b, lower_std_plan)
+                chebyshev_coeffs!(f, a, b, atol_plan)
+                
+                # Define scaling and translation parameters
+                s = scale(a, b)
+                t = translation(a, b)
+                
+                # Test different wavenumbers
+                ks = [0.1, 1.0, 5.0, 10.0]
+                
+                for k in ks
+                    # Get Fourier transform using standard plan
+                    std_result = fourier_mode(k, std_plan, s, t)
+                    lower_std_result = fourier_mode(k, lower_std_plan, s, t)
+                    
+                    # Get Fourier transform using atol plan (first element of the tuple)
+                    atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
+                    
+                    # Verify results match for each component
+                    for j in 1:K
+                        @test isapprox(std_result[j], atol_result[j])
+                        @test isapprox(lower_std_result[j], lower_atol_result[j])
+                    end
+                end
+                
+                # Also test the collection method
+                std_results = fourier_modes(f, ks, a, b, std_plan)
+                atol_results, _ = fourier_modes(f, ks, a, b, atol_plan)
+                
+                for i in 1:length(ks)
+                    for j in 1:K
+                        @test isapprox(std_results[i, j], atol_results[i, j])
+                    end
                 end
             end
         end
