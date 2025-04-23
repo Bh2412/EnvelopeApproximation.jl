@@ -167,3 +167,4 @@ scripts/runs/truncation_effect/KosowskySurfacePowerSpectrum.jld2
 scripts/runs/truncation_effect/PowerSpectrum.png
 scripts/runs/truncation_effect/SurfacePowerSpectrum.jld2
 scripts/runs/truncation_effect/TruncatedSurfacePowerSpectrum.jld2
+_Project.toml
