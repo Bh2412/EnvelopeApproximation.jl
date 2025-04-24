@@ -198,11 +198,11 @@ struct VectorChebyshevPlan{N,K}
 
     function VectorChebyshevPlan{N,K}() where {N,K}
         points = chebyshevpoints(Float64, N, Val(1))
-        coeffs_buffer = Matrix{Float64}(undef, N, K)
+        coeffs_buffer = Matrix{Float64}(undef, K, N)
         bessels_buffer = Vector{Float64}(undef, N)
         weights = multiplication_weights(N)
         multiplication_buffer = Vector{ComplexF64}(undef, N)
-        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1) # The last entry is the dimension on which the transformation acts
+        transform_plan! = plan_chebyshevtransform!(zeros(K, N), Val(1), 2) # The last entry is the dimension on which the transformation acts
         mode_buffer = Vector{ComplexF64}(undef, K)
         return new{N,K}(points, coeffs_buffer,
             bessels_buffer, weights, multiplication_buffer, transform_plan!, mode_buffer)
@@ -215,7 +215,7 @@ function values!(f, a::Float64, b::Float64,
     t = translation(a, b)
     @inbounds for (i, u) in enumerate(chebyshev_plan.points)
         icw = inverse_chebyshev_weight(u)
-        @views @. chebyshev_plan.coeffs_buffer[i, :] = $f($inverse_u(u, scale_factor, t)) * icw
+        @views @. chebyshev_plan.coeffs_buffer[:, i] = $f($inverse_u(u, scale_factor, t)) * icw
     end
 end
 
@@ -237,9 +237,7 @@ function fourier_mode(k::Float64,
     besselj!(chebyshev_plan.bessels_buffer, 0:(N-1), k̃)
     e = cis(-k * translation) * scale
     @. chebyshev_plan.multiplication_buffer = e * chebyshev_plan.bessels_buffer * chebyshev_plan.multiplication_weights
-    @inbounds for i in 1:K
-        chebyshev_plan.mode_buffer[i] = (@views chebyshev_plan.coeffs_buffer[:, i]) ⋅ chebyshev_plan.multiplication_buffer
-    end
+    mul!(chebyshev_plan.mode_buffer, chebyshev_plan.coeffs_buffer, chebyshev_plan.multiplication_buffer)
     return chebyshev_plan.mode_buffer
 end
 
@@ -500,13 +498,13 @@ struct VectorChebyshevPlanWithAtol{N,K,P}
         end
         # P must be odd
         points = chebyshevpoints(Float64, N, Val(1))
-        coeffs_buffer = Matrix{Float64}(undef, N, K)
-        lower_order_coeffs_buffer = Matrix{Float64}(undef, N ÷ P, K)
+        coeffs_buffer = Matrix{Float64}(undef, K, N)
+        lower_order_coeffs_buffer = Matrix{Float64}(undef, K, N ÷ P)
         bessels_buffer = Vector{Float64}(undef, N)
         weights = multiplication_weights(N)
         multiplication_buffer = Vector{ComplexF64}(undef, N)
-        transform_plan! = plan_chebyshevtransform!(zeros(N, K), Val(1), 1)  # The last entry is the dimension on which the transformation acts
-        lower_order_transform_plan! = plan_chebyshevtransform!(zeros(N ÷ P, K), Val(1), 1)
+        transform_plan! = plan_chebyshevtransform!(zeros(K, N), Val(1), 2)  # The last entry is the dimension on which the transformation acts
+        lower_order_transform_plan! = plan_chebyshevtransform!(zeros(K, N ÷ P), Val(1), 2)
         mode_buffer = Vector{ComplexF64}(undef, K)
         lower_mode_buffer = Vector{ComplexF64}(undef, K)
         return new{N,K,P}(points, coeffs_buffer, lower_order_coeffs_buffer,
@@ -522,13 +520,13 @@ function values!(f, a::Real, b::Real,
     t = translation(a, b)
     @inbounds for (i, u) in enumerate(plan.points)
         icw = inverse_chebyshev_weight(u)
-        @views @. plan.coeffs_buffer[i, :] = $f($inverse_u(u, scale_factor, t)) * icw
+        @views @. plan.coeffs_buffer[:, i] = $f($inverse_u(u, scale_factor, t)) * icw
     end
     
     # Populate the lower order buffer with subsampled points
     @inbounds for i in 1:(N÷P)
         idx = i*P+((1-P)÷2)
-        @views plan.lower_order_coeffs_buffer[i, :] .= plan.coeffs_buffer[idx, :]
+        @views plan.lower_order_coeffs_buffer[:, i] .= plan.coeffs_buffer[:, idx]
     end
 end
 
@@ -551,17 +549,11 @@ function fourier_mode(k::Float64,
     besselj!(plan.bessels_buffer, 0:(N-1), k̃)
     e = cis(-k * translation) * scale
     @. plan.multiplication_buffer = e * plan.bessels_buffer * plan.weights
-
     # Calculate full mode
-    @inbounds for i in 1:K
-        plan.mode_buffer[i] = (@views plan.coeffs_buffer[:, i]) ⋅ plan.multiplication_buffer
-    end
+    mul!(plan.mode_buffer, plan.coeffs_buffer, plan.multiplication_buffer)
 
     # Calculate lower order mode
-    @inbounds for i in 1:K
-        plan.lower_mode_buffer[i] = (@views plan.lower_order_coeffs_buffer[:, i]) ⋅ (@views plan.multiplication_buffer[1:(N÷P)])
-    end
-
+    mul!(plan.lower_mode_buffer, plan.lower_order_coeffs_buffer, (@views plan.multiplication_buffer[1:(N÷P)]))
     return plan.mode_buffer, plan.lower_mode_buffer
 end
 
