@@ -36,25 +36,6 @@ function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble,
     return V
 end
 
-# function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
-#                                      ks:: AbstractVector{Float64}, 
-#                                      bubble:: Bubble, 
-#                                      domes:: Vector{IntersectionDome}, 
-#                                      chebyshev_plan:: VectorChebyshevPlan{N, 6}, 
-#                                      _x̂_ix̂_j:: x̂_ix̂_j; 
-#                                      ΔV:: Float64 = 1.) where N
-#     @assert size(V) == (length(ks), 6) "The output vector must be of the same length of the input k vector"
-#     _polar_limits = polar_limits(bubble.radius, domes)
-#     @inbounds for (μ1, μ2) in partition(_polar_limits, 2, 1)
-#         s, t = scale(μ1, μ2), translation(μ1, μ2)
-#         chebyshev_coeffs!(μ -> _x̂_ix̂_j(μ, bubble, domes), μ1, μ2, chebyshev_plan)
-#         @inbounds for (i, k) in enumerate(ks)
-#             e = cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3)
-#             @. V[i, :] += e * $fourier_mode(k, chebyshev_plan, s, t) # ∂_iφ∂_jφ contribution
-#         end
-#     end
-# end
-
 function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
                                      ks:: AbstractVector{Float64}, 
                                      bubble:: Bubble, 

@@ -82,6 +82,12 @@ function sample!(rng:: AbstractRNG, n:: Int64, space:: AbstractSpace, points_buf
     throw("Cant sample from abstract space $space")
 end
 
+export volume
+
+function volume(space:: AbstractSpace):: Float64
+    throw("Cant compute volume of abstract space $space")
+end
+
 export sample!
 
 struct BallSpace <: AbstractSpace
@@ -90,6 +96,7 @@ struct BallSpace <: AbstractSpace
 end
 
 ∈(p:: Point3, ball_space:: BallSpace) = norm(p - ball_space.center) <= ball_space.radius
+volume(space:: BallSpace):: Float64 = (4 / 3) * π * space.radius ^ 3
 
 const RADIAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 1.)
 const AZYMUTHAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 2π)
