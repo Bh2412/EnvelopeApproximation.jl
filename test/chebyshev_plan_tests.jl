@@ -725,4 +725,105 @@ using Test
             end
         end
     end
+    
+    @testset "TailoredVectorChebyshevPlanWithAtol Tests" begin
+        @testset "Basic functionality" begin
+            # Vector-valued function test
+            f(x) = [sin(x), cos(x), exp(-x^2)]
+            a, b = -2.0, 2.0
+            ks = [0.0, 0.5, 1.0, 2.0]
+    
+            # P must be odd, N must be divisible by P (63 ÷ 3 = 21)
+            plan = TailoredVectorChebyshevPlanWithAtol{3 ^ 8,3,3}(ks, 2.0, a, b)
+    
+            # Compute Fourier transform
+            chebyshev_coeffs!(f, plan)
+            modes, error_estimate = fourier_modes(plan)
+    
+            # Verify against direct numerical integration for each component
+            for (i, k) in enumerate(ks)
+                for j in 1:3
+                    component_f(x) = f(x)[j]
+                    numerical, _ = quadgk(x -> component_f(x) * cis(-k * x), a, b, rtol=1e-12)
+                    @test isapprox(modes[i, j], numerical, rtol=1e-6, atol=1e-12)
+                end
+            end
+    
+            # Also test the combined function that performs coeffs calculation + modes computation
+            modes2, error_estimate2 = fourier_modes(f, plan)
+            @test isapprox(modes, modes2)
+            @test isapprox(error_estimate, error_estimate2)
+        end
+
+        @testset "Constructor constraints" begin
+            # Test that constructor enforces P must be odd and N must be divisible by P
+            ks = [0.0, 1.0]
+            a, b = -1.0, 1.0
+    
+            # P must be odd
+            @test_throws ArgumentError TailoredVectorChebyshevPlanWithAtol{63,2,2}(ks, 2.0, a, b)
+    
+            # N must be divisible by P
+            @test_throws ArgumentError TailoredVectorChebyshevPlanWithAtol{64,2,3}(ks, 2.0, a, b)
+    
+        end
+    
+        @testset "Warning generation" begin
+            # Test that warnings are generated when error exceeds tolerance
+            f(x) = [sin(20 * x), cos(20 * x)] # Highly oscillatory
+            a, b = -π, π
+            ks = [1.0, 2.0]
+    
+            # Set a very small tolerance that should be exceeded
+            # N=33 is divisible by P=3
+            plan = TailoredVectorChebyshevPlanWithAtol{33,2,3}(ks, 2.0, a, b, atol=1e-12)
+    
+            # Should generate a warning
+            @test_logs (:warn, r"Chebyshev approximation error .* exceeds tolerance .*") begin
+                _, _ = fourier_modes(f, plan)
+            end
+        end
+
+        @testset "Comparison with other implementations" begin
+            # Compare results with both parent implementations
+            f(x) = [exp(-x^2), sin(x)]
+            a, b = -3.0, 3.0
+            ks = [0.0, 1.0, 2.0]
+    
+            # Create plans of each type
+            N = 63  # N is divisible by P=3
+            K = 2   # Vector dimension
+            P = 3   # Undersampling factor (must be odd)
+    
+            # Standard vector plan
+            std_plan = VectorChebyshevPlan{N,K}()
+            
+            # Vector plan with atol
+            atol_plan = VectorChebyshevPlanWithAtol{N,K,P}(2.0)
+            
+            # Tailored vector plan
+            tailored_plan = TailoredVectorChebyshevPlan{N,K}(ks, a, b)
+            
+            # Our new combined plan
+            combined_plan = TailoredVectorChebyshevPlanWithAtol{N,K,P}(ks, 2.0, a, b)
+    
+            # Compute results with each plan
+            std_results = fourier_modes(f, ks, a, b, std_plan)
+            atol_results, _ = fourier_modes(f, ks, a, b, atol_plan)
+            
+            chebyshev_coeffs!(f, tailored_plan)
+            tailored_results = fourier_modes(tailored_plan)
+            
+            combined_results, _ = fourier_modes(f, combined_plan)
+    
+            # All results should match within tolerance
+            for i in 1:length(ks)
+                for j in 1:K
+                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-8)
+                    @test isapprox(std_results[i, j], tailored_results[i, j], rtol=1e-8)
+                    @test isapprox(std_results[i, j], combined_results[i, j], rtol=1e-8)
+                end
+            end
+        end
+    end
 end

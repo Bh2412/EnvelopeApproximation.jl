@@ -582,4 +582,122 @@ function fourier_modes(f, ks::AbstractVector{Float64}, a::Real, b::Real,
     return M, error_estimate
 end
 
+export TailoredVectorChebyshevPlanWithAtol
+
+struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
+    points::Vector{Float64}
+    coeffs_buffer::Matrix{Float64}
+    lower_order_coeffs_buffer::Matrix{Float64}
+    weights::Matrix{ComplexF64}
+    transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
+    lower_order_transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
+    ks::Vector{Float64}
+    a::Float64
+    b::Float64
+    α::Float64  # Convergence rate of coefficients O(n^α)
+    atol::Float64
+
+    function TailoredVectorChebyshevPlanWithAtol{N,K,P}(
+            ks::AbstractVector{Float64},
+            α::Real,
+            a::Real=-1.0,
+            b::Real=1.0;
+            atol::Real=Inf) where {N,K,P}
+        
+        # N must be divisible by P
+        if N % P != 0
+            throw(ArgumentError("N must be divisible by P"))
+        end
+
+        if P % 2 != 1
+            throw(ArgumentError("P must be odd"))
+        end
+        
+        # Chebyshev points for full resolution
+        points = chebyshevpoints(Float64, N, Val(1))
+        
+        # Buffers for coefficients
+        coeffs_buffer = Matrix{Float64}(undef, K, N)
+        lower_order_coeffs_buffer = Matrix{Float64}(undef, K, N ÷ P)
+        
+        # Compute scale and translation factors
+        scale_factor = scale(a, b)
+        t = translation(a, b)
+        
+        # Calculate weights for the full resolution
+        translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
+        _weights = reshape(multiplication_weights(N), :, 1)
+        weights = @. _weights * translation_factors
+        
+        # Precompute Bessel functions for each k
+        for (i, k) in enumerate(ks)
+            weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
+        end
+        # Transform plans
+        transform_plan! = plan_chebyshevtransform!(zeros(K, N), Val(1), 2)
+        lower_order_transform_plan! = plan_chebyshevtransform!(zeros(K, N ÷ P), Val(1), 2)
+        
+        return new{N,K,P}(points, coeffs_buffer, lower_order_coeffs_buffer,
+                         weights, transform_plan!, 
+                         lower_order_transform_plan!, collect(ks), a, b, α, atol)
+    end
+end
+
+scale(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P}) where {N,K,P} = scale(plan.a, plan.b)
+translation(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P}) where {N,K,P} = translation(plan.a, plan.b)
+
+function values!(f, plan::TailoredVectorChebyshevPlanWithAtol{N,K,P}) where {N,K,P}
+    scale_factor = scale(plan)
+    t = translation(plan)
+    
+    # Compute function values at Chebyshev points for full resolution
+    @inbounds for (i, u) in enumerate(plan.points)
+        icw = inverse_chebyshev_weight(u)
+        @views @. plan.coeffs_buffer[:, i] = $f($inverse_u(u, scale_factor, t)) * icw
+    end
+    
+    # Populate the lower order buffer with subsampled points
+    @inbounds for i in 1:(N÷P)
+        idx = i*P+((1-P)÷2)
+        @views plan.lower_order_coeffs_buffer[:, i] .= plan.coeffs_buffer[:, idx]
+    end
+end
+
+function chebyshev_coeffs!(f, plan::TailoredVectorChebyshevPlanWithAtol{N,K,P}) where {N,K,P}
+    values!(f, plan)
+    
+    # Transform the full resolution coefficients
+    plan.transform_plan! * plan.coeffs_buffer
+    
+    # Transform the lower order coefficients
+    plan.lower_order_transform_plan! * plan.lower_order_coeffs_buffer
+end
+
+function fourier_modes(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{Matrix{ComplexF64}, Float64} where {N,K,P}
+    # Multiply by precomputed weights to get Fourier modes
+    full_modes = plan.coeffs_buffer * plan.weights
+    lower_modes = plan.lower_order_coeffs_buffer * (@views plan.weights[1:(N÷P), :])
+    
+    # Calculate error estimate
+    inf_norm = 0.0
+    for i in eachindex(full_modes)
+        err = abs(full_modes[i] - lower_modes[i])
+        inf_norm = max(inf_norm, err)
+    end
+    
+    error_estimate = inf_norm / (P^plan.α - 1)
+    
+    # Warn if error exceeds tolerance
+    if error_estimate >= plan.atol
+        @warn "Chebyshev approximation error $(error_estimate) exceeds tolerance $(plan.atol)."
+    end
+    
+    return collect(transpose(full_modes)), error_estimate
+end
+
+function fourier_modes(f, plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{Matrix{ComplexF64}, Float64} where {N,K,P}
+    chebyshev_coeffs!(f, plan)
+    return fourier_modes(plan)
+end
+
 end
