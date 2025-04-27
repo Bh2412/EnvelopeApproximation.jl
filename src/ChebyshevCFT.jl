@@ -589,6 +589,7 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
     coeffs_buffer::Matrix{Float64}
     lower_order_coeffs_buffer::Matrix{Float64}
     weights::Matrix{ComplexF64}
+    lower_order_weights::Matrix{ComplexF64}
     transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
     lower_order_transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
     modes_buffer::Matrix{ComplexF64}
@@ -630,6 +631,7 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
         translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
         _weights = reshape(multiplication_weights(N), :, 1)
         weights = @. _weights * translation_factors
+        lower_order_weights = weights[1:(N÷P), :]
         
         # Precompute Bessel functions for each k
         for (i, k) in enumerate(ks)
@@ -643,7 +645,7 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
         lower_modes_buffer = Matrix{ComplexF64}(undef, K, length(ks))
         
         return new{N,K,P}(points, coeffs_buffer, lower_order_coeffs_buffer,
-                         weights, transform_plan!, lower_order_transform_plan!, 
+                         weights, lower_order_weights, transform_plan!, lower_order_transform_plan!, 
                          modes_buffer, lower_modes_buffer, collect(ks), a, b, α, atol)
     end
 end
@@ -681,7 +683,7 @@ end
 function fourier_modes(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{Matrix{ComplexF64}, Float64} where {N,K,P}
     # Multiply by precomputed weights to get Fourier modes
     mul!(plan.modes_buffer, plan.coeffs_buffer, plan.weights)
-    mul!(plan.lower_modes_buffer, plan.lower_order_coeffs_buffer, (@views plan.weights[1:(N÷P), :]))
+    mul!(plan.lower_modes_buffer, plan.lower_order_coeffs_buffer, plan.lower_order_weights)
     
     # Calculate error estimate
     inf_norm = 0.0
