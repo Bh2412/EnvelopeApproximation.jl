@@ -591,6 +591,8 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
     weights::Matrix{ComplexF64}
     transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
     lower_order_transform_plan!::FastTransforms.ChebyshevTransformPlan{Float64, 1, Vector{Int32}, true, 2, Int64}
+    modes_buffer::Matrix{ComplexF64}
+    lower_modes_buffer::Matrix{ComplexF64}
     ks::Vector{Float64}
     a::Float64
     b::Float64
@@ -636,10 +638,13 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
         # Transform plans
         transform_plan! = plan_chebyshevtransform!(zeros(K, N), Val(1), 2)
         lower_order_transform_plan! = plan_chebyshevtransform!(zeros(K, N ÷ P), Val(1), 2)
+        # Buffers for modes
+        modes_buffer = Matrix{ComplexF64}(undef, K, length(ks))
+        lower_modes_buffer = Matrix{ComplexF64}(undef, K, length(ks))
         
         return new{N,K,P}(points, coeffs_buffer, lower_order_coeffs_buffer,
-                         weights, transform_plan!, 
-                         lower_order_transform_plan!, collect(ks), a, b, α, atol)
+                         weights, transform_plan!, lower_order_transform_plan!, 
+                         modes_buffer, lower_modes_buffer, collect(ks), a, b, α, atol)
     end
 end
 
@@ -675,13 +680,13 @@ end
 
 function fourier_modes(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{Matrix{ComplexF64}, Float64} where {N,K,P}
     # Multiply by precomputed weights to get Fourier modes
-    full_modes = plan.coeffs_buffer * plan.weights
-    lower_modes = plan.lower_order_coeffs_buffer * (@views plan.weights[1:(N÷P), :])
+    mul!(plan.modes_buffer, plan.coeffs_buffer, plan.weights)
+    mul!(plan.lower_modes_buffer, plan.lower_order_coeffs_buffer, (@views plan.weights[1:(N÷P), :]))
     
     # Calculate error estimate
     inf_norm = 0.0
-    for i in eachindex(full_modes)
-        err = abs(full_modes[i] - lower_modes[i])
+    for i in eachindex(plan.modes_buffer)
+        err = abs(plan.modes_buffer[i] - plan.lower_modes_buffer[i])
         inf_norm = max(inf_norm, err)
     end
     
@@ -692,7 +697,7 @@ function fourier_modes(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{
         @warn "Chebyshev approximation error $(error_estimate) exceeds tolerance $(plan.atol)."
     end
     
-    return collect(transpose(full_modes)), error_estimate
+    return collect(transpose(plan.modes_buffer)), error_estimate
 end
 
 function fourier_modes(f, plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{Matrix{ComplexF64}, Float64} where {N,K,P}
