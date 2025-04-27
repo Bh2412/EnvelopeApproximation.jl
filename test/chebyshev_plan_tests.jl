@@ -765,7 +765,7 @@ using Test
     
             # N must be divisible by P
             @test_throws ArgumentError TailoredVectorChebyshevPlanWithAtol{64,2,3}(ks, 2.0, a, b)
-    
+
         end
     
         @testset "Warning generation" begin
@@ -826,4 +826,4 @@ using Test
             end
         end
     end
-end
+end;
