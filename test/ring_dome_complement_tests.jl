@@ -49,5 +49,5 @@ complement(p:: PeriodicInterval) = PeriodicInterval(mod(p.ϕ1 + p.Δ, 2π), 2π 
 
 @test all(complement.(analytic_intersection.(μs)) .≈ numeric_intersection.(μs))
 @test all(numeric_not_domelike_intersection.(μs) .≈ complement.(numeric_intersection.(μs)))
-end
+end;
 

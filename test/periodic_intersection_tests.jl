@@ -14,7 +14,6 @@ using Combinatorics
 import Base.length
 end
 
-@time begin
 
 function IntervalSet(p:: PeriodicInterval)
     _a = a(p)
@@ -66,6 +65,5 @@ end
 @testset "periodic intersection" begin
 @test all(equal_on_subset(subset) for subset in subsets)
 @test all(bools)
-end
 
-end
+end;
