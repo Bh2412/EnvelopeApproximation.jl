@@ -96,3 +96,10 @@ begin
     save("2_bubble_surface_surface.png", figure)
     figure
 end
+
+begin
+    using CSV, DataFrames
+    df = DataFrame(ks=ks, P=vp)
+    # Save DataFrame to a CSV file
+    CSV.write("./2_bubble_volume_volume_power_spectrum.csv", df)
+end

@@ -22,7 +22,8 @@ begin
     k_0 = 2π / (R + d / 2)
     ks = logrange(k_0 / 100, k_0 * 10, 2000)
     chebyshev_plan = First3MomentsChebyshevPlan{32}()
-    _Δ = Δ(4)
+    _Δ = Δ(2)
+    ΔV = 1.
 end
 
 using CairoMakie
@@ -42,6 +43,59 @@ begin
     axislegend(ax)
     save("/home/ben/Pictures/2_bubble_Tzz.png", figure)
     figure
+end
+
+begin
+    using StaticArrays
+    using HCubature
+
+    unit_sphere_lower_left = SVector{2, Float64}(0., 0.)
+    unit_sphere_upper_right = SVector{2, Float64}(2π, π)
+
+    n̂(ΦΘ:: SVector{2, Float64}):: SVector{3, Float64} = begin
+        ϕ, θ = ΦΘ
+        return SVector{3, Float64}(cos(ϕ) * sin(θ), sin(ϕ) * sin(θ), cos(θ))
+    end
+
+    function power_spectrum(f; kwargs...)
+        return hcubature(ΦΘ -> f(ΦΘ) * sin(ΦΘ[2]), unit_sphere_lower_left, unit_sphere_upper_right)
+    end
+
+    function Tzz(ΦΘ:: SVector{2, Float64}, t:: Float64):: Vector{ComplexF64}
+        return k̂ik̂j∂_iφ∂_jφ(ks, current_bubbles(align_ẑ(n̂(ΦΘ)) * snapshot, t), chebyshev_plan, _Δ; ΔV=ΔV)
+    end
+
+    ηs = (0.:0.1:R)[1:end]
+    Tzz_power_spectrum = map(ηs) do η
+        @show η
+        power_spectrum(ΦΘ -> Tzz(ΦΘ, η); rtol=1e-3)
+    end
+end
+
+begin
+    fig = Figure()
+    ax = Axis(fig[1, 1])
+    k_indices = [1, length(ks)]
+    for k_index in k_indices
+        lines!(ax, ηs, Tzz_power_spectrum .|> x -> real(x[1][k_index]), label="$(ks[k_index])")
+        # lines!(ax, ηs, Tzz_power_spectrum .|> x -> imag(x[1][k_index]), label="imag, $(ks[k_index])")
+    end
+    axislegend(ax)
+    save("./plot.png", fig)
+    fig
+end
+
+begin
+    fig = Figure()
+    ax = Axis(fig[1, 1])
+    η_indices = 1:20:length(ηs)
+    for η_index in η_indices
+        lines!(ax, ks, Tzz_power_spectrum[η_index][1] .|> real, label="$(ηs[η_index])")
+        # lines!(ax, ηs, Tzz_power_spectrum .|> x -> imag(x[1][k_index]), label="imag, $(ks[k_index])")
+    end
+    axislegend(ax)
+    save("./plot.png", fig)
+    fig
 end
 
 begin

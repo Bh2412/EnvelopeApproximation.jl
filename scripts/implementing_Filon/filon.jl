@@ -1,6 +1,6 @@
 using BenchmarkTools
 using QuadGK
-using Plots
+using CairoMakie
 
 # Following "An Algorithm for Filon Quadrature" - STEPHEN M . CHASE AND LLOYD D. FOSDICK
 
@@ -35,15 +35,15 @@ function FilonBuffer(n:: Int)
     return FilonBuffer(even_buffer, odd_buffer)
 end
 
-even_nodes(a:: Base.TwicePrecision{Float64}, b:: Base.TwicePrecision{Float64}, p:: Int64):: AbstractRange = range(a, b, p + 1)
-function odd_nodes(a:: Float64, b:: Float64, p:: Int64):: AbstractRange
+even_nodes(a:: Real, b:: Real, p:: Int64) = range(a, b, p + 1)
+function odd_nodes(a:: Real, b:: Real, p:: Int64)
     h = (b-a) / 2p
     return range(a + h, b - h, p)
 end
 
 a, b = 1., 2.
 p = 10
-@btime $even_nodes($a, $b, $p)
+# @btime even_nodes($a, $b, $p)
 # @btime $odd_nodes($a, $b, $p)
 
 function sample!(f, nodes:: AbstractVector{Float64}, buffer:: Vector{Float64})
@@ -96,9 +96,9 @@ end
 
 a, b, κ, p = 1., 2., 10., 30
 filon_buffer = FilonBuffer(10_000)
-@btime $E($sin, $a, $b, $κ, $p, $filon_buffer)
-@btime quadgk_count(x -> sin(x) * cis(-κ * x), $a, $b; rtol=1e-2)
-@profview for _ in 1:1000_000 quadgk_count(x -> sin(x) * cis(-κ * x), a, b; rtol=1e-2) end
+# @btime $E($sin, $a, $b, $κ, $p, $filon_buffer)
+# @btime quadgk_count(x -> sin(x) * cis(-κ * x), $a, $b; rtol=1e-2)
+# @profview for _ in 1:1000_000 quadgk_count(x -> sin(x) * cis(-κ * x), a, b; rtol=1e-2) end
 
 _E(κ) = E(sin, a, b, κ, p, filon_buffer)
 _exact_sin_int(κ) = quadgk(x -> sin(x) * cis(-κ * x), a, b)
@@ -106,15 +106,23 @@ _exact_sin_int(κ) = quadgk(x -> sin(x) * cis(-κ * x), a, b)
 κs = 0.: 0.1: 100.
 new_method = _E.(κs)
 exact = _exact_sin_int.(κs) .|> x -> x[1]
-plot(κs, new_method .|> real, label="approximation")
-plot!(κs, exact .|> real, label="exact")
-plot(κs, new_method .|> imag, label="approximation")
-plot!(κs, exact .|> imag, label="exact")
 
-diff(κ) = _E(κ) - _exact_sin_int(κ)[1]
+begin
+    fig = Figure()
+    axr = Axis(fig[1, 1])
+    lines!(axr, κs, new_method .|> real, label="approximation")
+    lines!(axr, κs, exact .|> real, label="exact")
+    axi = Axis(fig[1, 2])
+    lines!(axi, κs, new_method .|> imag, label="approximation")
+    lines!(axi, κs, exact .|> imag, label="exact")
+    fig
+end
 
-plot(κs, diff.(κs) .|> abs)
-diff.(κs) .|> abs |> x -> max(x...)
 
-@btime $E($sin, $a, $b, $κ, $p, $filon_buffer)
-@profview for _ in 1:10_000 E(sin, a, b, κ, p, filon_buffer) end
+# diff(κ) = _E(κ) - _exact_sin_int(κ)[1]
+
+# lines(κs, diff.(κs) .|> abs)
+# diff.(κs) .|> abs |> x -> max(x...)
+
+# @btime $E($sin, $a, $b, $κ, $p, $filon_buffer)
+# @profview for _ in 1:10_000 E(sin, a, b, κ, p, filon_buffer) end
