@@ -16,7 +16,7 @@ using IterTools
 
 include("GeometricStressEnergyTensor/IntersectionDome.jl")
 include("GeometricStressEnergyTensor/PeriodicInterval.jl")
-include("GeometricStressEnergyTensor/RingDomeIntersection.jl")
+include("GeometricStressEnergyTensor/RingDomeComplementIntersection.jl")
 include("GeometricStressEnergyTensor/PeriodicIntersection.jl")
 
 """
