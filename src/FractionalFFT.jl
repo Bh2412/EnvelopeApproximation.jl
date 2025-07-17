@@ -1,5 +1,6 @@
 module FractionalFFT
 using FFTW
+import Base.*
 
 #=
 Following "A Fast method for the numerical evaluation of Continuous Fourier and Laplace Transforms" - David H. Bailey and Paul N. Swartzbauer

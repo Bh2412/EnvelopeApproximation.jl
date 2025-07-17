@@ -77,9 +77,11 @@ include("FractionalFFT.jl")
 
 include("FilonQuadrature.jl")
 
-include("ChebyshevCFT.jl")
+include("ChebyshevCFT/ChebyshevCFT.jl")
 
 include("GeometricStressEnergyTensor.jl")
+
+include("ChebyshevCFT/ChebyshevCFTDiagnostics.jl")
 
 include("GravitationalPotentials.jl")
 

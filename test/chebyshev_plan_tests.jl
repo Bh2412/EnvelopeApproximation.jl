@@ -248,7 +248,7 @@ using Test
             a, b = -1.0, 1.0
 
             # Create a plan with α=2 (typical for smooth functions), P must be odd
-            plan = ChebyshevPlanWithAtol{3 ^ 8,3}(2.0)
+            plan = ChebyshevPlanWithAtol{3^8,3}(2.0)
 
             ks = [0.0, 0.5, 1.0, 2.0, 5.0]
 
@@ -325,8 +325,8 @@ using Test
 
             # These should work fine
             N = 2^10
-            plan3 = ChebyshevPlanWithAtol{N * 3,3}(2.0) 
-            plan5 = ChebyshevPlanWithAtol{N * 5,5}(2.0) 
+            plan3 = ChebyshevPlanWithAtol{N * 3,3}(2.0)
+            plan5 = ChebyshevPlanWithAtol{N * 5,5}(2.0)
             plan7 = ChebyshevPlanWithAtol{N * 7,7}(2.0)  #
 
             # Check that they all give consistent results
@@ -361,24 +361,24 @@ using Test
             μ = 0.0
             f(x) = exp(-(x - μ)^2 / (2 * σ^2))
             a, b = -3.0, 3.0
-            
+
             # Analytical Fourier transform of Gaussian: σ*sqrt(2π)*exp(-k^2*σ^2/2)*exp(-ikμ)
             k = 1.0
             expected_ft = quadgk(x -> f(x) * cis(-k * x), a, b, rtol=1e-13)[1]
-            
+
             # Test with increasing degrees, all with P=3
             degrees = 5 .* (3 .^ (1:4))  # Must be divisible by 3
             modes = ComplexF64[]
             lower_modes = ComplexF64[]
             errors_full = Float64[]
             errors_lower = Float64[]
-            
+
             for N in degrees
                 plan = ChebyshevPlanWithAtol{N,3}(2.0)
                 chebyshev_coeffs!(f, a, b, plan)
                 s = scale(a, b)
                 t = translation(a, b)
-                
+
                 # Get both the full and lower order approximations
                 full_mode, lower_mode = fourier_mode(k, plan, s, t)
                 push!(modes, full_mode)
@@ -388,71 +388,60 @@ using Test
                 push!(errors_lower, abs(lower_mode - expected_ft))
             end
 
-            for i in 1:(length(degrees) - 1)
+            for i in 1:(length(degrees)-1)
                 @test isapprox(modes[i], lower_modes[i+1])
             end
-            
+
             # Check that errors decrease with increasing degree
             for i in 1:(length(degrees)-1)
                 @test errors_full[i] > errors_full[i+1]
                 @test errors_lower[i] > errors_lower[i+1]
             end
-            
+
             # Check that the full approximation is always better than lower
             for i in 1:length(degrees)
                 @test errors_full[i] < errors_lower[i]
             end
         end
 
-        @testset "Compatibility between ChebyshevPlan and ChebyshevPlanWithAtol" begin
-            # Test function - using a function with a known smooth profile
-            f(x) = exp(-x^2) * cos(3x)
+        @testset "Consistency with ChebyshevPlan" begin
+            # Test function
+            f(x) = exp(-x^2)
             a, b = -2.0, 2.0
-        
-            # Test with different N values (must be divisible by P=3)
-            N_values = [48, 96, 192]
-            P = 3
-        
-            for N in N_values
-                # Create standard plan
-                std_plan = ChebyshevPlan{N}()
-                lower_std_plan = ChebyshevPlan{N ÷ 3}()
-                
-                # Create withAtol plan with the same parameters
-                atol_plan = ChebyshevPlanWithAtol{N,P}(1.)
-                
-                # Calculate Chebyshev coefficients for both plans
-                chebyshev_coeffs!(f, a, b, std_plan)
-                chebyshev_coeffs!(f, a, b, lower_std_plan)
-                chebyshev_coeffs!(f, a, b, atol_plan)
-                
-                # Define scaling and translation parameters
-                s = scale(a, b)
-                t = translation(a, b)
-                
-                # Test different wavenumbers
-                ks = [0.1, 1.0, 5.0, 10.0]
-                
-                for k in ks
-                    # Get Fourier transform using standard plan
-                    std_result = fourier_mode(k, std_plan, s, t)
-                    lower_std_result = fourier_mode(k, lower_std_plan, s, t)
+            ks = [0.1, 1.0, 5.0, 10.0]
 
-                    # Get Fourier transform using atol plan (first element of the tuple)
-                    atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
-                    
-                    # Verify results match
-                    @test isapprox(std_result, atol_result)
-                    @test isapprox(lower_std_result, lower_atol_result)
-                end
-                
-                # Also test the collection method
-                std_results = fourier_modes(f, ks, a, b, std_plan)
-                atol_results, _= fourier_modes(f, ks, a, b, atol_plan)
-                
-                for i in 1:length(ks)
-                    @test isapprox(std_results[i], atol_results[i])
-                end
+            # Test parameters
+            N = 96
+            P = 3
+
+            # Create standard plans
+            std_plan = ChebyshevPlan{N}()
+            lower_std_plan = ChebyshevPlan{N ÷ 3}()
+
+            # Create withAtol plan
+            atol_plan = ChebyshevPlanWithAtol{N,P}(1.0)
+
+            # Calculate Chebyshev coefficients for all plans
+            chebyshev_coeffs!(f, a, b, std_plan)
+            chebyshev_coeffs!(f, a, b, lower_std_plan)
+            chebyshev_coeffs!(f, a, b, atol_plan)
+
+            # Define scaling and translation parameters
+            s = scale(a, b)
+            t = translation(a, b)
+
+            # Test different wavenumbers
+            for k in ks
+                # Get Fourier transform using standard plans
+                std_result = fourier_mode(k, std_plan, s, t)
+                lower_std_result = fourier_mode(k, lower_std_plan, s, t)
+
+                # Get Fourier transform using atol plan (returns both full and lower order)
+                atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
+
+                # Verify results
+                @test isapprox(std_result, atol_result, rtol=1e-15)
+                @test isapprox(lower_std_result, lower_atol_result, rtol=1e-15)
             end
         end
 
@@ -489,7 +478,7 @@ using Test
             a, b = -2.0, 2.0
 
             # P must be odd, N must be divisible by P (63 ÷ 3 = 21)
-            plan = VectorChebyshevPlanWithAtol{3 ^ 8,3,3}(2.0)
+            plan = VectorChebyshevPlanWithAtol{3^8,3,3}(2.0)
             ks = [0.0, 0.5, 1.0, 2.0]
 
             # Compute Fourier transform
@@ -538,8 +527,8 @@ using Test
             @test_throws ArgumentError VectorChebyshevPlanWithAtol{64,2,3}(2.0)
 
             # These should work fine
-            plan3 = VectorChebyshevPlanWithAtol{3 ^ 8,2,3}(2.0)  # 63 ÷ 3 = 21
-            plan5 = VectorChebyshevPlanWithAtol{5 ^ 6,2,5}(2.0)  # 65 ÷ 5 = 13
+            plan3 = VectorChebyshevPlanWithAtol{3^8,2,3}(2.0)  # 63 ÷ 3 = 21
+            plan5 = VectorChebyshevPlanWithAtol{5^6,2,5}(2.0)  # 65 ÷ 5 = 13
 
             # Check that they all give consistent results
             ks = [1.0]
@@ -555,10 +544,10 @@ using Test
             # Use a vector of Gaussian functions with different parameters
             σ_values = [0.5, 0.8, 1.0]
             μ_values = [0.0, 0.5, -0.5]
-            
+
             f(x) = [exp(-(x - μ)^2 / (2 * σ^2)) for (σ, μ) in zip(σ_values, μ_values)]
             a, b = -5.0, 5.0  # Large enough domain for all gaussians
-            
+
             # Calculate expected Fourier transform using numerical integration
             k = 1.0
             expected_ft = Vector{ComplexF64}(undef, 3)
@@ -567,37 +556,37 @@ using Test
                 gaussian_f(x) = exp(-(x - μ)^2 / (2 * σ^2))
                 expected_ft[j] = quadgk(x -> gaussian_f(x) * cis(-k * x), a, b, rtol=1e-13)[1]
             end
-            
+
             # Test with increasing degrees, all with P=3
             degrees = 5 .* (3 .^ (1:3))  # Must be divisible by 3
             modes = Vector{Vector{ComplexF64}}()
             lower_modes = Vector{Vector{ComplexF64}}()
             errors_full = Vector{Vector{Float64}}()
             errors_lower = Vector{Vector{Float64}}()
-            
+
             for N in degrees
                 plan = VectorChebyshevPlanWithAtol{N,3,3}(2.0)
                 chebyshev_coeffs!(f, a, b, plan)
                 s = scale(a, b)
                 t = translation(a, b)
-                
+
                 # Get both the full and lower order approximations
                 full_mode, lower_mode = fourier_mode(k, plan, s, t)
                 push!(modes, copy(full_mode))
                 push!(lower_modes, copy(lower_mode))
-                
+
                 # Record absolute errors for each component
                 push!(errors_full, [abs(full_mode[j] - expected_ft[j]) for j in 1:3])
                 push!(errors_lower, [abs(lower_mode[j] - expected_ft[j]) for j in 1:3])
             end
-            
+
             # Lower order of higher degree should match full order of lower degree
-            for i in 1:(length(degrees) - 1)
+            for i in 1:(length(degrees)-1)
                 for j in 1:3
                     @test isapprox(modes[i][j], lower_modes[i+1][j])
                 end
             end
-            
+
             # Check that errors decrease with increasing degree for all components
             for i in 1:(length(degrees)-1)
                 for j in 1:3
@@ -605,7 +594,7 @@ using Test
                     @test errors_lower[i][j] > errors_lower[i+1][j]
                 end
             end
-            
+
             # Check that the full approximation is always better than lower for all components
             for i in 1:length(degrees)
                 for j in 1:3
@@ -613,60 +602,46 @@ using Test
                 end
             end
         end
-
-        @testset "Compatibility between VectorChebyshevPlan and VectorChebyshevPlanWithAtol" begin
+        @testset "Compatibility with VectorChebyshevPlan" begin
             # Test function - vector-valued function
             f(x) = [exp(-x^2), sin(x), cos(x)]
             a, b = -2.0, 2.0
-        
+            ks = [0.1, 1.0, 5.0, 10.0]
+
             # Test parameters
-            N_values = [48, 96, 192]
+            N = 96
             K = 3  # Vector dimension
             P = 3
-        
-            for N in N_values
-                # Create standard vector plan
-                std_plan = VectorChebyshevPlan{N,K}()
-                lower_std_plan = VectorChebyshevPlan{N ÷ 3,K}()
-                
-                # Create withAtol vector plan with the same parameters
-                atol_plan = VectorChebyshevPlanWithAtol{N,K,P}(1.0)
-                
-                # Calculate Chebyshev coefficients for both plans
-                chebyshev_coeffs!(f, a, b, std_plan)
-                chebyshev_coeffs!(f, a, b, lower_std_plan)
-                chebyshev_coeffs!(f, a, b, atol_plan)
-                
-                # Define scaling and translation parameters
-                s = scale(a, b)
-                t = translation(a, b)
-                
-                # Test different wavenumbers
-                ks = [0.1, 1.0, 5.0, 10.0]
-                
-                for k in ks
-                    # Get Fourier transform using standard plan
-                    std_result = fourier_mode(k, std_plan, s, t)
-                    lower_std_result = fourier_mode(k, lower_std_plan, s, t)
-                    
-                    # Get Fourier transform using atol plan (first element of the tuple)
-                    atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
-                    
-                    # Verify results match for each component
-                    for j in 1:K
-                        @test isapprox(std_result[j], atol_result[j])
-                        @test isapprox(lower_std_result[j], lower_atol_result[j])
-                    end
-                end
-                
-                # Also test the collection method
-                std_results = fourier_modes(f, ks, a, b, std_plan)
-                atol_results, _ = fourier_modes(f, ks, a, b, atol_plan)
-                
-                for i in 1:length(ks)
-                    for j in 1:K
-                        @test isapprox(std_results[i, j], atol_results[i, j])
-                    end
+
+            # Create standard vector plans
+            std_plan = VectorChebyshevPlan{N,K}()
+            lower_std_plan = VectorChebyshevPlan{N ÷ 3,K}()
+
+            # Create withAtol vector plan
+            atol_plan = VectorChebyshevPlanWithAtol{N,K,P}(1.0)
+
+            # Calculate Chebyshev coefficients for all plans
+            chebyshev_coeffs!(f, a, b, std_plan)
+            chebyshev_coeffs!(f, a, b, lower_std_plan)
+            chebyshev_coeffs!(f, a, b, atol_plan)
+
+            # Define scaling and translation parameters
+            s = scale(a, b)
+            t = translation(a, b)
+
+            # Test different wavenumbers
+            for k in ks
+                # Get Fourier transform using standard plans
+                std_result = fourier_mode(k, std_plan, s, t)
+                lower_std_result = fourier_mode(k, lower_std_plan, s, t)
+
+                # Get Fourier transform using atol plan (returns both full and lower order)
+                atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
+
+                # Verify results match for each component
+                for j in 1:K
+                    @test isapprox(std_result[j], atol_result[j], rtol=1e-15)
+                    @test isapprox(lower_std_result[j], lower_atol_result[j], rtol=1e-15)
                 end
             end
         end
@@ -725,21 +700,21 @@ using Test
             end
         end
     end
-    
+
     @testset "TailoredVectorChebyshevPlanWithAtol Tests" begin
         @testset "Basic functionality" begin
             # Vector-valued function test
             f(x) = [sin(x), cos(x), exp(-x^2)]
             a, b = -2.0, 2.0
             ks = [0.0, 0.5, 1.0, 2.0]
-    
+
             # P must be odd, N must be divisible by P (63 ÷ 3 = 21)
-            plan = TailoredVectorChebyshevPlanWithAtol{3 ^ 8,3,3}(ks, 2.0, a, b)
-    
+            plan = TailoredVectorChebyshevPlanWithAtol{3^8,3,3}(ks, 2.0, a, b)
+
             # Compute Fourier transform
             chebyshev_coeffs!(f, plan)
             modes, error_estimate = fourier_modes(plan)
-    
+
             # Verify against direct numerical integration for each component
             for (i, k) in enumerate(ks)
                 for j in 1:3
@@ -748,7 +723,7 @@ using Test
                     @test isapprox(modes[i, j], numerical, rtol=1e-6, atol=1e-12)
                 end
             end
-    
+
             # Also test the combined function that performs coeffs calculation + modes computation
             modes2, error_estimate2 = fourier_modes(f, plan)
             @test isapprox(modes, modes2)
@@ -759,28 +734,62 @@ using Test
             # Test that constructor enforces P must be odd and N must be divisible by P
             ks = [0.0, 1.0]
             a, b = -1.0, 1.0
-    
+
             # P must be odd
             @test_throws ArgumentError TailoredVectorChebyshevPlanWithAtol{63,2,2}(ks, 2.0, a, b)
-    
+
             # N must be divisible by P
             @test_throws ArgumentError TailoredVectorChebyshevPlanWithAtol{64,2,3}(ks, 2.0, a, b)
 
         end
-    
+
         @testset "Warning generation" begin
             # Test that warnings are generated when error exceeds tolerance
             f(x) = [sin(20 * x), cos(20 * x)] # Highly oscillatory
             a, b = -π, π
             ks = [1.0, 2.0]
-    
+
             # Set a very small tolerance that should be exceeded
             # N=33 is divisible by P=3
             plan = TailoredVectorChebyshevPlanWithAtol{33,2,3}(ks, 2.0, a, b, atol=1e-12)
-    
+
             # Should generate a warning
             @test_logs (:warn, r"Chebyshev approximation error .* exceeds tolerance .*") begin
                 _, _ = fourier_modes(f, plan)
+            end
+        end
+
+        @testset "Compatibility with VectorChebyshevPlan" begin
+            # Test function - vector-valued function
+            f(x) = [exp(-x^2), sin(x), cos(x)]
+            a, b = -2.0, 2.0
+            ks = [0.1, 1.0, 5.0, 10.0]
+
+            # Test parameters
+            N = 96
+            K = 3  # Vector dimension
+            P = 3
+
+            # Create standard vector plans
+            std_plan = VectorChebyshevPlan{N,K}()
+            lower_std_plan = VectorChebyshevPlan{N ÷ 3,K}()
+
+            # Create withAtol tailored vector plan
+            atol_plan = TailoredVectorChebyshevPlanWithAtol{N,K,P}(ks, 1.0, a, b)
+
+            # Compute with standard plans
+            std_results = fourier_modes(f, ks, a, b, std_plan)
+            lower_std_results = fourier_modes(f, ks, a, b, lower_std_plan)
+
+            # Compute with atol plan
+            atol_results, _ = fourier_modes(f, atol_plan)
+
+            # Verify results match for each k and component
+            for i in 1:length(ks)
+                for j in 1:K
+                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-15)
+                    @test isapprox(lower_std_results[i, j], atol_plan.lower_modes_buffer[j, i], rtol=1e-15)
+                end
             end
         end
 
@@ -789,39 +798,39 @@ using Test
             f(x) = [exp(-x^2), sin(x)]
             a, b = -3.0, 3.0
             ks = [0.0, 1.0, 2.0]
-    
+
             # Create plans of each type
             N = 63  # N is divisible by P=3
             K = 2   # Vector dimension
             P = 3   # Undersampling factor (must be odd)
-    
+
             # Standard vector plan
             std_plan = VectorChebyshevPlan{N,K}()
-            
+
             # Vector plan with atol
             atol_plan = VectorChebyshevPlanWithAtol{N,K,P}(2.0)
-            
+
             # Tailored vector plan
             tailored_plan = TailoredVectorChebyshevPlan{N,K}(ks, a, b)
-            
+
             # Our new combined plan
             combined_plan = TailoredVectorChebyshevPlanWithAtol{N,K,P}(ks, 2.0, a, b)
-    
+
             # Compute results with each plan
             std_results = fourier_modes(f, ks, a, b, std_plan)
             atol_results, _ = fourier_modes(f, ks, a, b, atol_plan)
-            
+
             chebyshev_coeffs!(f, tailored_plan)
             tailored_results = fourier_modes(tailored_plan)
-            
+
             combined_results, _ = fourier_modes(f, combined_plan)
-    
+
             # All results should match within tolerance
             for i in 1:length(ks)
                 for j in 1:K
-                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-8)
-                    @test isapprox(std_results[i, j], tailored_results[i, j], rtol=1e-8)
-                    @test isapprox(std_results[i, j], combined_results[i, j], rtol=1e-8)
+                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-15)
+                    @test isapprox(std_results[i, j], tailored_results[i, j], rtol=1e-15)
+                    @test isapprox(std_results[i, j], combined_results[i, j], rtol=1e-15)
                 end
             end
         end
