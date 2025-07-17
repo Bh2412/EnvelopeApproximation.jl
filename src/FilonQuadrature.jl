@@ -43,11 +43,12 @@ sample!(f, a:: Real, b:: Real, p:: Int, β:: Float64, γ:: Float64,  buffer:: Ve
 
 function dft_portion(v:: Vector{Float64}, Δk:: Float64, a:: Float64, 
                      b:: Float64, p:: Int, 
-                     fractional_fft_buffer:: FractionalFFTPlan{M}) where M
+                     fractional_fft_plan:: FractionalFFTPlan{M}) where M
     @assert M == 2p + 1 "The buffer length must be equal 2p + 1 where p is the number 
                          of points in the Filon approximation"
     Δx = (b-a) / 2p
     δ = Δx * Δk / 2π
+    return fractional_fft(v, δ, fractional_fft_plan) .* cis(-n*Δk*a)
 end
 
 const Complex0:: Complex = zero(ComplexF64)
@@ -58,10 +59,12 @@ end
 
 E_2pm1(odd_nodes:: AbstractVector{Float64}, v:: AbstractVector{Float64}, κ:: Float64) = dft(odd_nodes, v, κ)
 
-function E(f, a:: Float64, b:: Float64, γ_k:: Float64, p::Int, buffer:: Vector{Float64}):: ComplexF64
+function E(f, a:: Float64, b:: Float64, Δk:: Float64, p::Int, buffer:: Vector{Float64}):: ComplexF64
+    h = (b - a) / (2p)
     _nodes = nodes(a, b, p)
-    α, β, γ = αβγ(h * κ)
+    ks = range(0, 2p*Δk, 2p + 1)
     v = sample!(f, β, γ, _nodes, buffer)
+    α, β, γ = αβγ(h * κ)
     _dft = 
     fa, fb = f(a), f(b)
     _E_2p = E_2p(evens, buffer.even_buffer, κ)
