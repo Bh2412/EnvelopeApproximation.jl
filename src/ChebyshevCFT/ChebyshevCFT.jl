@@ -418,7 +418,8 @@ function values!(f, a::Real, b::Real,
         chebyshev_plan.coeffs_buffer[i] = f(inverse_u(u, scale_factor, t)) * inverse_chebyshev_weight(u)
     end
     for i in 1:(N÷P)
-        chebyshev_plan.lower_order_coeffs_buffer[i] = chebyshev_plan.coeffs_buffer[i*P+((1-P)÷2)]
+        idx = i * P - (P - 1) ÷ 2  # The function chebyshevpoints produced a descending order of points
+        chebyshev_plan.lower_order_coeffs_buffer[i] = chebyshev_plan.coeffs_buffer[idx]  # The function chebyshevpoints produced a descending order of points
     end
     return chebyshev_plan.coeffs_buffer
 end
@@ -525,7 +526,7 @@ function values!(f, a::Real, b::Real,
 
     # Populate the lower order buffer with subsampled points
     @inbounds for i in 1:(N÷P)
-        idx = i * P + ((1 - P) ÷ 2)
+        idx = i * P - (P - 1) ÷ 2  # The function chebyshevpoints produced a descending order of points
         @views plan.lower_order_coeffs_buffer[:, i] .= plan.coeffs_buffer[:, idx]
     end
 end
@@ -665,7 +666,7 @@ function values!(f, plan::TailoredVectorChebyshevPlanWithAtol{N,K,P}) where {N,K
 
     # Populate the lower order buffer with subsampled points
     @inbounds for i in 1:(N÷P)
-        idx = i * P + ((1 - P) ÷ 2)
+        idx = i * P - (P - 1) ÷ 2  # The function chebyshevpoints produced a descending order of points
         @views plan.lower_order_coeffs_buffer[:, i] .= plan.coeffs_buffer[:, idx]
     end
 end
@@ -692,7 +693,7 @@ function fourier_modes(plan::TailoredVectorChebyshevPlanWithAtol{N,K,P})::Tuple{
         inf_norm = max(inf_norm, err)
     end
 
-    error_estimate = maximum(@.(abs(plan.modes_buffer - plan.lower_modes_buffer))) / (P^plan.α - 1)
+    error_estimate = inf_norm / (P^plan.α - 1)
 
     # Warn if error exceeds tolerance
     if error_estimate >= plan.atol
