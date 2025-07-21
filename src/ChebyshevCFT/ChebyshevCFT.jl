@@ -632,12 +632,13 @@ struct TailoredVectorChebyshevPlanWithAtol{N,K,P}
         translation_factors = reshape((@. cis(-ks * t) * scale_factor), 1, :)
         _weights = reshape(multiplication_weights(N), :, 1)
         weights = @. _weights * translation_factors
-        lower_order_weights = weights[1:(N÷P), :]
 
         # Precompute Bessel functions for each k
         for (i, k) in enumerate(ks)
             weights[:, i] .*= besselj(0:(N-1), scale_factor * k)
         end
+        lower_order_weights = weights[1:(N÷P), :]
+
         # Transform plans
         transform_plan! = plan_chebyshevtransform!(zeros(K, N), Val(1), 2)
         lower_order_transform_plan! = plan_chebyshevtransform!(zeros(K, N ÷ P), Val(1), 2)

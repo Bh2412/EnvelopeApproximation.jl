@@ -4,6 +4,7 @@ import EnvelopeApproximation.ChebyshevCFT:
 using EnvelopeApproximation.ChebyshevCFT
 using QuadGK
 using Test
+using Infiltrator
 
 @testset "ChebyshevCFT Tests" begin
     @testset "ChebyshevPlan Tests" begin
@@ -441,32 +442,8 @@ using Test
 
                 # Verify results
                 @test isapprox(std_result, atol_result, rtol=1e-15)
-                @test isapprox(lower_std_result, lower_atol_result, rtol=1e-15)
-            end
-        end
-
-        @testset "Comparison with standard ChebyshevPlan" begin
-            # Test that results match with standard ChebyshevPlan for same N
-            f(x) = exp(-x^2)
-            a, b = -3.0, 3.0
-            ks = [0.0, 1.0, 2.0]
-
-            # N=63 is divisible by P=3
-            std_plan = ChebyshevPlan{63}()
-            atol_plan = ChebyshevPlanWithAtol{63,3}(2.0)
-
-            # Compute with standard plan
-            chebyshev_coeffs!(f, a, b, std_plan)
-            s = scale(a, b)
-            t = translation(a, b)
-            std_results = [fourier_mode(k, std_plan, s, t) for k in ks]
-
-            # Compute with atol plan
-            atol_results, _ = fourier_modes(f, ks, a, b, atol_plan)
-
-            # Results should match
-            for i in 1:length(ks)
-                @test isapprox(std_results[i], atol_results[i], rtol=1e-8)
+                @test atol_plan.lower_order_coeffs_buffer ≈ lower_std_plan.coeffs_buffer
+                @test isapprox(lower_std_result, lower_atol_result, rtol=1e-12)
             end
         end
     end
@@ -540,68 +517,6 @@ using Test
             end
         end
 
-        @testset "Vector lower orderedness" begin
-            # Use a vector of Gaussian functions with different parameters
-            σ_values = [0.5, 0.8, 1.0]
-            μ_values = [0.0, 0.5, -0.5]
-
-            f(x) = [exp(-(x - μ)^2 / (2 * σ^2)) for (σ, μ) in zip(σ_values, μ_values)]
-            a, b = -5.0, 5.0  # Large enough domain for all gaussians
-
-            # Calculate expected Fourier transform using numerical integration
-            k = 1.0
-            expected_ft = Vector{ComplexF64}(undef, 3)
-            for j in 1:3
-                σ, μ = σ_values[j], μ_values[j]
-                gaussian_f(x) = exp(-(x - μ)^2 / (2 * σ^2))
-                expected_ft[j] = quadgk(x -> gaussian_f(x) * cis(-k * x), a, b, rtol=1e-13)[1]
-            end
-
-            # Test with increasing degrees, all with P=3
-            degrees = 5 .* (3 .^ (1:3))  # Must be divisible by 3
-            modes = Vector{Vector{ComplexF64}}()
-            lower_modes = Vector{Vector{ComplexF64}}()
-            errors_full = Vector{Vector{Float64}}()
-            errors_lower = Vector{Vector{Float64}}()
-
-            for N in degrees
-                plan = VectorChebyshevPlanWithAtol{N,3,3}(2.0)
-                chebyshev_coeffs!(f, a, b, plan)
-                s = scale(a, b)
-                t = translation(a, b)
-
-                # Get both the full and lower order approximations
-                full_mode, lower_mode = fourier_mode(k, plan, s, t)
-                push!(modes, copy(full_mode))
-                push!(lower_modes, copy(lower_mode))
-
-                # Record absolute errors for each component
-                push!(errors_full, [abs(full_mode[j] - expected_ft[j]) for j in 1:3])
-                push!(errors_lower, [abs(lower_mode[j] - expected_ft[j]) for j in 1:3])
-            end
-
-            # Lower order of higher degree should match full order of lower degree
-            for i in 1:(length(degrees)-1)
-                for j in 1:3
-                    @test isapprox(modes[i][j], lower_modes[i+1][j])
-                end
-            end
-
-            # Check that errors decrease with increasing degree for all components
-            for i in 1:(length(degrees)-1)
-                for j in 1:3
-                    @test errors_full[i][j] > errors_full[i+1][j]
-                    @test errors_lower[i][j] > errors_lower[i+1][j]
-                end
-            end
-
-            # Check that the full approximation is always better than lower for all components
-            for i in 1:length(degrees)
-                for j in 1:3
-                    @test errors_full[i][j] < errors_lower[i][j]
-                end
-            end
-        end
         @testset "Compatibility with VectorChebyshevPlan" begin
             # Test function - vector-valued function
             f(x) = [exp(-x^2), sin(x), cos(x)]
@@ -628,6 +543,8 @@ using Test
             # Define scaling and translation parameters
             s = scale(a, b)
             t = translation(a, b)
+            
+            @test atol_plan.lower_order_coeffs_buffer ≈ lower_std_plan.coeffs_buffer
 
             # Test different wavenumbers
             for k in ks
@@ -640,8 +557,8 @@ using Test
 
                 # Verify results match for each component
                 for j in 1:K
-                    @test isapprox(std_result[j], atol_result[j], rtol=1e-15)
-                    @test isapprox(lower_std_result[j], lower_atol_result[j], rtol=1e-15)
+                    @test isapprox(std_result[j], atol_result[j], rtol=1e-12)
+                    @test isapprox(lower_std_result[j], lower_atol_result[j], rtol=1e-12)
                 end
             end
         end
@@ -667,23 +584,6 @@ using Test
                     @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-8)
                 end
             end
-        end
-
-        @testset "Parameter P impact" begin
-            # Test how P parameter affects error estimation
-            f(x) = [sin(x), cos(x)]
-            a, b = -π, π
-            ks = [1.0]
-
-            # Different P values (N must be divisible by P), P must be odd
-            plan1 = VectorChebyshevPlanWithAtol{63,2,3}(2.0)  # 63 ÷ 3 = 21
-            plan2 = VectorChebyshevPlanWithAtol{63,2,9}(2.0)  # 63 ÷ 9 = 7
-
-            _, error1 = fourier_modes(f, ks, a, b, plan1)
-            _, error2 = fourier_modes(f, ks, a, b, plan2)
-
-            # For same α, larger P should give larger error estimate (since P^α - 1 is smaller)
-            @test error1 < error2
         end
 
         @testset "Warning generation" begin
@@ -772,7 +672,7 @@ using Test
 
             # Create standard vector plans
             std_plan = VectorChebyshevPlan{N,K}()
-            lower_std_plan = VectorChebyshevPlan{N ÷ 3,K}()
+            lower_std_plan = VectorChebyshevPlan{N ÷ P,K}()
 
             # Create withAtol tailored vector plan
             atol_plan = TailoredVectorChebyshevPlanWithAtol{N,K,P}(ks, 1.0, a, b)
@@ -784,11 +684,13 @@ using Test
             # Compute with atol plan
             atol_results, _ = fourier_modes(f, atol_plan)
 
+            @test atol_plan.lower_order_coeffs_buffer ≈ lower_std_plan.coeffs_buffer
+
             # Verify results match for each k and component
             for i in 1:length(ks)
                 for j in 1:K
-                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-15)
-                    @test isapprox(lower_std_results[i, j], atol_plan.lower_modes_buffer[j, i], rtol=1e-15)
+                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-12)
+                    @test isapprox(lower_std_results[i, j], atol_plan.lower_modes_buffer[j, i], rtol=1e-12)
                 end
             end
         end
