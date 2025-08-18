@@ -319,7 +319,7 @@ end
 
 export TailoredVectorChebyshevPlan
 
-struct TailoredVectorChebyshevPlan{N,k}
+struct TailoredVectorChebyshevPlan{N,K}
     points::Vector{Float64}
     coeffs_buffer::Matrix{Float64}
     weights::Matrix{ComplexF64}
