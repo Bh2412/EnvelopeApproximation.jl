@@ -115,7 +115,6 @@ begin
 end
 
 begin
-    using CairoMakie
     R = 4.8
     d = 1.2
     nucleations = [(time=0., site=Point3(0., 0., -d / 2)), (time=0., site=Point3(0., 0., d / 2))]
@@ -132,7 +131,6 @@ begin
 end
 
 begin
-    using CairoMakie
     R = 4.8
     d = 1.2
     nucleations = [(time=0., site=Point3(0., 0., -d / 2)), (time=1., site=Point3(0., 0., d / 2))]
