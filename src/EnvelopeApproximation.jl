@@ -83,6 +83,8 @@ include("GeometricStressEnergyTensor.jl")
 
 include("ChebyshevCFT/ChebyshevCFTDiagnostics.jl")
 
+include("SphericalHarmonics.jl")
+
 include("GravitationalPotentials.jl")
 
 include("ISWPowerSpectrum.jl")
