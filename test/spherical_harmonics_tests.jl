@@ -51,31 +51,19 @@ using EnvelopeApproximation.SphericalHarmonics
         @test maximum(abs.(coeffs_copy)) < 1e-10
     end
 
-    @testset "sin(θ)cos(ϕ) ~ Y₁¹ (real SH)" begin
-        # In real spherical harmonics: sin(θ)cos(ϕ) = √(4π/3) Y₁¹
-        f_x(ϕ, θ) = [sin(θ) * cos(ϕ)]
-        lmax = 1
-        coeffs = spherical_harmonic_coefficients(f_x, lmax, 1)
+    @testset "sin(θ)sin(ϕ) ~ Y₁⁻¹ (real SH), sin(θ)cos(ϕ) ~ Y₁¹ (real SH)" begin
+        # In real spherical harmonics: sin(θ)sin(ϕ) = √(4π/3) Y₁⁻¹
+        f_y(ϕ, θ) = [sin(θ) * cos(ϕ), sin(θ) * sin(ϕ)]
+        lmax = 20
+        coeffs = spherical_harmonic_coefficients(f_y, lmax, 2)
         
         @test coeffs[1, 3, 1] ≈ sqrt(4π/3)    # Y₁¹ (real)
+        @test coeffs[1, 2, 2] ≈ sqrt(4π/3)    # Y₁⁻¹ (real)
         
         # Check all other coefficients are zero
-        coeffs_copy = copy(coeffs[:, :, 1])
-        coeffs_copy[1, 3] = 0
-        @test maximum(abs.(coeffs_copy)) < 1e-10
-    end
-
-    @testset "sin(θ)sin(ϕ) ~ Y₁⁻¹ (real SH)" begin
-        # In real spherical harmonics: sin(θ)sin(ϕ) = √(4π/3) Y₁⁻¹
-        f_y(ϕ, θ) = [sin(θ) * sin(ϕ)]
-        lmax = 20
-        coeffs = spherical_harmonic_coefficients(f_y, lmax, 1)
-        
-        @test coeffs[1, 2, 1] ≈ sqrt(4π/3)    # Y₁⁻¹ (real)
-        
-        # Check all other coefficients are zero
-        coeffs_copy = copy(coeffs[:, :, 1])
-        coeffs_copy[1, 2] = 0
+        coeffs_copy = copy(coeffs)
+        coeffs_copy[1, 3, 1] = 0
+        coeffs_copy[1, 2, 2] = 0
         @test maximum(abs.(coeffs_copy)) < 1e-10
     end
 
