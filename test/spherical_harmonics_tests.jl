@@ -10,9 +10,6 @@ using EnvelopeApproximation.SphericalHarmonics
         
         # Y₀₀ should be non-zero
         @test abs(coeffs[1, 1, 1]) ≈ sqrt(4π)
-        println("Y₀₀ coefficient: ", coeffs[1, 1, 1])
-        println("Expected: ", sqrt(4π))
-        
         # Check all other coefficients are zero
         coeffs_copy = copy(coeffs[:, :, 1])
         coeffs_copy[1, 1] = 0
