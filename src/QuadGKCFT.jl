@@ -38,7 +38,7 @@ Integrates `f(μ) * cis(-k * μ)` for all k in the plan simultaneously.
 - `scale`: Scaling factor for k (e.g., bubble radius).
 - `limits`: Integration boundaries and discontinuities (e.g., -1.0, 1.0).
 """
-function fourier_modes(f, ks:: Vector{<: Real}, plan::VectorQuadGKPlan{K}, limits::Real..., )::Matrix{ComplexF64} where {K}
+function fourier_modes(f, ks:: Vector{<: Real}, a:: Real, b:: Real, plan::VectorQuadGKPlan{K})::Tuple{Matrix{ComplexF64}, Float64} where {K}
     Nk = length(ks)
 
     # 1. Resize phase buffer if new ks vector is larger than previous runs
@@ -55,12 +55,12 @@ function fourier_modes(f, ks:: Vector{<: Real}, plan::VectorQuadGKPlan{K}, limit
         return val * transpose(plan.phase_buffer)
     end
 
-    val, err = quadgk(integrand, limits...; 
+    val, err = quadgk(integrand, a, b; 
                       segbuf=plan.segbuf, 
                       rtol=plan.rtol, 
                       atol=plan.atol)
     
-    return transpose(val) 
+    return val, err
 end
 
 end

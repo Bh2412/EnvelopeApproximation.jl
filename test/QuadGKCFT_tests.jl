@@ -20,9 +20,10 @@ using LinearAlgebra
         
         # 4. Run Vectorized Transform
         # Result shape should be (length(ks), 3)
-        result_matrix = fourier_modes(f, ks, plan, a, b)
+        result_matrix, err = fourier_modes(f, ks, a, b, plan)
         
-        @test size(result_matrix) == (length(ks), 3)
+        @test err < 1e-8
+        @test size(result_matrix) == (3, length(ks))
 
         # 5. Verification Loop
         for (i_k, k) in enumerate(ks)
@@ -35,7 +36,7 @@ using LinearAlgebra
                 # Note: fourier_modes computes ∫ f(x) * cis(-k*x) dx
                 scalar_truth, _ = quadgk(x -> component_f(x) * cis(-k * x), a, b, rtol=1e-12)
                 
-                vector_val = result_matrix[i_k, i_comp]
+                vector_val = result_matrix[i_comp, i_k]
                 
                 @test isapprox(vector_val, scalar_truth, rtol=1e-8)
             end
