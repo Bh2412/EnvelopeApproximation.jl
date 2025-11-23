@@ -4,17 +4,39 @@ using EnvelopeApproximation.BubbleBasics: Bubble, Vec3
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, PeriodicInterval, polar_limits, IntersectionDome, intersection_domes
 import IterTools: partition
-import EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, fourier_modes
+import EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, fourier_modes as chebyshev_fourier_modes, VectorChebyshevPlan
+import EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan, fourier_modes as quadgk_fourier_modes
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
 using HCubature
 
-function ∫_ϕ_x̂_ix̂_j(μ:: Float64, p:: PeriodicInterval):: NTuple{6, Float64}
-    ϕ1, ϕ2 = p.ϕ1, p.ϕ1 + p.Δ
-    s2 = 1 - μ ^ 2
-    s = sqrt(s2)
-    return s2 * ((1 / 2) * (ϕ2 - ϕ1) + (1/4) * (sin(2ϕ2) - sin(2ϕ1))), s2 * (1 / 4) * (cos(2ϕ1) - cos(2ϕ2)), (μ * s) * (sin(ϕ2) - sin(ϕ1)), s2 * ((1/2) * (ϕ2 - ϕ1) - (1/4) * (sin(2ϕ2) - sin(2ϕ1))), μ * s * (cos(ϕ1) - cos(ϕ2)), μ ^ 2 * (ϕ2 - ϕ1) 
+@inline function ∫_ϕ_x̂_ix̂_j(μ::Float64, p::PeriodicInterval)
+    ϕ₁, ϕ₂ = p.ϕ1, p.ϕ1 + p.Δ
+    
+    # Pre-calculate powers and roots
+    μ² = μ^2
+    s² = 1 - μ²
+    s  = sqrt(s²)
+    
+    # Pre-calculate trigonometric differences
+    # Note: For cosine terms, the integral of sin is -cos, 
+    # resulting in the order cos(1) - cos(2).
+    Δϕ     = ϕ₂ - ϕ₁
+    Δsinϕ  = sin(ϕ₂)  - sin(ϕ₁)
+    Δcosϕ  = cos(ϕ₁)  - cos(ϕ₂)
+    Δsin2ϕ = sin(2ϕ₂) - sin(2ϕ₁)
+    Δcos2ϕ = cos(2ϕ₁) - cos(2ϕ₂) 
+    
+    # 6 components: xx, xy, xz, yy, yz, zz
+    return SVector{6, Float64}(
+        s² * (0.5Δϕ + 0.25Δsin2ϕ), # xx
+        s² * 0.25Δcos2ϕ,           # xy
+        μ*s * Δsinϕ,               # xz
+        s² * (0.5Δϕ - 0.25Δsin2ϕ), # yy
+        μ*s * Δcosϕ,               # yz
+        μ² * Δϕ                    # zz
+    )
 end
 
 struct x̂_ix̂_j
@@ -26,27 +48,40 @@ end
 x̂_ix̂_j(n:: Int64) = x̂_ix̂_j(_buffers(n)...)
 
 function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble, 
-                      intersection_domes:: Vector{IntersectionDome}):: MVector{6, Float64}
-    V = zeros(MVector{6, Float64})
+                      intersection_domes:: Vector{IntersectionDome}):: SVector{6, Float64}
+    V = SVector{6, Float64}(0., 0., 0., 0., 0., 0.)
+
     periodic_intervals = ring_domes_complement_intersection!(μ, bubble.radius, intersection_domes, 
                                                              f.arcs_buffer, f.limits_buffer, f.intersection_buffer)
     @inbounds for interval in periodic_intervals
-        V .+= ∫_ϕ_x̂_ix̂_j(μ, interval)
+        V += ∫_ϕ_x̂_ix̂_j(μ, interval)
     end
     return V
+end
+
+function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorQuadGKPlan{K}):: Matrix{ComplexF64} where {K}
+    return quadgk_fourier_modes(f, ks, a, b, plan)
+end
+
+function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorChebyshevPlan{N, K}):: Matrix{ComplexF64} where {N, K}
+    return collect(transpose(chebyshev_fourier_modes(f, ks, a, b, plan)))
+end
+
+function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorChebyshevPlanWithAtol{N, K, P}):: Matrix{ComplexF64} where {N, K, P}
+    return collect(transpose(chebyshev_fourier_modes(f, ks, a, b, plan)[1]))
 end
 
 function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
                                      ks:: AbstractVector{Float64}, 
                                      bubble:: Bubble, 
                                      domes:: Vector{IntersectionDome}, 
-                                     chebyshev_plan:: VectorChebyshevPlanWithAtol{N, 6, P}, 
+                                     plan::P, 
                                      _x̂_ix̂_j:: x̂_ix̂_j; 
-                                     ΔV:: Float64 = 1.) where {N, P}
+                                     ΔV:: Float64 = 1.) where {P}
     @assert size(V) == (length(ks), 6) "The output vector must be of the same length of the input k vector"
-    modes = fourier_modes(μ -> _x̂_ix̂_j(μ, bubble, domes), ks * bubble.radius, -1., 1., chebyshev_plan)[1]
+    modes = fourier_modes(μ -> _x̂_ix̂_j(μ, bubble, domes), ks * bubble.radius, -1., 1., plan)[1]
     es = map(ks) do k
-        cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3)
+        cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3.)
     end
     @. V += $reshape(es, $length(ks), 1) * modes    
 end
@@ -55,14 +90,14 @@ end
 function ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
                 bubbles:: AbstractVector{Bubble}, 
                 ball_space:: BallSpace,
-                chebyshev_plan:: VectorChebyshevPlanWithAtol{N, 6, P},
+                plan:: P,
                 _x̂_ix̂_j:: x̂_ix̂_j;
-                ΔV:: Float64 = 1.):: Matrix{ComplexF64} where {N, P}
+                ΔV:: Float64 = 1.):: Matrix{ComplexF64} where {P}
     V = zeros(ComplexF64, length(ks), 6)
     domes = intersection_domes(bubbles, ball_space)
     @inbounds for (bubble_index, _domes) in domes
     bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
-                                chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
+                                plan, _x̂_ix̂_j; ΔV=ΔV)
     end
     return V
 end
@@ -127,23 +162,23 @@ export Directional_Π
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
 function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
-                       ball_space:: BallSpace, chebyshev_plan:: VectorChebyshevPlanWithAtol{N, 6, P}, 
-                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64} where {N, P}
+                       ball_space:: BallSpace, plan:: P, 
+                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64} where {P}
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
-    T1 = ∂iϕ∂jϕ(ωs, bubbles1, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
-    T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV)
-    return @. Λ($eachrow(T1), $eachrow(T2)) / $volume(ball_space)
+    T1 = ∂iϕ∂jϕ(ωs, bubbles1, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
+    T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
+    return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(ball_space)
 end
 export Π
 
 function Π(t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
-           ball_space:: BallSpace, chebyshev_plan:: VectorChebyshevPlanWithAtol{N, 6, P}, 
-           _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64} where {N, P}
+           ball_space:: BallSpace, plan::P, 
+           _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64} where {P}
     function f(_n̂:: SVector{2, Float64}):: Vector{Float64}
         ϕ, θ = _n̂
-        return @. 2 * real($Directional_Π($n̂(ϕ, θ), t1, t2, ωs, snapshot, ball_space, chebyshev_plan, _x̂_ix̂_j; ΔV=ΔV) * $sin(θ))
+        return @. 2 * real($Directional_Π($n̂(ϕ, θ), t1, t2, ωs, snapshot, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV) * $sin(θ))
     end
     v, err = hcubature(f, SVector(0., 0.,), SVector(2π, π / 2); kwargs...)  # It is enough to integrate over half the ski
     return v ./ 4π, err / 4π
