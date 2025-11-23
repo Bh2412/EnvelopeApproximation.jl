@@ -79,6 +79,8 @@ include("FilonQuadrature.jl")
 
 include("ChebyshevCFT/ChebyshevCFT.jl")
 
+include("QuadGKCFT.jl")
+
 include("GeometricStressEnergyTensor.jl")
 
 include("ChebyshevCFT/ChebyshevCFTDiagnostics.jl")
