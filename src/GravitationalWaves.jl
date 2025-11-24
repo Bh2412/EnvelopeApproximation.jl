@@ -4,8 +4,9 @@ using EnvelopeApproximation.BubbleBasics: Bubble, Vec3
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, PeriodicInterval, polar_limits, IntersectionDome, intersection_domes
 import IterTools: partition
-import EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, fourier_modes as chebyshev_fourier_modes, VectorChebyshevPlan
-import EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan, fourier_modes as quadgk_fourier_modes
+import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
+using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, VectorChebyshevPlan
+using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
@@ -59,41 +60,43 @@ function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble,
     return V
 end
 
-function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorQuadGKPlan{K}):: Matrix{ComplexF64} where {K}
-    return quadgk_fourier_modes(f, ks, a, b, plan)
+function dispatch_fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorQuadGKPlan{K}):: Matrix{ComplexF64} where {K}
+    val, err = fourier_modes(f, ks, a, b, plan)
+    return val
 end
 
-function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorChebyshevPlan{N, K}):: Matrix{ComplexF64} where {N, K}
-    return collect(transpose(chebyshev_fourier_modes(f, ks, a, b, plan)))
+function dispatch_fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorChebyshevPlan{N, K}):: Matrix{ComplexF64} where {N, K}
+    return collect(permutedims(fourier_modes(f, ks, a, b, plan)))
 end
 
-function fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, plan:: VectorChebyshevPlanWithAtol{N, K, P}):: Matrix{ComplexF64} where {N, K, P}
-    return collect(transpose(chebyshev_fourier_modes(f, ks, a, b, plan)[1]))
+function dispatch_fourier_modes(f, ks:: AbstractVector{Float64}, a:: Float64, b:: Float64, 
+                                plan:: VectorChebyshevPlanWithAtol{N, K, P}):: Matrix{ComplexF64} where {N, K, P}
+    return collect(permutedims(fourier_modes(f, ks, a, b, plan)[1]))
 end
 
 function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
                                      ks:: AbstractVector{Float64}, 
                                      bubble:: Bubble, 
                                      domes:: Vector{IntersectionDome}, 
-                                     plan::P, 
+                                     plan::CFTPlan, 
                                      _x̂_ix̂_j:: x̂_ix̂_j; 
-                                     ΔV:: Float64 = 1.) where {P}
-    @assert size(V) == (length(ks), 6) "The output vector must be of the same length of the input k vector"
-    modes = fourier_modes(μ -> _x̂_ix̂_j(μ, bubble, domes), ks * bubble.radius, -1., 1., plan)[1]
+                                     ΔV:: Float64 = 1.)
+    @assert size(V) == (6, length(ks)) "Output buffer V must be (6, Nk)"
+    modes = dispatch_fourier_modes(μ -> _x̂_ix̂_j(μ, bubble, domes), ks * bubble.radius, -1., 1., plan)
     es = map(ks) do k
         cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3.)
     end
-    @. V += $reshape(es, $length(ks), 1) * modes    
+    @. V += $reshape(es, 1, $length(ks)) * modes    
 end
 
 
 function ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
                 bubbles:: AbstractVector{Bubble}, 
                 ball_space:: BallSpace,
-                plan:: P,
+                plan:: CFTPlan,
                 _x̂_ix̂_j:: x̂_ix̂_j;
-                ΔV:: Float64 = 1.):: Matrix{ComplexF64} where {P}
-    V = zeros(ComplexF64, length(ks), 6)
+                ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+    V = zeros(ComplexF64, 6, length(ks))
     domes = intersection_domes(bubbles, ball_space)
     @inbounds for (bubble_index, _domes) in domes
     bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
