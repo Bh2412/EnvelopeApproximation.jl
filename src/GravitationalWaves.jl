@@ -6,7 +6,7 @@ using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_i
 import IterTools: partition
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, VectorChebyshevPlan
-using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
+using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan, fourier_modes
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
@@ -40,7 +40,7 @@ using HCubature
     )
 end
 
-struct x̂_ix̂_j
+mutable struct x̂_ix̂_j
     arcs_buffer:: Vector{PeriodicInterval}
     limits_buffer:: Vector{Tuple{Float64, Float64}}
     intersection_buffer:: Vector{PeriodicInterval}
