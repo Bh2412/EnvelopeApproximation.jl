@@ -2,6 +2,8 @@ module SphericalHarmonics
 
 using FastTransforms
 
+export spherical_harmonic_coefficients, monopole
+
 """
 Compute spherical harmonic coefficients of a vector-valued function f(ϕ, θ). The output matrix follows the convention:
 
@@ -53,6 +55,26 @@ function spherical_harmonic_coefficients(f, lmax::Int, K::Int)
     return sh_coeffs
 end
 
-export spherical_harmonic_coefficients
+"""
+    monopole(sh_coeffs)
+
+Compute the integral of the vector field over the sphere using the monopole moment (Y₀⁰) 
+from pre-calculated coefficients.
+"""
+function monopole(sh_coeffs::AbstractArray{ComplexF64, 3})
+    # The integral of Y₀⁰ over the unit sphere is √4π.
+    # In FastTransforms layout, the (0,0) mode is at index [1, 1].
+    return sh_coeffs[1, 1, :] .* sqrt(4π)
+end
+
+"""
+    monopole(f, lmax, K)
+
+Compute the spherical harmonic coefficients of `f` up to `lmax` and return the monopole integral.
+"""
+function monopole(f, lmax::Int, K::Int)
+    coeffs = spherical_harmonic_coefficients(f, lmax, K)
+    return monopole(coeffs)
+end
 
 end

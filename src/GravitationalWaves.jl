@@ -164,9 +164,9 @@ end
 export Directional_Π
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
-function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
-                       ball_space:: BallSpace, plan:: P, 
-                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64} where {P}
+function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, 
+                       snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
+                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64}
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
@@ -177,8 +177,8 @@ end
 export Π
 
 function Π(t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
-           ball_space:: BallSpace, plan::P, 
-           _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64} where {P}
+           ball_space:: BallSpace, plan::CFTPlan, 
+           _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64}
     function f(_n̂:: SVector{2, Float64}):: Vector{Float64}
         ϕ, θ = _n̂
         return @. 2 * real($Directional_Π($n̂(ϕ, θ), t1, t2, ωs, snapshot, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV) * $sin(θ))
