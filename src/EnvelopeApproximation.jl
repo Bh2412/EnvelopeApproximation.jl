@@ -77,13 +77,13 @@ include("FractionalFFT.jl")
 
 include("FilonQuadrature.jl")
 
-include("ChebyshevCFT/ChebyshevCFT.jl")
+include("CFT/CFTInteface.jl")
 
-include("QuadGKCFT.jl")
+include("CFT/ChebyshevCFT.jl")
+
+include("CFT/QuadGKCFT.jl")
 
 include("GeometricStressEnergyTensor.jl")
-
-include("ChebyshevCFT/ChebyshevCFTDiagnostics.jl")
 
 include("SphericalHarmonics.jl")
 
