@@ -64,71 +64,71 @@ using EnvelopeApproximation.SphericalHarmonics
         @test maximum(abs.(coeffs_copy)) < 1e-10
     end
 
-end
+    @testset "SHPlan Interface Consistency Tests" begin
+        
+        # Shared parameters
+        lmax = 20
+        
+        # Helper to manually compute integral from raw coefficients
+        function manual_integration(coeffs)
+            # The integral is the monopole moment (Y₀₀) scaled by √4π
+            # In FastTransforms layout, Y₀₀ is at [1, 1]
+            return coeffs[1, 1, :] * sqrt(4π)
+        end
 
-@testset "SHPlan Interface Consistency Tests" begin
-    
-    # Shared parameters
-    lmax = 20
-    
-    # Helper to manually compute integral from raw coefficients
-    function manual_integration(coeffs)
-        # The integral is the monopole moment (Y₀₀) scaled by √4π
-        # In FastTransforms layout, Y₀₀ is at [1, 1]
-        return coeffs[1, 1, :] * sqrt(4π)
-    end
+        @testset "Scalar Function: f = 1 + cos(θ)^2" begin
+            K = 1
+            plan = SHPlan(lmax, K)
+            
+            # Define function
+            f(ϕ, θ) = [1.0 + cos(θ)^2]
+            
+            # 1. New API Method
+            res_api = integrate_angular(plan, f)
+            
+            # 2. Direct Method (No Plan)
+            raw_coeffs = spherical_harmonic_coefficients(f, lmax, K)
+            res_manual = manual_integration(raw_coeffs)
+            
+            @test res_api ≈ res_manual atol=1e-12
+        end
 
-    @testset "Scalar Function: f = 1 + cos(θ)^2" begin
-        K = 1
-        plan = SHPlan(lmax, K)
+        @testset "Vector Function: f = [sin(θ)cos(ϕ), cos(θ)]" begin
+            K = 2
+            plan = SHPlan(lmax, K)
+            
+            # Define vector-valued function
+            f_vec(ϕ, θ) = [sin(θ)*cos(ϕ), cos(θ)]
+            
+            # 1. New API Method
+            res_api = integrate_angular(plan, f_vec)
+            
+            # 2. Direct Method (No Plan)
+            raw_coeffs = spherical_harmonic_coefficients(f_vec, lmax, K)
+            res_manual = manual_integration(raw_coeffs)
+            
+            @test res_api ≈ res_manual atol=1e-12
+        end
         
-        # Define function
-        f(ϕ, θ) = [1.0 + cos(θ)^2]
-        
-        # 1. New API Method
-        res_api = integrate_angular(plan, f)
-        
-        # 2. Direct Method (No Plan)
-        raw_coeffs = spherical_harmonic_coefficients(f, lmax, K)
-        res_manual = manual_integration(raw_coeffs)
-        
-        @test res_api ≈ res_manual atol=1e-12
-    end
+        @testset "High Frequency: f = cos(10θ)" begin
+            # Test consistency even when resolution might be borderline
+            # (Consistency should hold regardless of accuracy)
+            K = 1
+            lmax_low = 10 # Just barely enough to capture basic modes?
+            plan = SHPlan(lmax_low, K)
+            
+            f_high(ϕ, θ) = [cos(5*θ)] # Lower freq to ensure fit in lmax=10
+            
+            # 1. New API Method
+            res_api = integrate_angular(plan, f_high)
+            
+            # 2. Direct Method
+            raw_coeffs = spherical_harmonic_coefficients(f_high, lmax_low, K)
+            res_manual = manual_integration(raw_coeffs)
+            
+            @test res_api ≈ res_manual atol=1e-12
+        end
 
-    @testset "Vector Function: f = [sin(θ)cos(ϕ), cos(θ)]" begin
-        K = 2
-        plan = SHPlan(lmax, K)
-        
-        # Define vector-valued function
-        f_vec(ϕ, θ) = [sin(θ)*cos(ϕ), cos(θ)]
-        
-        # 1. New API Method
-        res_api = integrate_angular(plan, f_vec)
-        
-        # 2. Direct Method (No Plan)
-        raw_coeffs = spherical_harmonic_coefficients(f_vec, lmax, K)
-        res_manual = manual_integration(raw_coeffs)
-        
-        @test res_api ≈ res_manual atol=1e-12
-    end
-    
-    @testset "High Frequency: f = cos(10θ)" begin
-        # Test consistency even when resolution might be borderline
-        # (Consistency should hold regardless of accuracy)
-        K = 1
-        lmax_low = 10 # Just barely enough to capture basic modes?
-        plan = SHPlan(lmax_low, K)
-        
-        f_high(ϕ, θ) = [cos(5*θ)] # Lower freq to ensure fit in lmax=10
-        
-        # 1. New API Method
-        res_api = integrate_angular(plan, f_high)
-        
-        # 2. Direct Method
-        raw_coeffs = spherical_harmonic_coefficients(f_high, lmax_low, K)
-        res_manual = manual_integration(raw_coeffs)
-        
-        @test res_api ≈ res_manual atol=1e-12
     end
 
 end

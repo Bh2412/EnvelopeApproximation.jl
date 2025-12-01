@@ -1,8 +1,9 @@
 module SphericalHarmonics
 
 using FastTransforms
+import EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
 
-export spherical_harmonic_coefficients, monopole
+export spherical_harmonic_coefficients, monopole, SHPlan, integrate_angular
 
 """
 Compute spherical harmonic coefficients of a vector-valued function f(ϕ, θ). The output matrix follows the convention:
@@ -74,6 +75,30 @@ Compute the spherical harmonic coefficients of `f` up to `lmax` and return the m
 """
 function monopole(f, lmax::Int, K::Int)
     coeffs = spherical_harmonic_coefficients(f, lmax, K)
+    return monopole(coeffs)
+end
+
+"""
+    SHPlan
+
+Integration strategy using Spherical Harmonics decomposition.
+This is efficient for smooth functions and allows for easy spectral analysis.
+
+Fields:
+- `lmax`: The maximum spherical harmonic degree (resolution).
+- `K`: The dimension of the output vector (e.g., number of k-modes/wavenumbers).
+"""
+struct SHPlan <: AbstractAngularIntegrationPlan
+    lmax::Int
+    K::Int
+end
+
+function integrate_angular(plan::SHPlan, f_directional::Function)
+    # 1. Decompose the directional function into spherical harmonics [cite: 47]
+    coeffs = spherical_harmonic_coefficients(f_directional, plan.lmax, plan.K)
+    
+    # 2. The integral over the sphere is exactly the monopole moment * sqrt(4π)
+    # The 'monopole' function in SphericalHarmonics.jl already applies this factor[cite: 51].
     return monopole(coeffs)
 end
 
