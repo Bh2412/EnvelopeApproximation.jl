@@ -85,7 +85,9 @@ include("CFT/QuadGKCFT.jl")
 
 include("GeometricStressEnergyTensor.jl")
 
-include("SphericalHarmonics.jl")
+include("AngularIntegration/AngularIntegrationInterface.jl")
+
+include("AngularIntegration/SphericalHarmonics.jl")
 
 include("GravitationalPotentials.jl")
 

@@ -6,11 +6,15 @@ using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_i
 import IterTools: partition
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, VectorChebyshevPlan
-using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan, fourier_modes
+using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
+using EnvelopeApproximation.SphericalHarmonics: SHPlan, integrate_angular
+using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
 using HCubature
+
+export Directional_Π, Π, x̂_ix̂_j, symmetric_tensor_indices, inverse_symmetric_tensor_indices
 
 @inline function ∫_ϕ_x̂_ix̂_j(μ::Float64, p::PeriodicInterval)
     ϕ₁, ϕ₂ = p.ϕ1, p.ϕ1 + p.Δ
@@ -174,18 +178,41 @@ function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractV
     T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
     return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(ball_space)
 end
-export Π
 
-function Π(t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, 
-           ball_space:: BallSpace, plan::CFTPlan, 
-           _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1., kwargs...):: Tuple{Vector{ComplexF64}, Float64}
-    function f(_n̂:: SVector{2, Float64}):: Vector{Float64}
-        ϕ, θ = _n̂
-        return @. 2 * real($Directional_Π($n̂(ϕ, θ), t1, t2, ωs, snapshot, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV) * $sin(θ))
+"""
+    Π(plan, t1, t2, ωs, snapshot, ball_space, cft_plan, _x̂_ix̂_j; ΔV=1.)
+
+Computes the isotropic anisotropic stress correlation by integrating 
+Directional_Π over all angles using the provided strategy `plan`.
+
+Returns:
+- Vector{ComplexF64}: The angle-averaged value (Total Integral / 4π).
+"""
+function Π(t1::Float64, 
+           t2::Float64, 
+           ωs::AbstractVector{Float64}, 
+           snapshot::BubblesSnapShot, 
+           ball_space::BallSpace, 
+           cft_plan::CFTPlan, 
+           angular_integration_plan:: SHPlan,
+           _x̂_ix̂_j::x̂_ix̂_j; 
+           ΔV::Float64 = 1.)
+           
+    # Wrapper to convert (ϕ, θ) into the 3D direction vector n̂ expected by Directional_Π
+    # and ensure the output format matches what SphericalHarmonics expects.
+    function f_wrapper(ϕ::Float64, θ::Float64)
+        # Convert angles to unit vector [cite: 8, 104]
+        n_vec = n̂(SVector{2, Float64}(ϕ, θ)) 
+        
+        # Call the physics kernel 
+        return Directional_Π(n_vec, t1, t2, ωs, snapshot, ball_space, cft_plan, _x̂_ix̂_j; ΔV=ΔV)
     end
-    v, err = hcubature(f, SVector(0., 0.,), SVector(2π, π / 2); kwargs...)  # It is enough to integrate over half the ski
-    return v ./ 4π, err / 4π
-end
 
+    # Compute the full integral ∫ f dΩ
+    total_integral = integrate_angular(angular_integration_plan, f_wrapper)
+    
+    # Return average (integral / 4π) to match previous conventions 
+    return total_integral ./ 4π
+end
 
 end
