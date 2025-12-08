@@ -180,7 +180,15 @@ function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractV
 end
 
 """
-    Π(plan, t1, t2, ωs, snapshot, ball_space, cft_plan, _x̂_ix̂_j; ΔV=1.)
+    Π(t1::Float64, 
+      t2::Float64, 
+      ωs::AbstractVector{Float64}, 
+      snapshot::BubblesSnapShot, 
+      ball_space::BallSpace, 
+      cft_plan::CFTPlan, 
+      angular_integration_plan:: SHPlan,
+      _x̂_ix̂_j::x̂_ix̂_j; 
+      ΔV::Float64 = 1.)
 
 Computes the isotropic anisotropic stress correlation by integrating 
 Directional_Π over all angles using the provided strategy `plan`.
@@ -194,7 +202,7 @@ function Π(t1::Float64,
            snapshot::BubblesSnapShot, 
            ball_space::BallSpace, 
            cft_plan::CFTPlan, 
-           angular_integration_plan:: SHPlan,
+           angular_integration_plan:: AbstractAngularIntegrationPlan,
            _x̂_ix̂_j::x̂_ix̂_j; 
            ΔV::Float64 = 1.)
            
@@ -208,11 +216,8 @@ function Π(t1::Float64,
         return Directional_Π(n_vec, t1, t2, ωs, snapshot, ball_space, cft_plan, _x̂_ix̂_j; ΔV=ΔV)
     end
 
-    # Compute the full integral ∫ f dΩ
-    total_integral = integrate_angular(angular_integration_plan, f_wrapper)
-    
     # Return average (integral / 4π) to match previous conventions 
-    return total_integral ./ 4π
+    return integrate_angular(angular_integration_plan, f_wrapper) ./ 4π
 end
 
 end
