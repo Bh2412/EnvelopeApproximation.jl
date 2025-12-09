@@ -78,7 +78,7 @@ end
     Δcos2ϕ = cos(2ϕ₁) - cos(2ϕ₂) 
     
     # 2 components: 1/2 (xx - yy), xy
-    return SVector{6, Float64}(
+    return SVector{2, Float64}(
         s² * 0.25Δsin2ϕ, # xx
         s² * 0.25Δcos2ϕ, # xy
     )
@@ -93,7 +93,7 @@ end
 Λx̂x̂(n:: Int64) = Λx̂x̂(_buffers(n)...)
 
 function (f:: Λx̂x̂)(μ:: Float64, bubble:: Bubble, 
-                   intersection_domes:: Vector{IntersectionDome}):: SVector{6, Float64}
+                   intersection_domes:: Vector{IntersectionDome}):: SVector{2, Float64}
     V = SVector{2, Float64}(0., 0.)
     periodic_intervals = ring_domes_complement_intersection!(μ, bubble.radius, intersection_domes, 
                                                              f.arcs_buffer, f.limits_buffer, f.intersection_buffer)
@@ -132,14 +132,14 @@ function bubble_∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
     @. V += $reshape(es, 1, $length(ks)) * modes    
 end
 
-function bubble_Λ∂ᵢϕ∂ⱼϕ_contribution!(V:: AbstractMatrix{ComplexF64},
+function bubble_Λ∂iϕ∂jϕ_contribution!(V:: AbstractMatrix{ComplexF64},
                                       ks:: AbstractVector{Float64}, 
                                       bubble:: Bubble, 
                                       domes:: Vector{IntersectionDome}, 
                                       plan::CFTPlan, 
                                       _Λx̂x̂:: Λx̂x̂; 
                                       ΔV:: Float64 = 1.)
-    @assert size(V) == (6, length(ks)) "Output buffer V must be (6, Nk)"
+    @assert size(V) == (2, length(ks)) "Output buffer V must be (6, Nk)"
     modes = dispatch_fourier_modes(μ -> _Λx̂x̂(μ, bubble, domes), ks * bubble.radius, -1., 1., plan)
     es = map(ks) do k
         cis(-k * bubble.center.coordinates[3]) * (ΔV * (bubble.radius ^ 3) / 3.)
@@ -169,7 +169,7 @@ function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64},
                  plan:: CFTPlan,
                  _Λx̂x̂:: Λx̂x̂;
                  ΔV:: Float64 = 1.):: Matrix{ComplexF64}
-    V = zeros(ComplexF64, 6, length(ks))
+    V = zeros(ComplexF64, 2, length(ks))
     domes = intersection_domes(bubbles, ball_space)
     @inbounds for (bubble_index, _domes) in domes
         bubble_Λ∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
@@ -198,7 +198,7 @@ const symmetric_tensor_indices:: Dict{Int, Tuple{Int, Int}} = Dict(1 => (1, 1), 
 const inverse_symmetric_tensor_indices:: Dict{Tuple{Int, Int}, Int} = Dict(zip(values(symmetric_tensor_indices), keys(symmetric_tensor_indices)))
 
 function Λ(T1:: AbstractVector{ComplexF64}, T2:: AbstractVector{ComplexF64}):: ComplexF64
-    return (1. / 2) * ((T1[1] - T1[4])' * (T2[1] - T2[4])) + 2 * (T1[2]' * T2[2])
+    return (1. / 2) * ((T2[1] - T2[4])' * (T1[1] - T1[4])) + 2 * (T2[2]' * T1[2])
 end
 
 function Λ(T:: AbstractVector{ComplexF64}):: ComplexF64
@@ -246,14 +246,14 @@ end
 function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, 
                        snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
                        _Λx̂x̂:: Λx̂x̂; ΔV:: Float64 = 1.):: Vector{ComplexF64}
-    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV))
+    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, ball_space, plan, _Λx̂x̂; ΔV=ΔV))
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
     ΛT1 = Λ∂iϕ∂jϕ(ωs, bubbles1, ball_space, plan, _Λx̂x̂; ΔV=ΔV)
     ΛT2 = Λ∂iϕ∂jϕ(ωs, bubbles2, ball_space, plan, _Λx̂x̂; ΔV=ΔV)
     return map(zip(eachcol(ΛT1), eachcol(ΛT2))) do (v1, v2)
-        2 * v1' * v2 / volume(ball_space)
+        2 * v2' * v1 / volume(ball_space)
     end
 end
 
@@ -339,6 +339,5 @@ function Π(t1::Float64,
     # Return average (integral / 4π) to match previous conventions 
     return integrate_angular(angular_integration_plan, f_wrapper) ./ 4π
 end
-
 
 end
