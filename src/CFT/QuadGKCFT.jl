@@ -16,17 +16,17 @@ against a set of Fourier modes.
 
 # Type Parameters
 - `K`: The dimension of the physics output (e.g., 2 for projected GWs, 6 for full tensor).
-- `T_Buf`: The type of the internal segment buffer (inferred automatically).
 """
 mutable struct VectorQuadGKPlan{K} <: CFTPlan
     segbuf::Vector{<:QuadGK.Segment}  # Segment buffer for QuadGK
     phase_buffer::Vector{ComplexF64} # Internal temporary for broadcasting k values
     rtol::Float64
     atol::Float64
+    initdiv:: Int  # The amount of splitting to do initially (in order to handle sharp features between nodes)
 end
 
-function VectorQuadGKPlan{K}(; rtol=1e-8, atol=1e-12) where {K}
-    return VectorQuadGKPlan{K}(alloc_segbuf(Float64, Matrix{ComplexF64}, Float64), ComplexF64[], rtol, atol)
+function VectorQuadGKPlan{K}(; rtol=1e-8, atol=1e-12, initdiv=1) where {K}
+    return VectorQuadGKPlan{K}(alloc_segbuf(Float64, Matrix{ComplexF64}, Float64), ComplexF64[], rtol, atol, initdiv)
 end
 
 """
@@ -56,7 +56,9 @@ function fourier_modes(f, ks:: AbstractVector{<: Real}, a:: Real, b:: Real, plan
         return val * transpose(plan.phase_buffer)
     end
 
-    val, err = quadgk(integrand, a, b; 
+    ps = range(a, b, plan.initdiv + 1)  
+
+    val, err = quadgk(integrand, ps...; 
                       segbuf=plan.segbuf, 
                       rtol=plan.rtol, 
                       atol=plan.atol)
