@@ -8,11 +8,12 @@ begin
     using Measurements
     using QuadGK
     using StatsBase
+    using Bessels
 end
 
 # Unit normal vector for given (μ, ϕ)
 function n̂(μ::Real, ϕ::Real)::SVector{3,Float64}
-    sin_theta = sqrt(1 - μ^2)
+    sin_theta = sqrt(clamp(1 - μ^2, 0.0, 1.0))
     n_y, n_x = sin_theta .* sincos(ϕ)
     n_z = μ
     return SVector(n_x, n_y, n_z)
@@ -390,4 +391,105 @@ function Π_MC(
     end
 
     return Π_vals
+end
+
+function coeffs(z:: Real):: SVector{5,Float64}
+    j₀, j₁, j₂, j₃, j₄ = map(ν -> sphericalbesselj(ν, z), 0:4)
+    α = (- 1. / 2) * j₀ + j₁ / z + j₂ / (z ^ 2)
+    β = j₂ - (1. / 2) * j₃ / z
+    γ = (1. / 2) * j₄
+    return SVector{5,Float64}(4π * ((- 1. / 2) * j₀ + j₁ / z + j₂ / (2 * (z ^ 2))), 
+                              4π * (j₀ -2 * j₁ / z + j₂ / (z ^ 2)),
+                              8π * (j₂ - j₃ / z),
+                              4π * (-1. / 2 * j₂ - 1. / 2 * j₃ / z), 
+                              2π * j₄)
+end
+
+function dot_products(x̂₁:: SVector{3,Float64}, x̂₂:: SVector{3,Float64}, n̂:: SVector{3,Float64}):: SVector{5,Float64}
+    c₁ = dot(x̂₁, n̂)
+    c₂ = dot(x̂₂, n̂)
+    c_12 = dot(x̂₁, x̂₂)
+    return SVector{5,Float64}(1., c_12 ^ 2, c_12 * c₁ * c₂, c₁ ^ 2 + c₂ ^ 2, c₁ ^ 2 * c₂ ^ 2)
+end
+
+function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: Float64)
+    return dot(coeffs(z), dot_products(x̂₁, x̂₂, n̂))
+end
+
+function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: AbstractVector{Float64})
+    prods =  dot_products(x̂₁, x̂₂, n̂)
+    return map(z) do _z
+        dot(coeffs(_z), prods)
+    end
+end
+    
+function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, ball_space::BallSpace;
+    N_samples:: Int=1_000_000, rng:: AbstractRNG=Random.default_rng(), ΔV:: Float64=1.0)
+    
+    bubbles1 = current_bubbles(snapshot, t1)
+    bubbles2 = current_bubbles(snapshot, t2)
+    domes_dict1 = intersection_domes(bubbles1, ball_space)
+    domes_dict2 = intersection_domes(bubbles2, ball_space)
+
+    # 1. Setup Bubble Selection Probabilities (Proportional to R^3)
+    weights1 = map(b -> b.radius^3, bubbles1)
+    weights2 = map(b -> b.radius^3, bubbles2)
+    prefactor = begin
+        total_weight1 = sum(weights1)
+        total_weight2 = sum(weights2)
+        4π / 9 * total_weight1 * total_weight2 / EnvelopeApproximation.BubblesEvolution.volume(ball_space)
+    end # This prefactor transforms the result from an average to an integral over the domain
+
+    # Create a sampler for efficient selection
+    # (Aliasing or simple categorical sampling)
+    bubble_indices1 = 1:length(bubbles1)
+    bubble_sampler1 = Weights(weights1) # StatsBase handles the normalization
+
+    bubble_indices2 = 1:length(bubbles2)
+    bubble_sampler2 = Weights(weights2) # StatsBase handles the normalization
+
+    N = length(ks)
+    val = zeros(Float64, N) # Temporary storage for each sample's result
+    S_1 = zeros(Float64, N) # Nominal sum
+    S_S = zeros(Float64, N, N) # Z * Zᵀ
+
+    # Monte Carlo Loop
+    for _ in 1:N_samples
+        idx1 = sample(rng, bubble_indices1, bubble_sampler1)
+        bubble1 = bubbles1[idx1]
+        domes1 = domes_dict1[idx1]
+
+        idx2 = sample(rng, bubble_indices2, bubble_sampler2)
+        bubble2 = bubbles2[idx2]
+        domes2 = domes_dict2[idx2]  
+
+        # Sample two points on the sphere
+        μ₁ = 2.0 * rand(rng) - 1.0
+        ϕ₁ = 2π * rand(rng)
+        x̂₁ = n̂(μ₁, ϕ₁)
+
+        μ₂ = 2.0 * rand(rng) - 1.0
+        ϕ₂ = 2π * rand(rng)
+        x̂₂ = n̂(μ₂, ϕ₂)
+
+        # Check geometric overlap
+        if inanydome(x̂₁, bubble1, domes1) || inanydome(x̂₂, bubble2, domes2)
+            continue # Contribution is 0
+        end
+
+        # Evaluate integrand for each k
+        r = bubble1.radius * x̂₁ + coordinates(bubble1.center) - (bubble2.radius * x̂₂ + coordinates(bubble2.center))
+        d = norm(r)
+        _n̂ = r / d
+        z = ks .* d
+        val = integrated_projected(x̂₁, x̂₂, _n̂, z) * prefactor
+        S_1 .+= val
+        BLAS.syr!('U', 1.0, val, S_S)
+    end
+    # Final Statistics
+    mean_Π = S_1 ./ N_samples
+    Σ_Π = Symmetric((S_S - (1 / N_samples) * (S_1 * S_1')) ./ (N_samples * (N_samples - 1))) # Covariance matrix
+    σ, corr = decompose_covariance(Σ_Π)
+    corr = nullify_negative_eigenvalues(corr)
+    return Measurements.correlated_values(mean_Π, σ, corr)
 end
