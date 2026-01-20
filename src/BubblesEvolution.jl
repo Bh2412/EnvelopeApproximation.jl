@@ -12,6 +12,9 @@ import Base.isless
 import Random
 using LinearAlgebra
 
+export Nucleation, BubblesSnapShot, sample_PT, current_bubbles, at_earlier_time, ExponentialGrowthProcess, 
+    BallSpace, volume, appropriate_t_end
+
 Nucleation = @NamedTuple{time:: Float64, site:: Point3}
 isless(n1:: Nucleation, n2:: Nucleation) = isless(n1[:time], n2[:time])
 
@@ -78,17 +81,58 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: AbstractSpace):: Vector{Po
     return sample!(rng, n, space, buffer)
 end
 
-function sample!(rng:: AbstractRNG, n:: Int64, space:: AbstractSpace, points_buffer:: Vector{Point3}):: AbstractVector{Point3}
-    throw("Cant sample from abstract space $space")
-end
-
 export volume
 
 function volume(space:: AbstractSpace):: Float64
     throw("Cant compute volume of abstract space $space")
 end
 
-export sample!
+function ∈(p:: Point3, space:: AbstractSpace):: Bool
+    throw("Cant check membership of point $p in abstract space $space")
+end
+
+struct BoxSpace <: AbstractSpace
+    L::Float64        # Side length of the cube
+    center::Point3    
+    
+    BoxSpace(L::Float64, center::Point3 = Point3(0., 0., 0.)) = new(L, center)
+end
+
+volume(s::BoxSpace) = s.L^3
+
+∈(p:: Point3, box_space:: BoxSpace) = begin
+    d = p - box_space.center
+    half_L = box_space.L / 2
+    dx = abs(coordinates(d)[1])
+    dy = abs(coordinates(d)[2])
+    dz = abs(coordinates(d)[3])
+    return (dx <= half_L) && (dy <= half_L) && (dz <= half_L)
+end
+
+function sample(rng::AbstractRNG, n::Int64, space::BoxSpace)::Vector{Point3}
+    points = Vector{Point3}(undef, n)
+    
+    L = space.L
+    center = space.center
+    
+    for i in 1:n
+        dx = (rand(rng) - 0.5) * L
+        dy = (rand(rng) - 0.5) * L
+        dz = (rand(rng) - 0.5) * L
+        
+        points[i] = center + Vec3(dx, dy, dz)
+    end
+    
+    return points
+end     
+
+"""
+    bounding_box(space::AbstractSpace)::BoxSpace
+Returns the smallest BoxSpace (with PBC capabilities) that contains the given space.
+"""
+function bounding_box(space::AbstractSpace)::BoxSpace
+    throw("bounding_box not implemented for $(typeof(space))")
+end
 
 struct BallSpace <: AbstractSpace
     radius:: Float64
@@ -98,11 +142,15 @@ end
 ∈(p:: Point3, ball_space:: BallSpace) = norm(p - ball_space.center) <= ball_space.radius
 volume(space:: BallSpace):: Float64 = (4 / 3) * π * space.radius ^ 3
 
+function bounding_box(space:: BallSpace):: BoxSpace
+    r = space.radius
+    c = space.center
+    return BoxSpace(2 * r, c)
+end
+
 const RADIAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 1.)
 const AZYMUTHAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 2π)
 const POLAR_DISTRIBUTION:: Uniform{Float64} = Uniform(-1., 1.)
-
-export BallSpace
 
 function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
     # r^3 is distributed uniformly over (0, 1)
@@ -116,19 +164,6 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
         @. Vec3(r * s * cos(ϕ), r * s * sin(ϕ), r * μ)
     end
     return @. (space.center, ) + v
-end
-
-function sample!(rng:: AbstractRNG, n:: Int64, space:: BallSpace, points_buffer:: Vector{Point3}):: AbstractVector{Point3}
-    R = space.radius
-    x0, y0, z0 = space.center.coordinates
-    @inbounds for i in 1:n
-        r = R * (rand(rng, RADIAL_DISTRIBUTION) ^ (1 // 3))
-        ϕ = rand(rng, AZYMUTHAL_DISTRIBUTION)
-        μ = rand(rng, POLAR_DISTRIBUTION)
-        s = sqrt(1 - μ ^ 2)
-        points_buffer[i] = Point3(Vec3((x0 + r * s * cos(ϕ), y0 + r * s * sin(ϕ), z0 + r * μ)))
-    end
-    return @views points_buffer[1:n]
 end
 
 function false_vacuum_filter!(sites:: Vector{Point3}, existing_bubbles:: Bubbles):: Vector{Point3}
@@ -152,35 +187,29 @@ function sample_nucleations(Δt:: Float64,
     return nucleations, fv_ratio
 end
 
-abstract type NucleationLaw end
+abstract type NucleationProcess end
+
+function sample_nucleations(rng:: AbstractRNG, process:: NucleationProcess, space:: AbstractSpace):: Vector{Nucleation}
+    throw(ErrorException("sample_nucleations not implemented for $(typeof(process))"))
+end
+
+function radial_profile(process:: NucleationProcess):: Function
+    throw(ErrorException("radial_profile not implemented for $(typeof(process))"))
+end
+
+function completion_time(process:: NucleationProcess):: Float64
+    throw(ErrorException("completion_time not implemented for $(typeof(process))"))
+end
 
 include("ExponentialGrowth.jl")
-
-function bounding_bubbles(snapshot:: BubblesSnapShot, Δt:: Float64):: Bubbles
-    t = snapshot.t
-   return Bubbles([Bubble(nuc[:site], snapshot.radial_profile(t + Δt - nuc[:time])) for nuc in snapshot.nucleations]) 
-end
-                                                                                            
-function evolve(nucleation_law:: NL, space:: S;
-                initial_state:: BubblesSnapShot = BubblesSnapShot(), 
-                rng:: Union{AbstractRNG, Nothing} = nothing,
-                termination_strategy:: Function = (_, _, _) -> false) where {NL <: NucleationLaw, S <: AbstractSpace}
-    if rng ≡ nothing
-        rng = Random.default_rng()
-    end
-    state = initial_state
-    @info "Initiating PT of $state"
-    for (Δt, λ) in nucleation_law
-        bubbles = bounding_bubbles(state, Δt)
-        new_nucs, fv_ratio = sample_nucleations(Δt, λ, space, bubbles, state.t, rng)
-        state = evolve(state, new_nucs, Δt)
-        if termination_strategy(state, space, fv_ratio)
-            break
-        end
-    end 
-    return state                   
+                                                                                           
+function sample_PT(rng:: AbstractRNG, 
+                   nucleation_process:: NucleationProcess, 
+                   space:: AbstractSpace; padding:: Float64):: BubblesSnapShot
+    nucleations = sample_nucleations(rng, nucleation_process, space; padding=padding)
+    return BubblesSnapShot(nucleations, completion_time(nucleation_process), radial_profile(nucleation_process))
 end
 
-export evolve
+export sample_PT
 
 end
