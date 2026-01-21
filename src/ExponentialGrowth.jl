@@ -88,7 +88,7 @@ function padded_box(space:: AbstractSpace, padding:: Float64):: BoxSpace
 end
 
 function sample_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess, 
-                            space:: AbstractSpace; padding:: Float64 = 0.)::Vector{Nucleation}
+                            space:: AbstractSpace, boundary_condition:: Periodic; padding:: Float64 = 0.)::Vector{Nucleation}
     bbox = padded_box(space, padding)
     N = rand(rng, Poisson(N_expected_value(process, bbox)))
     nucleations = sample(rng, N, bbox)
