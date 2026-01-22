@@ -2,6 +2,8 @@ module GeometricStressEnergyTensor
 
 import EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.Spaces
+using EnvelopeApproximation.BoundaryConditions
 import EnvelopeApproximation.BubblesEvolution: BallSpace
 using EnvelopeApproximation.ChebyshevCFT
 import EnvelopeApproximation.ChebyshevCFT: fourier_mode, scale, translation

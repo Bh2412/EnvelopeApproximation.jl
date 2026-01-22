@@ -309,6 +309,61 @@ function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome # This 
     return IntersectionDome(h, n̂, false)
 end
 
+function cardinal_vector(axis:: Int, direction:: Float64):: Vec3
+    v = zeros(Float64, 3)
+    v[axis] = direction
+    return Vec3(v...)
+end
+
+function wall_intersect_complement!(domes:: Vector{IntersectionDome}, c:: Float64, R:: Float64, wall_location:: Float64, wall_interior_direction:: Float64, wall_axis:: Int)
+    dist = (c - wall_location) * wall_interior_direction
+    domelike = true
+    dist < 0. && begin
+        domelike = false
+        dist = -dist
+    end
+    if dist < R
+        push!(domes, IntersectionDome(dist, cardinal_vector(wall_axis, sign(wall_location - c)), domelike))
+    end 
+end
+
+"""
+    ∩(bubble::Bubble, box_space::BoxSpace)::Vector{IntersectionDome}
+
+Computes the exclusion domes (spherical caps) where a bubble protrudes outside a BoxSpace.
+Unlike BallSpace intersection which returns the inner dome, this returns a vector of 
+domes representing the parts of the bubble *outside* the box (up to 6 caps).
+
+# Arguments
+- `bubble::Bubble`: The bubble to check.
+- `box_space::BoxSpace`: The cubic space.
+
+# Returns
+A vector of `IntersectionDome`s. Each dome represents a region of the bubble that is 
+outside the box boundaries. If the bubble is fully inside, returns empty.
+"""
+function ∩(bubble:: Bubble, box_space:: BoxSpace):: Vector{IntersectionDome}
+    domes = Vector{IntersectionDome}()
+    
+    # Box geometry
+    L_half = box_space.L / 2.0
+    box_center = box_space.center.coordinates
+    bubble_center = bubble.center.coordinates
+    R = bubble.radius
+    
+    # We check all 6 faces. 
+    # If dist_to_wall < R, the bubble sticks out.
+    # The 'h' of the exclusion dome is the distance from bubble center to the wall.
+    # The normal 'n' points outward from the box (towards the exclusion region).
+
+    for (axis, sign) in product([1, 2, 3], [1, -1])
+        wall_location = box_center[axis] - sign * L_half
+        c = bubble_center[axis]
+        wall_intersect_complement!(domes, c, R, wall_location, sign, axis)
+    end
+    return domes
+end
+
 """
     intersection_domes(bubbles::Bubbles, ball_space::BallSpace)::Dict{Int, Vector{IntersectionDome}}
 
@@ -320,6 +375,7 @@ each bubble and the containing ball space boundary.
 # Arguments
 - `bubbles::Bubbles`: A collection of bubbles
 - `ball_space::BallSpace`: The containing ball space
+- `boundary_condition::Vacuum`: The boundary condition type (currently only Vacuum is supported for a BallSpace)
 
 # Returns
 A dictionary where:
@@ -341,7 +397,7 @@ This is equivalent to having a reflective bubble that reaches the ball space sur
 - [`∩`](@ref): Functions that calculate intersections.
 - [`complement`](@ref): Function to create the complement of a dome.
 """
-function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
+function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace, boundary_condition:: Vacuum):: Dict{Int, Vector{IntersectionDome}}
     domes = intersection_domes(bubbles)
     for (i, bubble) in enumerate(bubbles)
         if ~(bubble ⊆ ball_space)
@@ -354,4 +410,144 @@ function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
     return domes
 end
 
-export intersection_domes
+"""
+    intersection_domes(bubbles::Bubbles, box_space::BoxSpace, boundary_condition::Vacuum)
+
+Computes intersections for bubbles in a BoxSpace with Vacuum boundary conditions.
+Includes domes for bubble-bubble intersections and domes for wall penetrations.
+"""
+function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_condition:: Vacuum):: Dict{Int, Vector{IntersectionDome}}
+    # 1. Standard pairwise bubble intersections
+    domes = intersection_domes(bubbles)
+    
+    # 2. Wall intersections (Vacuum)
+    # We append domes representing the parts of bubbles sticking out of the box
+    for (i, bubble) in enumerate(bubbles)
+        # Optimization: Quick check if fully contained to avoid allocations
+        # (This logic essentially duplicates ⊆ but gets the domes directly)
+        wall_domes = bubble ∩ box_space
+        if !isempty(wall_domes)
+            append!(domes[i], wall_domes)
+        end
+    end
+    
+    return domes
+end
+
+const box_faces:: Vector{SVector{3, Int}} = [(-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1)]
+const box_edges:: Vector{SVector{3, Int}} = [
+    (-1, -1, 0), (-1, 1, 0), (1, -1, 0), (1, 1, 0), # Z-parallel edges
+    (-1, 0, -1), (-1, 0, 1), (1, 0, -1), (1, 0, 1), # Y-parallel edges
+    (0, -1, -1), (0, -1, 1), (0, 1, -1), (0, 1, 1)  # X-parallel edges
+]
+const box_vertices:: Vector{SVector{3, Int}} = [
+    (-1, -1, -1), (-1, -1, 1), (-1, 1, -1), (-1, 1, 1),
+    (1, -1, -1), (1, -1, 1), (1, 1, -1), (1, 1, 1)
+]
+# Map Edges -> Indices of the 2 faces that form them
+const edge_face_correspondence:: Vector{SVector{2, Int}} = [
+    (1, 3), (1, 4), (2, 3), (2, 4),
+    (1, 5), (1, 6), (2, 5), (2, 6),
+    (3, 5), (3, 6), (4, 5), (4, 6)
+]
+# Map Vertices -> Indices of the 3 faces that form them
+const vertex_face_correspondence:: Vector{SVector{3, Int}} = [
+    (1, 3, 5), (1, 3, 6), (1, 4, 5), (1, 4, 6),
+    (2, 3, 5), (2, 3, 6), (2, 4, 5), (2, 4, 6)
+]
+
+function face_distance(p:: Point3, face:: SVector{3, Int}, L_half:: Float64):: Float64
+    axis = findfirst(!iszero, face)
+    return (L_half - p.coordinates[axis]) * face[axis]
+end
+
+function edge_distance(p:: Point3, edge:: SVector{3, Int}, L_half:: Float64):: Float64
+    dist_sq = 0.0
+    
+    for i in 1:3
+        if edge[i] != 0
+            dist_sq += abs2(p.coordinates[i] - (edge[i] * L_half))
+        end
+    end
+    return √(dist_sq)
+end
+
+function vertex_distance(p:: Point3, vertex:: SVector{3, Int}, L_half:: Float64):: Float64
+    dist_sq = 0.0
+
+    for i in 1:3
+        dist_sq += abs2(p.coordinates[i] - (vertex[i] * L_half))
+    end
+
+    return √(dist_sq)
+end
+
+function periodic_copies!(periodic_bubbles:: Bubbles, 
+                          bubble:: Bubble, box:: BoxSpace)
+    # Implementation for generating periodic copies of bubbles
+    intersecting_faces = zeros(Bool, 6)
+    L_half = box.L / 2.0
+    p = bubble.center - box.center
+    for (i, face) in enumerate(box_faces)
+        dist = face_distance(p, face, L_half)
+        if dist < bubble.radius
+            intersecting_faces[i] = true
+            shift_vec = Vec3(face * box.L)
+            push!(periodic_bubbles, Bubble(bubble.center - shift_vec, bubble.radius))
+        end
+    end
+    for (i, edge) in enumerate(box_edges)
+        face_indices = edge_face_correspondence[i]
+        if all(view(intersecting_faces, face_indices))
+            dist = edge_distance(p, edge, L_half)
+            if dist < bubble.radius
+                shift_vec = Vec3(edge * box.L)
+                push!(periodic_bubbles, Bubble(bubble.center - shift_vec, bubble.radius))
+            end
+        end
+    end
+    for (i, vertex) in enumerate(box_vertices)
+        face_indices = vertex_face_correspondence[i]
+        if all(view(intersecting_faces, face_indices))
+            dist = vertex_distance(p, vertex, L_half)
+            if dist < bubble.radius
+                shift_vec = Vec3(vertex * box.L)
+                push!(periodic_bubbles, Bubble(bubble.center - shift_vec, bubble.radius))
+            end
+        end
+    end
+end
+
+function unfold_periodic_bubbles(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
+    periodic_bubbles = Bubble[]
+    sizehint!(periodic_bubbles, length(bubbles) * 27)  # Worst case scenario: each bubble spawns 26 copies
+    for bubble in bubbles
+        periodic_copies!(periodic_bubbles, bubble, box)
+    end
+    return periodic_bubbles
+end
+
+"""
+    intersection_domes(bubbles::Bubbles, box_space::BoxSpace, boundary_condition::Vacuum)
+
+Computes intersections for bubbles in a BoxSpace with Vacuum boundary conditions.
+Includes domes for bubble-bubble intersections and domes for wall penetrations.
+"""
+function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_condition:: Periodic):: Dict{Int, Vector{IntersectionDome}}
+    # 1. Standard pairwise bubble intersections
+    periodic_copies = unfold_periodic_bubbles(bubbles, box_space)
+    total_bubbles = vcat(bubbles, periodic_copies)
+    domes = intersection_domes(total_bubbles)
+    
+    # 2. Wall intersections (Vacuum)
+    # We append domes representing the parts of bubbles sticking out of the box
+    for (i, bubble) in enumerate(total_bubbles)
+        wall_domes = bubble ∩ box_space
+        if !isempty(wall_domes)
+            append!(domes[i], wall_domes)
+        end
+    end
+    
+    return domes
+end
+
