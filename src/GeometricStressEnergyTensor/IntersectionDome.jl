@@ -356,7 +356,7 @@ function ∩(bubble:: Bubble, box_space:: BoxSpace):: Vector{IntersectionDome}
     # The 'h' of the exclusion dome is the distance from bubble center to the wall.
     # The normal 'n' points outward from the box (towards the exclusion region).
 
-    for (axis, sign) in product([1, 2, 3], [1, -1])
+    for (axis, sign) in product([1, 2, 3], [1., -1.])
         wall_location = box_center[axis] - sign * L_half
         c = bubble_center[axis]
         wall_intersect_complement!(domes, c, R, wall_location, sign, axis)
@@ -457,7 +457,8 @@ const vertex_face_correspondence:: Vector{SVector{3, Int}} = [
 ]
 
 function face_distance(p:: Point3, face:: SVector{3, Int}, L_half:: Float64):: Float64
-    return abs(signed_face_distance(p, face, L_half))
+    axis = findfirst(!iszero, face)
+    return abs(L_half * face[axis] - p.coordinates[axis])
 end
 
 function edge_distance(p:: Point3, edge:: SVector{3, Int}, L_half:: Float64):: Float64

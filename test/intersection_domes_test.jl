@@ -2,10 +2,104 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.GeometricStressEnergyTensor
-import EnvelopeApproximation.GeometricStressEnergyTensor: unfold_periodic_bubbles, face_distance, edge_distance, vertex_distance
+import EnvelopeApproximation.GeometricStressEnergyTensor: unfold_periodic_bubbles, face_distance, edge_distance, 
+    vertex_distance, wall_intersect_complement!, ∩
 using Test
 using StaticArrays
 using LinearAlgebra
+
+@testset "Bubbles Intersection with Boxes" begin
+
+    @testset "wall_intersect_complement!" begin
+        domes = Vector{IntersectionDome}()
+        R = 1.0
+        
+        # Scenario 1: Bubble completely INSIDE, no intersection
+        # Wall at x=0, Center at x=2, Interior direction +1 (implies wall is at left)
+        # Dist = (2 - 0)*1 = 2.0. Since 2.0 > R, no dome.
+        wall_intersect_complement!(domes, 2.0, R, 0.0, 1.0, 1)
+        @test isempty(domes)
+
+        # Scenario 2: Bubble INSIDE, protruding out (Standard Intersection)
+        # Wall at x=0, Center at x=0.5, Interior Dir +1
+        # Dist = (0.5 - 0)*1 = 0.5. Since 0.5 < R, add dome.
+        empty!(domes)
+        wall_intersect_complement!(domes, 0.5, R, 0.0, 1.0, 1)
+        @test length(domes) == 1
+        d = domes[1]
+        @test d.h ≈ 0.5
+        @test d.dome_like == true
+        # Wall is at 0, Center at 0.5. Vector from C to Wall is Negative.
+        @test d.n̂ == Vec3(-1.0, 0.0, 0.0) 
+
+        # Scenario 3: Bubble center OUTSIDE (Ghost Bubble Logic)
+        # Wall at x=0, Center at x=-0.5, Interior Dir +1 (so center is "behind" wall)
+        # Dist = (-0.5 - 0)*1 = -0.5. 
+        # Logic flips: dist becomes 0.5, domelike becomes false.
+        empty!(domes)
+        wall_intersect_complement!(domes, -0.5, R, 0.0, 1.0, 1)
+        @test length(domes) == 1
+        d = domes[1]
+        @test d.h ≈ 0.5
+        @test d.dome_like == false
+        # Wall is at 0, Center at -0.5. Vector from C to Wall is Positive.
+        @test d.n̂ == Vec3(1.0, 0.0, 0.0)
+    end
+
+    @testset "∩(bubble, box_space) Integration" begin
+        # Setup: Box size 10 (extends -5 to +5 on all axes)
+        box = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        R = 1.0
+
+        # Case A: Bubble Safely Inside
+        b_safe = Bubble(Point3(0.0, 0.0, 0.0), R)
+        domes = ∩(b_safe, box)
+        @test isempty(domes)
+
+        # Case B: Protruding Right (+X)
+        # Wall at +5. Center at 4.5.
+        b_right = Bubble(Point3(4.5, 0.0, 0.0), R)
+        domes = ∩(b_right, box)
+        @test length(domes) == 1
+        @test domes[1].h ≈ 0.5
+        @test domes[1].dome_like == true
+        @test domes[1].n̂ == Vec3(1.0, 0.0, 0.0) # Points +X towards wall
+
+        # Case C: Protruding Left (-X)
+        # Wall at -5. Center at -4.5.
+        b_left = Bubble(Point3(-4.5, 0.0, 0.0), R)
+        domes = ∩(b_left, box)
+        @test length(domes) == 1
+        @test domes[1].h ≈ 0.5
+        @test domes[1].dome_like == true
+        @test domes[1].n̂ == Vec3(-1.0, 0.0, 0.0) # Points -X towards wall
+
+        # Case D: Corner Intersection (Right + Top + Front)
+        # Walls at 5. Center at (4.5, 4.5, 4.5).
+        b_corner = Bubble(Point3(4.5, 4.5, 4.5), R)
+        domes = ∩(b_corner, box)
+        @test length(domes) == 3
+        # Verify all are caps (dome_like=true)
+        @test all(d -> d.dome_like, domes)
+        # Verify normals point +X, +Y, +Z
+        normals = [d.n̂ for d in domes]
+        @test Vec3(1.0, 0.0, 0.0) in normals
+        @test Vec3(0.0, 1.0, 0.0) in normals
+        @test Vec3(0.0, 0.0, 1.0) in normals
+
+        # Case E: Ghost Bubble (Center Outside Box)
+        # Wall at +5. Center at 5.5.
+        # This represents a ghost entering from the right.
+        b_ghost = Bubble(Point3(5.5, 0.0, 0.0), R)
+        domes = ∩(b_ghost, box)
+        @test length(domes) == 1
+        d = domes[1]
+        @test d.h ≈ 0.5
+        @test d.dome_like == false # Should exclude the bulk
+        # Normal should point from 5.5 back to 5.0 -> (-1, 0, 0)
+        @test d.n̂ == Vec3(-1.0, 0.0, 0.0)
+    end
+end
 
 @testset "Geometric Distance Functions" begin
     L = 10.0
@@ -83,7 +177,7 @@ end
 # using .EnvelopeApproximation.BubbleBasics
 # using .EnvelopeApproximation.BubblesEvolution
 
-@testset "Periodic Boundary Tests" begin
+@testset "Periodic Bubbles Generation Tests" begin
 
     # Define a standard box: Size 10, centered at 0
     # Extent is [-5, 5] along each axis
