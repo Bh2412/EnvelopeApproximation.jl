@@ -457,8 +457,7 @@ const vertex_face_correspondence:: Vector{SVector{3, Int}} = [
 ]
 
 function face_distance(p:: Point3, face:: SVector{3, Int}, L_half:: Float64):: Float64
-    axis = findfirst(!iszero, face)
-    return (L_half - p.coordinates[axis]) * face[axis]
+    return abs(signed_face_distance(p, face, L_half))
 end
 
 function edge_distance(p:: Point3, edge:: SVector{3, Int}, L_half:: Float64):: Float64
