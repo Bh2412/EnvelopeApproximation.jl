@@ -417,14 +417,8 @@ Computes intersections for bubbles in a BoxSpace with Vacuum boundary conditions
 Includes domes for bubble-bubble intersections and domes for wall penetrations.
 """
 function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_condition:: Vacuum):: Dict{Int, Vector{IntersectionDome}}
-    # 1. Standard pairwise bubble intersections
     domes = intersection_domes(bubbles)
-    
-    # 2. Wall intersections (Vacuum)
-    # We append domes representing the parts of bubbles sticking out of the box
     for (i, bubble) in enumerate(bubbles)
-        # Optimization: Quick check if fully contained to avoid allocations
-        # (This logic essentially duplicates ⊆ but gets the domes directly)
         wall_domes = bubble ∩ box_space
         if !isempty(wall_domes)
             append!(domes[i], wall_domes)
@@ -526,28 +520,3 @@ function unfold_periodic_bubbles(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
     end
     return periodic_bubbles
 end
-
-"""
-    intersection_domes(bubbles::Bubbles, box_space::BoxSpace, boundary_condition::Vacuum)
-
-Computes intersections for bubbles in a BoxSpace with Vacuum boundary conditions.
-Includes domes for bubble-bubble intersections and domes for wall penetrations.
-"""
-function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_condition:: Periodic):: Dict{Int, Vector{IntersectionDome}}
-    # 1. Standard pairwise bubble intersections
-    periodic_copies = unfold_periodic_bubbles(bubbles, box_space)
-    total_bubbles = vcat(bubbles, periodic_copies)
-    domes = intersection_domes(total_bubbles)
-    
-    # 2. Wall intersections (Vacuum)
-    # We append domes representing the parts of bubbles sticking out of the box
-    for (i, bubble) in enumerate(total_bubbles)
-        wall_domes = bubble ∩ box_space
-        if !isempty(wall_domes)
-            append!(domes[i], wall_domes)
-        end
-    end
-    
-    return domes
-end
-

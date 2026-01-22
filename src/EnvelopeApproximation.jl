@@ -93,9 +93,9 @@ volume(s::BoxSpace) = s.L^3
 ∈(p:: Point3, box_space:: BoxSpace) = begin
     d = p - box_space.center
     half_L = box_space.L / 2
-    dx = abs(coordinates(d)[1])
-    dy = abs(coordinates(d)[2])
-    dz = abs(coordinates(d)[3])
+    dx = abs(d[1])
+    dy = abs(d[2])
+    dz = abs(d[3])
     return (dx <= half_L) && (dy <= half_L) && (dz <= half_L)
 end
 
