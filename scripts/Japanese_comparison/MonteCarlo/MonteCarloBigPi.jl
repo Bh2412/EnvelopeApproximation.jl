@@ -1,6 +1,8 @@
 begin
+    using EnvelopeApproximation.Spaces
+    using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubbleBasics: Bubble
-    using EnvelopeApproximation.GeometricStressEnergyTensor: IntersectionDome, intersection_domes
+    using EnvelopeApproximation.GeometricStressEnergyTensor: IntersectionDome, intersection_domes, unfold_periodic_bubbles
     using StaticArrays
     using LinearAlgebra
     using HCubature
@@ -8,7 +10,7 @@ begin
     using Measurements
     using QuadGK
     using StatsBase
-    using Bessels
+    using Bessels: sphericalbesselj
 end
 
 # Unit normal vector for given (μ, ϕ)
@@ -113,7 +115,15 @@ end
 
 function decompose_covariance(covariance_matrix:: AbstractMatrix{Float64}):: Tuple{Vector{Float64}, Symmetric{Float64, Matrix{Float64}}}
     σ = sqrt.(diag(covariance_matrix))
-    return (σ, Symmetric(covariance_matrix ./ (σ * σ'), :U))
+    # Treating carefully the σ = 0 case
+    inv_σ = map(x -> x > 1e-20 ? 1.0 / x : 0.0, σ)
+    correlation_matrix = covariance_matrix .* (inv_σ * inv_σ')
+    for i in eachindex(σ)
+        if σ[i] <= 1e-20
+            correlation_matrix[i, i] = 1.0
+        end
+    end
+    return (σ, Symmetric(correlation_matrix, :U))
 end
 
 const EPS:: Float64 = 1e-10
@@ -393,11 +403,44 @@ function Π_MC(
     return Π_vals
 end
 
+function first_5_spherical_bessels(z:: Real):: NTuple{5, Float64}
+    j₀ = sphericalbesselj(0, z)
+    j₁ = sphericalbesselj(1, z)
+    invz = 1 / z
+    j2 = 3 * j₁ * invz - j₀
+    j3 = (5 * j2) * invz - j₁
+    j4 = (7 * j3) * invz - j2
+    return (j₀, j₁, j2, j3, j4)
+end
+
+function small_z_coeffs(z::Real)
+    z2 = z * z
+    z4 = z2 * z2
+    
+    # Component 1: 4π * (-2/15 + z²/21)
+    c1 = 4π * (-2.0/15.0 + z2/21.0 - z4/756.0)
+    
+    # Component 2: 4π * (2/5 - 11z²/105)
+    c2 = 4π * (2.0/5.0 - 11.0*z2/105.0 + 4.0*z4/135.0)
+    
+    # Component 3: 8π * (2z²/35)
+    c3 = 8π * (2.0*z2/35.0 - 4.0*z4/315.0)
+    
+    # Component 4: 4π * (-4z²/105)
+    c4 = 4π * (-4.0*z2/105.0 + 4.0*z4/315.0)
+    
+    # Component 5: 2π * (z⁴/945)
+    c5 = 2π * (z4/945.0)
+    
+    return SVector{5, Float64}(c1, c2, c3, c4, c5)
+end
+
 function coeffs(z:: Real):: SVector{5,Float64}
-    j₀, j₁, j₂, j₃, j₄ = map(ν -> sphericalbesselj(ν, z), 0:4)
-    α = (- 1. / 2) * j₀ + j₁ / z + j₂ / (z ^ 2)
-    β = j₂ - (1. / 2) * j₃ / z
-    γ = (1. / 2) * j₄
+    # if z < 1e-4
+    #     return small_z_coeffs(z)
+    # end
+
+    j₀, j₁, j₂, j₃, j₄ = first_5_spherical_bessels(z)
     return SVector{5,Float64}(4π * ((- 1. / 2) * j₀ + j₁ / z + j₂ / (2 * (z ^ 2))), 
                               4π * (j₀ -2 * j₁ / z + j₂ / (z ^ 2)),
                               8π * (j₂ - j₃ / z),
@@ -423,13 +466,24 @@ function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, 
     end
 end
     
-function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, ball_space::BallSpace;
-    N_samples:: Int=1_000_000, rng:: AbstractRNG=Random.default_rng(), ΔV:: Float64=1.0)
+function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, box_space::BoxSpace;
+    N_samples:: Int=1_000_000, rng:: AbstractRNG=Random.default_rng(), ΔV:: Float64=1.0):: Vector{Measurement}
     
     bubbles1 = current_bubbles(snapshot, t1)
+    periodic_copies1 = unfold_periodic_bubbles(bubbles1, box_space)
+    bubbles1 = vcat(bubbles1, periodic_copies1)
     bubbles2 = current_bubbles(snapshot, t2)
-    domes_dict1 = intersection_domes(bubbles1, ball_space)
-    domes_dict2 = intersection_domes(bubbles2, ball_space)
+    periodic_copies2 = unfold_periodic_bubbles(bubbles2, box_space)
+    bubbles2 = vcat(bubbles2, periodic_copies2)
+
+    if isempty(bubbles1) | isempty(bubbles2)
+        return zeros(Measurement{Float64}, length(ks))
+    end
+
+    # Since we include the periodic copies, going forward we may treat the problem as if it 
+    # is with Vacuum boundary conditions
+    domes_dict1 = intersection_domes(bubbles1, box_space, Vacuum())
+    domes_dict2 = intersection_domes(bubbles2, box_space, Vacuum())
 
     # 1. Setup Bubble Selection Probabilities (Proportional to R^3)
     weights1 = map(b -> b.radius^3, bubbles1)
@@ -437,7 +491,7 @@ function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, 
     prefactor = begin
         total_weight1 = sum(weights1)
         total_weight2 = sum(weights2)
-        4π / 9 * total_weight1 * total_weight2 / EnvelopeApproximation.BubblesEvolution.volume(ball_space)
+        4π / 9 * (ΔV ^ 2) * total_weight1 * total_weight2 / EnvelopeApproximation.BubblesEvolution.volume(box_space)
     end # This prefactor transforms the result from an average to an integral over the domain
 
     # Create a sampler for efficient selection
