@@ -1,5 +1,6 @@
 begin
     using EnvelopeApproximation.BubbleBasics
+    using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubblesEvolution
     import EnvelopeApproximation.BubblesEvolution: BallSpace
     using EnvelopeApproximation.GeometricStressEnergyTensor
@@ -33,7 +34,7 @@ function surface_area(bubbles:: Bubbles, _Δ:: Δ; kwargs...):: Float64
 end
 
 function surface_area(bubbles:: Bubbles, ball_space:: BallSpace, _Δ:: Δ; kwargs...):: Float64
-    domes = intersection_domes(bubbles, ball_space)
+    domes = intersection_domes(bubbles, ball_space, Vacuum())
     _surface_area = 0.
     for (i, bubble) in enumerate(bubbles)
         _surface_area += bubble_surface_area(bubble, domes[i], _Δ; kwargs...)
@@ -169,7 +170,7 @@ begin
     bubbless = current_bubbles.(snapshots)
     _Δ = Δ(max(length.(bubbless)...))
     N = 4^9
-    @testset "General Ensemble With Reflective Boundary Conditions" begin
+    @testset "General Ensemble With Vacuum Boundary" begin
         for bubbles in bubbless
             sa1 = surface_area(bubbles, ball_space, _Δ)
             @assert sa1 < surface_area(bubbles, _Δ)

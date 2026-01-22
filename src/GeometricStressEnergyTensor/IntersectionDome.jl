@@ -356,7 +356,7 @@ function ∩(bubble:: Bubble, box_space:: BoxSpace):: Vector{IntersectionDome}
     # The 'h' of the exclusion dome is the distance from bubble center to the wall.
     # The normal 'n' points outward from the box (towards the exclusion region).
 
-    for (axis, sign) in product([1, 2, 3], [1., -1.])
+    for (axis, sign) in Iterators.product([1, 2, 3], [1., -1.])
         wall_location = box_center[axis] - sign * L_half
         c = bubble_center[axis]
         wall_intersect_complement!(domes, c, R, wall_location, sign, axis)
