@@ -487,7 +487,7 @@ function periodic_copies!(periodic_bubbles:: Bubbles,
     # Implementation for generating periodic copies of bubbles
     intersecting_faces = zeros(Bool, 6)
     L_half = box.L / 2.0
-    p = bubble.center - box.center
+    p = with_origin(bubble.center, box.center)
     for (i, face) in enumerate(box_faces)
         dist = face_distance(p, face, L_half)
         if dist < bubble.radius
@@ -520,7 +520,7 @@ end
 
 function unfold_periodic_bubbles(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
     periodic_bubbles = Bubble[]
-    sizehint!(periodic_bubbles, length(bubbles) * 27)  # Worst case scenario: each bubble spawns 26 copies
+    sizehint!(periodic_bubbles, length(bubbles) * 26)  # Worst case scenario: each bubble spawns 26 copies
     for bubble in bubbles
         periodic_copies!(periodic_bubbles, bubble, box)
     end
