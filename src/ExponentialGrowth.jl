@@ -8,7 +8,11 @@ function appropriate_t_end(tvp:: Float64, β:: Float64, Γ_0:: Float64, v_wall::
     return t_0 + (1 / β) * log(-β ^ 4 * log(1. - tvp) / (8π * v_wall^3 * Γ_0))
 end
 
-struct ExponentialGrowthProcess <: NucleationProcess
+abstract type ExponentialGrowthSamplingMethod end
+struct SequentialSampling <: ExponentialGrowthSamplingMethod end
+struct APrioriPoissonSampling <: ExponentialGrowthSamplingMethod end
+
+struct ExponentialGrowthProcess{T <: ExponentialGrowthSamplingMethod} <: NucleationProcess
     β:: Float64
     Γ_0:: Float64
     t_0:: Float64
@@ -16,9 +20,9 @@ struct ExponentialGrowthProcess <: NucleationProcess
     v_wall:: Float64
     t_end:: Float64
 
-    function ExponentialGrowthProcess(β:: Float64, Γ_0:: Float64, 
-                                      tvp:: Float64; t_0:: Float64 = 0., 
-                                      v_wall:: Float64 = 1.)
+    function ExponentialGrowthProcess{T}(β:: Float64, Γ_0:: Float64, 
+                                         tvp:: Float64; t_0:: Float64 = 0., 
+                                         v_wall:: Float64 = 1.) where {T <: ExponentialGrowthSamplingMethod}
         if β <= 0
             throw(ArgumentError("β must be positive"))
         end
@@ -32,8 +36,14 @@ struct ExponentialGrowthProcess <: NucleationProcess
             throw(ArgumentError("v_wall must be in (0, 1]"))
         end
         t_end = appropriate_t_end(tvp, β, Γ_0, v_wall; t_0=t_0)
-        return new(β, Γ_0, t_0, tvp, v_wall, t_end)
+        return new{T}(β, Γ_0, t_0, tvp, v_wall, t_end)
     end
+end
+
+function ExponentialGrowthProcess(β:: Float64, Γ_0:: Float64, 
+                                  tvp:: Float64; t_0:: Float64 = 0., 
+                                  v_wall:: Float64 = 1.)
+    return ExponentialGrowthProcess{APrioriPoissonSampling}(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
 end
 
 function Λ(egp:: ExponentialGrowthProcess, t1:: Float64, t2:: Float64):: Float64
@@ -87,17 +97,22 @@ function padded_box(space:: AbstractSpace, padding:: Float64):: BoxSpace
     return BoxSpace(bbox.L + 2 * padding, bbox.center)
 end
 
+function sample_candidate_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess{APrioriPoissonSampling}, space:: AbstractSpace)
+    N = rand(rng, Poisson(N_expected_value(process, space)))
+    nucleations = sample(rng, N, space)
+    nucleation_times = sample_nucleation_times(rng, process, N)
+    sort!(nucleation_times)
+    return zip(nucleation_times, nucleations)
+end
+
 function sample_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess, 
                             space:: AbstractSpace, boundary_condition:: Periodic; padding:: Float64 = 0.)::Vector{Nucleation}
     bbox = padded_box(space, padding)
-    N = rand(rng, Poisson(N_expected_value(process, bbox)))
-    nucleations = sample(rng, N, bbox)
-    nucleation_times = sample_nucleation_times(rng, process, N)
-    sort!(nucleation_times)
+    candidate_nucleations = sample_candidate_nucleations(rng, process, bbox)
     tv_nucleations = Vector{Nucleation}()
-    sizehint!(tv_nucleations, N)
+    sizehint!(tv_nucleations, length(candidate_nucleations))
     wall_radius = radial_profile(process)
-    for (t, p) in zip(nucleation_times, nucleations)
+    for (t, p) in candidate_nucleations
         phys_nucleation = true
         for nucleation in tv_nucleations
             if toroidal_dist(p, nucleation.site, bbox.L) <= wall_radius(t - nucleation.time)
