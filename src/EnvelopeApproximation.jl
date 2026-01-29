@@ -97,6 +97,14 @@ volume(s::BoxSpace) = s.L^3
     return (dx <= half_L) && (dy <= half_L) && (dz <= half_L)
 end
 
+function sample(rng:: AbstractRNG, space::BoxSpace):: Point3
+    L = space.L
+    dx = (rand(rng) - 0.5) * L
+    dy = (rand(rng) - 0.5) * L
+    dz = (rand(rng) - 0.5) * L
+    return space.center + Vec3(dx, dy, dz)
+end
+
 function sample(rng::AbstractRNG, n::Int64, space::BoxSpace)::Vector{Point3}
     points = Vector{Point3}(undef, n)
     
@@ -140,9 +148,14 @@ function bounding_box(space:: BallSpace):: BoxSpace
     return BoxSpace(2 * r, c)
 end
 
-const RADIAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 1.)
-const AZYMUTHAL_DISTRIBUTION:: Uniform{Float64} = Uniform(0., 2π)
-const POLAR_DISTRIBUTION:: Uniform{Float64} = Uniform(-1., 1.)
+function sample(rng:: AbstractRNG, space:: BallSpace):: Point3
+    r = space.radius * cbrt(rand(rng))
+    ϕ = rand(rng, Uniform(0, 2π))
+    μ = rand(rng, Uniform(-1., 1.))
+    sμ = √(1 - μ ^ 2)
+    sϕ, cϕ = sincos(ϕ)
+    return space.center + Vec3(r * cϕ * sμ, r * sϕ * sμ, r * μ)
+end
 
 function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3}
     # r^3 is distributed uniformly over (0, 1)
