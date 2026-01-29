@@ -1,15 +1,17 @@
 module GravitationalWaves
 
-using EnvelopeApproximation.BubbleBasics: Bubble, Vec3
+using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
-using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, PeriodicInterval, polar_limits, IntersectionDome, intersection_domes
+using EnvelopeApproximation.BoundaryConditions
+using EnvelopeApproximation.Spaces
+using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, 
+    PeriodicInterval, polar_limits, IntersectionDome, intersection_domes, unfold_periodic_bubbles
 import IterTools: partition
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, VectorChebyshevPlan
 using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
 using EnvelopeApproximation.SphericalHarmonics: SHPlan, integrate_angular
 using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
-import EnvelopeApproximation.BubblesEvolution: BallSpace
 import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
 using HCubature
@@ -150,12 +152,13 @@ end
 
 function ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
                 bubbles:: AbstractVector{Bubble}, 
-                ball_space:: BallSpace,
+                space:: AbstractSpace,
+                boundary_condition:: Vacuum,
                 plan:: CFTPlan,
                 _x̂_ix̂_j:: x̂_ix̂_j;
-                ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+                ΔV:: Float64 = 1.,):: Matrix{ComplexF64}
     V = zeros(ComplexF64, 6, length(ks))
-    domes = intersection_domes(bubbles, ball_space)
+    domes = intersection_domes(bubbles, space, boundary_condition)
     @inbounds for (bubble_index, _domes) in domes
         bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
                                     plan, _x̂_ix̂_j; ΔV=ΔV)
@@ -165,18 +168,38 @@ end
 
 function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
                  bubbles:: AbstractVector{Bubble}, 
-                 ball_space:: BallSpace,
+                 space:: AbstractSpace,
+                 boundary_condition:: Vacuum,
                  plan:: CFTPlan,
                  _Λx̂x̂:: Λx̂x̂;
                  ΔV:: Float64 = 1.):: Matrix{ComplexF64}
     V = zeros(ComplexF64, 2, length(ks))
-    domes = intersection_domes(bubbles, ball_space)
+    domes = intersection_domes(bubbles, space, boundary_condition)
     @inbounds for (bubble_index, _domes) in domes
         bubble_Λ∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
                                      plan, _Λx̂x̂; ΔV=ΔV)
     end
     return V
 end
+
+function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
+                 bubbles:: Bubbles, 
+                 space:: BoxSpace,
+                 boundary_condition:: Periodic,
+                 plan:: CFTPlan,
+                 _Λx̂x̂:: Λx̂x̂;
+                 ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+    V = zeros(ComplexF64, 2, length(ks))
+    periodic_bubbles = unfold_periodic_bubbles(bubbles, space)
+    bubbles = vcat(bubbles, periodic_bubbles)
+    domes = intersection_domes(bubbles, space, Vacuum())
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_Λ∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes, 
+                                     plan, _Λx̂x̂; ΔV=ΔV)
+    end
+    return V
+end
+
 
 """
     symmetric_tensor_indices
@@ -209,51 +232,51 @@ export Directional_Π
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
 function Directional_Π(_n̂:: Vec3, t:: Float64, ωs:: AbstractVector{Float64}, 
-                       snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
-                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64}
+                       snapshot:: BubblesSnapShot, space:: AbstractSpace, boundary_condition:: BoundaryCondition,
+                        plan:: CFTPlan, _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64}
     _snap = align_ẑ(_n̂) * snapshot
     bubbles = current_bubbles(_snap, t)
-    T = ∂iϕ∂jϕ(ωs, bubbles, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
-    return @. Λ($eachcol(T)) / $volume(ball_space)
+    T = ∂iϕ∂jϕ(ωs, bubbles, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV)
+    return @. Λ($eachcol(T)) / $volume(space)
 end
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
 function Directional_Π(_n̂:: Vec3, t:: Float64, ωs:: AbstractVector{Float64}, 
-                       snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
-                       _Λx̂x̂:: Λx̂x̂; ΔV:: Float64 = 1.):: Vector{ComplexF64}
+                       snapshot:: BubblesSnapShot, space:: AbstractSpace, boundary_condition:: BoundaryCondition, 
+                       plan:: CFTPlan, _Λx̂x̂:: Λx̂x̂; ΔV:: Float64 = 1.):: Vector{ComplexF64}
     _snap = align_ẑ(_n̂) * snapshot
     bubbles = current_bubbles(_snap, t)
-    ΛT = Λ∂iϕ∂jϕ(ωs, bubbles, ball_space, plan, _Λx̂x̂; ΔV=ΔV)
+    ΛT = Λ∂iϕ∂jϕ(ωs, bubbles, space, boundary_condition, plan, _Λx̂x̂; ΔV=ΔV)
     return map(eachcol(ΛT)) do v
-        2 * v' * v / volume(ball_space)
+        2 * v' * v / volume(space)
     end
 end
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
 function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, 
-                       snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
-                       _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64}
-    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV))
+                       snapshot:: BubblesSnapShot, space:: AbstractSpace, boundary_condition:: BoundaryCondition,
+                        plan:: CFTPlan, _x̂_ix̂_j:: x̂_ix̂_j; ΔV:: Float64 = 1.):: Vector{ComplexF64}
+    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV))
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
-    T1 = ∂iϕ∂jϕ(ωs, bubbles1, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
-    T2 = ∂iϕ∂jϕ(ωs, bubbles2, ball_space, plan, _x̂_ix̂_j; ΔV=ΔV)
-    return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(ball_space)
+    T1 = ∂iϕ∂jϕ(ωs, bubbles1, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV)
+    T2 = ∂iϕ∂jϕ(ωs, bubbles2, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV)
+    return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(spce)
 end
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
 function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractVector{Float64}, 
-                       snapshot:: BubblesSnapShot, ball_space:: BallSpace, plan:: CFTPlan, 
-                       _Λx̂x̂:: Λx̂x̂; ΔV:: Float64 = 1.):: Vector{ComplexF64}
-    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, ball_space, plan, _Λx̂x̂; ΔV=ΔV))
+                       snapshot:: BubblesSnapShot, space:: AbstractSpace, boundary_condition:: BoundaryCondition,
+                        plan:: CFTPlan, _Λx̂x̂:: Λx̂x̂; ΔV:: Float64 = 1.):: Vector{ComplexF64}
+    t1 ≈ t2 && (return Directional_Π(_n̂, t1, ωs, snapshot, space, boundary_condition, plan, _Λx̂x̂; ΔV=ΔV))
     _snap = align_ẑ(_n̂) * snapshot
     bubbles1 = current_bubbles(_snap, t1)
     bubbles2 = current_bubbles(_snap, t2)
-    ΛT1 = Λ∂iϕ∂jϕ(ωs, bubbles1, ball_space, plan, _Λx̂x̂; ΔV=ΔV)
-    ΛT2 = Λ∂iϕ∂jϕ(ωs, bubbles2, ball_space, plan, _Λx̂x̂; ΔV=ΔV)
+    ΛT1 = Λ∂iϕ∂jϕ(ωs, bubbles1, space, boundary_condition, plan, _Λx̂x̂; ΔV=ΔV)
+    ΛT2 = Λ∂iϕ∂jϕ(ωs, bubbles2, space, boundary_condition, plan, _Λx̂x̂; ΔV=ΔV)
     return map(zip(eachcol(ΛT1), eachcol(ΛT2))) do (v1, v2)
-        2 * v2' * v1 / volume(ball_space)
+        2 * v2' * v1 / volume(space)
     end
 end
 
@@ -263,7 +286,8 @@ end
       t2::Float64, 
       ωs::AbstractVector{Float64}, 
       snapshot::BubblesSnapShot, 
-      ball_space::BallSpace, 
+      space::AbstractSpace,
+      boundary_condition::BoundaryCondition 
       cft_plan::CFTPlan, 
       angular_integration_plan:: SHPlan,
       _x̂_ix̂_j::x̂_ix̂_j; 
@@ -279,7 +303,8 @@ function Π(t1::Float64,
            t2::Float64, 
            ωs::AbstractVector{Float64}, 
            snapshot::BubblesSnapShot, 
-           ball_space::BallSpace, 
+           space::AbstractSpace,
+           boundary_condition:: BoundaryCondition, 
            cft_plan::CFTPlan, 
            angular_integration_plan:: AbstractAngularIntegrationPlan,
            _x̂_ix̂_j::x̂_ix̂_j; 
@@ -292,7 +317,7 @@ function Π(t1::Float64,
         n_vec = n̂(SVector{2, Float64}(ϕ, θ)) 
         
         # Call the physics kernel 
-        return Directional_Π(n_vec, t1, t2, ωs, snapshot, ball_space, cft_plan, _x̂_ix̂_j; ΔV=ΔV)
+        return Directional_Π(n_vec, t1, t2, ωs, snapshot, space, boundary_condition, cft_plan, _x̂_ix̂_j; ΔV=ΔV)
     end
 
     # Return average (integral / 4π) to match previous conventions 
@@ -304,7 +329,8 @@ end
       t2::Float64, 
       ωs::AbstractVector{Float64}, 
       snapshot::BubblesSnapShot, 
-      ball_space::BallSpace, 
+      space::AbstractSpace,
+      boundary_condition::BoundaryCondition 
       cft_plan::CFTPlan, 
       angular_integration_plan:: SHPlan,
       _x̂_ix̂_j::x̂_ix̂_j; 
@@ -320,7 +346,8 @@ function Π(t1::Float64,
            t2::Float64, 
            ωs::AbstractVector{Float64}, 
            snapshot::BubblesSnapShot, 
-           ball_space::BallSpace, 
+           space::AbstractSpace,
+           boundary_condition:: BoundaryCondition, 
            cft_plan::CFTPlan, 
            angular_integration_plan:: AbstractAngularIntegrationPlan,
            _Λx̂x̂:: Λx̂x̂; 
@@ -333,7 +360,7 @@ function Π(t1::Float64,
         n_vec = n̂(SVector{2, Float64}(ϕ, θ)) 
         
         # Call the physics kernel 
-        return Directional_Π(n_vec, t1, t2, ωs, snapshot, ball_space, cft_plan, _Λx̂x̂; ΔV=ΔV)
+        return Directional_Π(n_vec, t1, t2, ωs, snapshot, space, boundary_condition, cft_plan, _Λx̂x̂; ΔV=ΔV)
     end
 
     # Return average (integral / 4π) to match previous conventions 
