@@ -472,3 +472,9 @@ scripts/Japanese_comparison/MonteCarlo/ComplexCovarianceSampling/ComplexCovarian
 .continue/agents/new-config-1.yaml
 .continue/agents/new-config.yaml
 plot_4.png
+src/GeometricStressEnergyTensor/ring_dome_complement_intersection.so
+target/rust-analyzer/flycheck0/stderr
+target/rust-analyzer/flycheck0/stdout
+BigPiComparisonToJapanese.png
+coeffs_convergence.png
+nucleation_count_comparison.png
