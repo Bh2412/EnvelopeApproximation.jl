@@ -1,4 +1,3 @@
-
 """
     appropriate_t_end(tvp:: Float64, β:: Float64, Γ_0:: Float64; t_0:: Float64 = 0.):: Float64
 Given a target true vacuum fraction `tvp` in (0, 1), the nucleation rate parameters `β` and `Γ_0`,
@@ -46,25 +45,8 @@ function ExponentialGrowthProcess(β:: Float64, Γ_0:: Float64,
     return ExponentialGrowthProcess{APrioriPoissonSampling}(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
 end
 
-function Λ(t1:: Float64, t2:: Float64, β:: Float64, Γ_0:: Float64, t_0:: Float64):: Float64
-    return Γ_0 * (1 / β) * (exp(β * (t2 - t_0)) - exp(β * (t1 - t_0)))
-end
-
-function Λ(egp:: ExponentialGrowthProcess, t1:: Float64, t2:: Float64):: Float64
-    return Λ(t1, t2, egp.β, egp.Γ_0, egp.t_0)
-end
-
-function expected_candidate_nucleations(t_start:: Float64, t_end:: Float64, V:: Float64, β:: Float64, Γ_0:: Float64, t_0:: Float64):: Float64
-    return Λ(t_start, t_end, β, Γ_0, t_0) * V
-end
-
-"""
-    expected_candidate_nucleations(egp:: ExponentialGrowthProcess, space:: AbstractSpace):: Float64
-Compute the expected number of *total* nucleations in the given space for the ExponentialGrowthProcess `egp`.
-This includes non-physical nucleations that may be filtered out later.
-"""
-function expected_candidate_nucleations(egp:: ExponentialGrowthProcess, space:: AbstractSpace):: Float64
-    return Λ(egp, -Inf, egp.t_end) * volume(space)
+function λ(t1:: Float64, t2:: Float64, β:: Float64, Γ_0:: Float64, t_0:: Float64, V:: Float64):: Float64
+    return V * Γ_0 * (1 / β) * (exp(β * (t2 - t_0)) - exp(β * (t1 - t_0)))
 end
 
 function sample_backwards_exponential(rng:: AbstractRNG, N:: Int64, t_end:: Float64, β:: Float64):: Vector{Float64}
@@ -72,56 +54,25 @@ function sample_backwards_exponential(rng:: AbstractRNG, N:: Int64, t_end:: Floa
     return @. t_end + (1 / β) * log(1 - us)
 end
 
-function sample_backwards_exponential(rng:: AbstractRNG, process:: ExponentialGrowthProcess, N:: Int64):: Vector{Float64}
-    return sample_backwards_exponential(rng, N, process.t_end, process.β)
-end
-
 function next_event_time(rng:: AbstractRNG, t_last:: Float64, V:: Float64, β:: Float64, Γ_0:: Float64, t_0:: Float64):: Float64
     u = rand(rng)
+    # Handle t_last = -Inf case safely
     prev_term = t_last == -Inf ? 0.0 : exp(β * (t_last - t_0))
     return t_0 + (1 / β) * log(prev_term - (β / (V * Γ_0)) * log(1 - u))
 end
 
-function next_event_time(rng:: AbstractRNG, t_last:: Float64, V:: Float64, process:: ExponentialGrowthProcess):: Float64
-    return next_event_time(rng, t_last, V, process.β, process.Γ_0, process.t_0)
-end
-
-function radial_profile(process:: ExponentialGrowthProcess):: Function
-    v_wall = process.v_wall
-    return t -> v_wall * t
-end
-
-function completion_time(process:: ExponentialGrowthProcess):: Float64
-    return process.t_end
-end
-
 function toroidal_dist(p1::Point3, p2::Point3, L::Float64)::Float64
-    # Calculate difference in each dimension
     c1 = coordinates(p1)
     c2 = coordinates(p2)
     dx = abs(c1[1] - c2[1])
     dy = abs(c1[2] - c2[2])
     dz = abs(c1[3] - c2[3])
 
-    # Wrap: if dist > L/2, taking the path across the boundary is shorter
     if dx > L/2; dx = L - dx; end
     if dy > L/2; dy = L - dy; end
     if dz > L/2; dz = L - dz; end
     
     return sqrt(dx^2 + dy^2 + dz^2)
-end
-
-function padded_box(space:: AbstractSpace, padding:: Float64):: BoxSpace
-    bbox = bounding_box(space)
-    return BoxSpace(bbox.L + 2 * padding, bbox.center)
-end
-
-function sample_candidate_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess{APrioriPoissonSampling}, space:: AbstractSpace)
-    N = rand(rng, Poisson(expected_candidate_nucleations(process, space)))
-    nucleation_sites = sample(rng, N, space)
-    nucleation_times = sample_backwards_exponential(rng, process, N)
-    sort!(nucleation_times)
-    return zip(nucleation_times, nucleation_sites)
 end
 
 function is_physical(t:: Float64, p:: Point3, L:: Float64, tv_nucleations:: Vector{Nucleation}, wall_radius)
@@ -135,14 +86,54 @@ function is_physical(t:: Float64, p:: Point3, L:: Float64, tv_nucleations:: Vect
     return phys_nucleation
 end
 
+# --- Interface Wrappers ---
+
+function λ(egp:: ExponentialGrowthProcess, t1:: Float64, t2:: Float64, V:: Float64):: Float64
+    return λ(t1, t2, egp.β, egp.Γ_0, egp.t_0, V)
+end
+
+function λ(egp::ExponentialGrowthProcess, space:: AbstractSpace):: Float64
+    return λ(egp, -Inf, egp.t_end, volume(space))
+end
+
+function sample_backwards_exponential(rng:: AbstractRNG, process:: ExponentialGrowthProcess, N:: Int64):: Vector{Float64}
+    return sample_backwards_exponential(rng, N, process.t_end, process.β)
+end
+
+function radial_profile(process:: ExponentialGrowthProcess):: Function
+    v_wall = process.v_wall
+    return t -> v_wall * t
+end
+
+function completion_time(process:: ExponentialGrowthProcess):: Float64
+    return process.t_end
+end
+
+function padded_box(space:: AbstractSpace, padding:: Float64):: BoxSpace
+    bbox = bounding_box(space)
+    return BoxSpace(bbox.L + 2 * padding, bbox.center)
+end
+
+# --- Sampling Implementations ---
+
+function sample_candidate_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess{APrioriPoissonSampling}, space:: AbstractSpace)
+    N = rand(rng, Poisson(λ(process, space)))
+    nucleation_sites = sample(rng, N, space)
+    nucleation_times = sample_backwards_exponential(rng, process, N)
+    sort!(nucleation_times)
+    return zip(nucleation_times, nucleation_sites)
+end
+
 function sample_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProcess{APrioriPoissonSampling}, 
                             space:: AbstractSpace, boundary_condition:: Periodic; padding:: Float64 = 0.)::Vector{Nucleation}
     bbox = padded_box(space, padding)
     candidate_nucleations = sample_candidate_nucleations(rng, process, bbox)
     tv_nucleations = Vector{Nucleation}()
     sizehint!(tv_nucleations, length(candidate_nucleations))
+    
     L = bbox.L
     wall_radius = radial_profile(process)
+    
     for (t, p) in candidate_nucleations
         if is_physical(t, p, L, tv_nucleations, wall_radius)
             push!(tv_nucleations, Nucleation((time=t, site=p)))
