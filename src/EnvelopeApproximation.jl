@@ -99,24 +99,31 @@ end
 
 function sample(rng:: AbstractRNG, space::BoxSpace):: Point3
     L = space.L
-    dx = (rand(rng) - 0.5) * L
-    dy = (rand(rng) - 0.5) * L
-    dz = (rand(rng) - 0.5) * L
-    return space.center + Vec3(dx, dy, dz)
+    c = coordinates(space.center)
+
+    x = (rand(rng) - 0.5) * L + c[1]
+    y = (rand(rng) - 0.5) * L + c[2]
+    z = (rand(rng) - 0.5) * L + c[3]
+    return Point3(x, y, z)
 end
 
 function sample(rng::AbstractRNG, n::Int64, space::BoxSpace)::Vector{Point3}
-    points = Vector{Point3}(undef, n)
+points = Vector{Point3}(undef, n)
     
     L = space.L
-    center = space.center
+    c = coordinates(space.center)
     
-    for i in 1:n
-        dx = (rand(rng) - 0.5) * L
-        dy = (rand(rng) - 0.5) * L
-        dz = (rand(rng) - 0.5) * L
+    offset = 0.5 * L
+    ll_x = c[1] - offset
+    ll_y = c[2] - offset
+    ll_z = c[3] - offset
+    
+    @inbounds for i in 1:n
+        px = muladd(rand(rng), L, ll_x)
+        py = muladd(rand(rng), L, ll_y)
+        pz = muladd(rand(rng), L, ll_z)
         
-        points[i] = center + Vec3(dx, dy, dz)
+        points[i] = Point3(px, py, pz)
     end
     
     return points
