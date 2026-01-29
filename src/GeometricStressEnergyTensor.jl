@@ -19,6 +19,7 @@ using IterTools
 export IntersectionDome, intersection_domes
 
 include("GeometricStressEnergyTensor/IntersectionDome.jl")
+include("GeometricStressEnergyTensor/PeriodicCopies.jl")
 include("GeometricStressEnergyTensor/PeriodicInterval.jl")
 include("GeometricStressEnergyTensor/RingDomeComplementIntersection.jl")
 include("GeometricStressEnergyTensor/PeriodicIntersection.jl")
