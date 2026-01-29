@@ -90,3 +90,12 @@ function unfold_periodic_bubbles(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
     end
     return periodic_bubbles
 end
+
+function append_periodic_bubbles!(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
+    bubble_indices = eachindex(bubbles)
+    sizehint!(bubbles, length(bubbles) * 27)  # Worst case scenario: each bubble spawns 26 copies
+    for idx in bubble_indices
+        periodic_copies!(bubbles, bubbles[idx], box)
+    end
+    return bubbles
+end
