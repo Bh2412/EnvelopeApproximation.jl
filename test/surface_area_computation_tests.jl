@@ -4,7 +4,7 @@ begin
     using EnvelopeApproximation.BubblesEvolution
     import EnvelopeApproximation.BubblesEvolution: BallSpace
     using EnvelopeApproximation.EnvelopeAnalysis
-    import EnvelopeApproximation.EnvelopeAnalysis: intersection_domes, IntersectionDome, polar_limits
+    import EnvelopeApproximation.EnvelopeAnalysis: intersection_domes, IntersectionDome, polar_limits, ring_domes_complement_buffers
     using Distributions
     using QuadGK
     using Test
@@ -25,17 +25,7 @@ struct Δ
     intersection_buffer:: Vector{PeriodicInterval}
 end
 
-function _buffers(n)
-    arcs_buffer = PeriodicInterval[]
-    limits_buffer = Tuple{Float64, Float64}[]
-    intersection_buffer = Vector{PeriodicInterval}[]
-    resize!(arcs_buffer, n)
-    resize!(limits_buffer, 2n)
-    resize!(intersection_buffer, n)
-    return arcs_buffer, limits_buffer, intersection_buffer
-end
-
-Δ(n:: Int64) = Δ(_buffers(n)...)
+Δ(n:: Int64) = Δ(ring_domes_complement_buffers(n)...)
 
 function (δ:: Δ)(μ:: Float64, bubble:: Bubble, 
                  intersection_domes:: Vector{IntersectionDome}):: Float64

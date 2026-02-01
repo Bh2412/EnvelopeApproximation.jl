@@ -4,7 +4,7 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.Spaces
-using EnvelopeApproximation.EnvelopeAnalysis: ring_domes_complement_intersection!, _buffers, 
+using EnvelopeApproximation.EnvelopeAnalysis: ring_domes_complement_intersection!, ring_domes_complement_buffers, 
     PeriodicInterval, polar_limits, IntersectionDome, intersection_domes, unfold_periodic_bubbles, align_ẑ, n̂
 import IterTools: partition
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
@@ -51,7 +51,7 @@ mutable struct x̂_ix̂_j
     intersection_buffer:: Vector{PeriodicInterval}
 end
 
-x̂_ix̂_j(n:: Int64) = x̂_ix̂_j(_buffers(n)...)
+x̂_ix̂_j(n:: Int64) = x̂_ix̂_j(ring_domes_complement_buffers(n)...)
 
 function (f:: x̂_ix̂_j)(μ:: Float64, bubble:: Bubble, 
                       intersection_domes:: Vector{IntersectionDome}):: SVector{6, Float64}

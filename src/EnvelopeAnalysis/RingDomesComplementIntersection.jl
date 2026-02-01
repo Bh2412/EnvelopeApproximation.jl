@@ -212,3 +212,12 @@ function ring_domes_complement_intersection!(μ′:: Float64, R:: Float64, inter
     return @views periodic_intersection!(arcs_buffer[1:(i - 1)], limits_buffer, intersection_buffer)
 end
 
+function ring_domes_complement_buffers(n)
+    arcs_buffer = PeriodicInterval[]
+    limits_buffer = Tuple{Float64, Float64}[]
+    intersection_buffer = Vector{PeriodicInterval}[]
+    resize!(arcs_buffer, n)
+    resize!(limits_buffer, 2n)
+    resize!(intersection_buffer, n)
+    return arcs_buffer, limits_buffer, intersection_buffer
+end
