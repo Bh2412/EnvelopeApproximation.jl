@@ -1,8 +1,8 @@
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
-using EnvelopeApproximation.GeometricStressEnergyTensor
-import EnvelopeApproximation.GeometricStressEnergyTensor: unfold_periodic_bubbles, face_distance, edge_distance, 
+using EnvelopeApproximation.EnvelopeAnalysis
+import EnvelopeApproximation.EnvelopeAnalysis: unfold_periodic_bubbles, face_distance, edge_distance, 
     vertex_distance, wall_intersect_complement!, ∩
 using Test
 using StaticArrays

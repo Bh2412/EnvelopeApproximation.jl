@@ -4,15 +4,14 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.Spaces
-using EnvelopeApproximation.GeometricStressEnergyTensor: ring_domes_complement_intersection!, _buffers, 
-    PeriodicInterval, polar_limits, IntersectionDome, intersection_domes, unfold_periodic_bubbles
+using EnvelopeApproximation.EnvelopeAnalysis: ring_domes_complement_intersection!, _buffers, 
+    PeriodicInterval, polar_limits, IntersectionDome, intersection_domes, unfold_periodic_bubbles, align_ẑ, n̂
 import IterTools: partition
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, chebyshev_coeffs!, scale, translation, VectorChebyshevPlan
 using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
 using EnvelopeApproximation.SphericalHarmonics: SHPlan, integrate_angular
 using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
-import EnvelopeApproximation.ISWPowerSpectrum: n̂, align_ẑ
 using StaticArrays
 using HCubature
 

@@ -193,25 +193,17 @@ end
 
 include("BubblesEvolution.jl")
 
-include("FractionalFFT.jl")
-
-include("FilonQuadrature.jl")
-
 include("CFT/CFTInteface.jl")
 
 include("CFT/ChebyshevCFT.jl")
 
 include("CFT/QuadGKCFT.jl")
 
-include("GeometricStressEnergyTensor.jl")
+include("EnvelopeAnalysis.jl")
 
 include("AngularIntegration/AngularIntegrationInterface.jl")
 
 include("AngularIntegration/SphericalHarmonics.jl")
-
-include("GravitationalPotentials.jl")
-
-include("ISWPowerSpectrum.jl")
 
 include("GravitationalWaves.jl")
 

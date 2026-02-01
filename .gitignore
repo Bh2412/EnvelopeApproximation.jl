@@ -478,3 +478,4 @@ target/rust-analyzer/flycheck0/stdout
 BigPiComparisonToJapanese.png
 coeffs_convergence.png
 nucleation_count_comparison.png
+src/EnvelopeAnalysis/ring_dome_complement_intersection.so
