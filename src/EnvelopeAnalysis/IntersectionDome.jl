@@ -427,3 +427,41 @@ function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_co
     
     return domes
 end
+
+# Check if a point is in any dome
+# μ is cos(theta), ϕ is azimuthal
+function inanydome(x̂::Vec3, R::Real, domes::Vector{IntersectionDome})::Bool
+    for dome in domes
+        # The distance from center along this direction projected onto normal
+        # dome.h is the distance to the cutting plane
+        projection = dot(x̂, dome.n̂) * R
+
+        if dome.dome_like
+            # Cap case: Intersection is "above" the plane
+            if projection > dome.h
+                return true # Covered
+            end
+        else
+            # Complement case: Intersection is "below" the plane
+            if projection < dome.h
+                return true # Covered
+            end
+        end
+    end
+    return false
+end
+
+function inanydome(μ::Real, ϕ::Real, R::Real, domes::Vector{IntersectionDome})::Bool
+    x̂ = n̂(μ, ϕ)
+    return inanydome(x̂, R, domes)
+end
+
+function inanydome(x̂::Vec3, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
+    R = bubble.radius
+    return inanydome(x̂, R, domes)
+end
+
+function inanydome(μ::Real, ϕ::Real, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
+    R = bubble.radius
+    return inanydome(μ, ϕ, R, domes)
+end

@@ -28,9 +28,10 @@ indicating they are parallel, `false` otherwise.
 ∥(u:: Vec3, v:: Vec3):: Bool = u×v ≈ NullVec
 
 function n̂(μ:: Float64, ϕ:: Float64):: Vec3
-    sμ = √(1 - μ ^ 2)
-    sϕ, cϕ = sincos(ϕ)
-    return Vec3(cϕ * sμ, sϕ * sμ, μ)
+    sin_theta = sqrt(clamp(1 - μ^2, 0.0, 1.0))
+    n_y, n_x = sin_theta .* sincos(ϕ)
+    n_z = μ
+    return SVector(n_x, n_y, n_z)
 end
 
 """

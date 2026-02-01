@@ -1,7 +1,8 @@
 using Test
 
 include("ring_dome_complement_tests.jl")
-include("intersection_domes_test.jl")
+include("intersection_domes_tests.jl")
+include("periodic_bubbles_tests.jl")
 include("periodic_intersection_tests.jl")
 include("surface_area_computation_tests.jl")
 include("chebyshev_plan_tests.jl")
