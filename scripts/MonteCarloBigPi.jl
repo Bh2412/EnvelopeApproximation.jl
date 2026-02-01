@@ -1,6 +1,6 @@
 begin
     using EnvelopeApproximation.BubbleBasics: Bubble
-    using EnvelopeApproximation.GeometricStressEnergyTensor: IntersectionDome
+    using EnvelopeApproximation.EnvelopeAnalysis: IntersectionDome, inanydome
     using StaticArrays
     using LinearAlgebra
     using HCubature
@@ -15,50 +15,6 @@ function n̂(μ::Real, ϕ::Real)::SVector{3,Float64}
     n_y, n_x = sin_theta .* sincos(ϕ)
     n_z = μ
     return SVector(n_x, n_y, n_z)
-end
-
-# Check if a point is in any dome
-# μ is cos(theta), ϕ is azimuthal
-function inanydome(x̂::SVector{3,Float64}, R::Real, domes::Vector{IntersectionDome})::Bool
-    for dome in domes
-        # The distance from center along this direction projected onto normal
-        # dome.h is the distance to the cutting plane
-        projection = dot(x̂, dome.n̂) * R
-
-        if dome.dome_like
-            # Cap case: Intersection is "above" the plane
-            if projection > dome.h
-                return true # Covered
-            end
-        else
-            # Complement case: Intersection is "below" the plane
-            if projection < dome.h
-                return true # Covered
-            end
-        end
-    end
-    return false
-end
-
-function inanydome(μ::Real, ϕ::Real, R::Real, domes::Vector{IntersectionDome})::Bool
-    x̂ = n̂(μ, ϕ)
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(x̂::SVector{3,Float64}, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(μ::Real, ϕ::Real, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(μ, ϕ, R, domes)
-end
-
-function phases(μ::Real, ks::Vector{Float64}, R::Real)::Vector{ComplexF64}
-    return map(ks) do k
-        cis(-k * R * μ)
-    end
 end
 
 function phases(x̂::SVector{3,Float64}, ks::AbstractArray, bubble::Bubble)::Vector{ComplexF64}

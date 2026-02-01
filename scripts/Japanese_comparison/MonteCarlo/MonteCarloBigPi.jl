@@ -2,7 +2,7 @@ begin
     using EnvelopeApproximation.Spaces
     using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubbleBasics: Bubble
-    using EnvelopeApproximation.GeometricStressEnergyTensor: IntersectionDome, intersection_domes, unfold_periodic_bubbles
+    using EnvelopeApproximation.EnvelopeAnalysis: IntersectionDome, intersection_domes, unfold_periodic_bubbles, append_periodic_bubbles!, inanydome, n̂
     using StaticArrays
     using LinearAlgebra
     using HCubature
@@ -11,52 +11,6 @@ begin
     using QuadGK
     using StatsBase
     using Bessels: sphericalbesselj
-end
-
-# Unit normal vector for given (μ, ϕ)
-function n̂(μ::Real, ϕ::Real)::SVector{3,Float64}
-    sin_theta = sqrt(clamp(1 - μ^2, 0.0, 1.0))
-    n_y, n_x = sin_theta .* sincos(ϕ)
-    n_z = μ
-    return SVector(n_x, n_y, n_z)
-end
-
-# Check if a point is in any dome
-# μ is cos(theta), ϕ is azimuthal
-function inanydome(x̂::SVector{3,Float64}, R::Real, domes::Vector{IntersectionDome})::Bool
-    for dome in domes
-        # The distance from center along this direction projected onto normal
-        # dome.h is the distance to the cutting plane
-        projection = dot(x̂, dome.n̂) * R
-
-        if dome.dome_like
-            # Cap case: Intersection is "above" the plane
-            if projection > dome.h
-                return true # Covered
-            end
-        else
-            # Complement case: Intersection is "below" the plane
-            if projection < dome.h
-                return true # Covered
-            end
-        end
-    end
-    return false
-end
-
-function inanydome(μ::Real, ϕ::Real, R::Real, domes::Vector{IntersectionDome})::Bool
-    x̂ = n̂(μ, ϕ)
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(x̂::SVector{3,Float64}, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(μ::Real, ϕ::Real, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(μ, ϕ, R, domes)
 end
 
 function phases(μ::Real, ks::Vector{Float64}, R::Real)::Vector{ComplexF64}
