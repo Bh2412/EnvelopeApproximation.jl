@@ -309,6 +309,61 @@ function ∩(bubble:: Bubble, ball_space:: BallSpace):: IntersectionDome # This 
     return IntersectionDome(h, n̂, false)
 end
 
+function cardinal_vector(axis:: Int, direction:: Float64):: Vec3
+    v = zeros(Float64, 3)
+    v[axis] = direction
+    return Vec3(v...)
+end
+
+function wall_intersect_complement!(domes:: Vector{IntersectionDome}, c:: Float64, R:: Float64, wall_location:: Float64, wall_interior_direction:: Float64, wall_axis:: Int)
+    dist = (c - wall_location) * wall_interior_direction
+    domelike = true
+    dist < 0. && begin
+        domelike = false
+        dist = -dist
+    end
+    if dist < R
+        push!(domes, IntersectionDome(dist, cardinal_vector(wall_axis, sign(wall_location - c)), domelike))
+    end 
+end
+
+"""
+    ∩(bubble::Bubble, box_space::BoxSpace)::Vector{IntersectionDome}
+
+Computes the exclusion domes (spherical caps) where a bubble protrudes outside a BoxSpace.
+Unlike BallSpace intersection which returns the inner dome, this returns a vector of 
+domes representing the parts of the bubble *outside* the box (up to 6 caps).
+
+# Arguments
+- `bubble::Bubble`: The bubble to check.
+- `box_space::BoxSpace`: The cubic space.
+
+# Returns
+A vector of `IntersectionDome`s. Each dome represents a region of the bubble that is 
+outside the box boundaries. If the bubble is fully inside, returns empty.
+"""
+function ∩(bubble:: Bubble, box_space:: BoxSpace):: Vector{IntersectionDome}
+    domes = Vector{IntersectionDome}()
+    
+    # Box geometry
+    L_half = box_space.L / 2.0
+    box_center = box_space.center.coordinates
+    bubble_center = bubble.center.coordinates
+    R = bubble.radius
+    
+    # We check all 6 faces. 
+    # If dist_to_wall < R, the bubble sticks out.
+    # The 'h' of the exclusion dome is the distance from bubble center to the wall.
+    # The normal 'n' points outward from the box (towards the exclusion region).
+
+    for (axis, sign) in Iterators.product([1, 2, 3], [1., -1.])
+        wall_location = box_center[axis] - sign * L_half
+        c = bubble_center[axis]
+        wall_intersect_complement!(domes, c, R, wall_location, sign, axis)
+    end
+    return domes
+end
+
 """
     intersection_domes(bubbles::Bubbles, ball_space::BallSpace)::Dict{Int, Vector{IntersectionDome}}
 
@@ -320,6 +375,7 @@ each bubble and the containing ball space boundary.
 # Arguments
 - `bubbles::Bubbles`: A collection of bubbles
 - `ball_space::BallSpace`: The containing ball space
+- `boundary_condition::Vacuum`: The boundary condition type (currently only Vacuum is supported for a BallSpace)
 
 # Returns
 A dictionary where:
@@ -341,7 +397,7 @@ This is equivalent to having a reflective bubble that reaches the ball space sur
 - [`∩`](@ref): Functions that calculate intersections.
 - [`complement`](@ref): Function to create the complement of a dome.
 """
-function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
+function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace, boundary_condition:: Vacuum):: Dict{Int, Vector{IntersectionDome}}
     domes = intersection_domes(bubbles)
     for (i, bubble) in enumerate(bubbles)
         if ~(bubble ⊆ ball_space)
@@ -354,4 +410,20 @@ function intersection_domes(bubbles:: Bubbles, ball_space:: BallSpace)
     return domes
 end
 
-export intersection_domes
+"""
+    intersection_domes(bubbles::Bubbles, box_space::BoxSpace, boundary_condition::Vacuum)
+
+Computes intersections for bubbles in a BoxSpace with Vacuum boundary conditions.
+Includes domes for bubble-bubble intersections and domes for wall penetrations.
+"""
+function intersection_domes(bubbles:: Bubbles, box_space:: BoxSpace, boundary_condition:: Vacuum):: Dict{Int, Vector{IntersectionDome}}
+    domes = intersection_domes(bubbles)
+    for (i, bubble) in enumerate(bubbles)
+        wall_domes = bubble ∩ box_space
+        if !isempty(wall_domes)
+            append!(domes[i], wall_domes)
+        end
+    end
+    
+    return domes
+end

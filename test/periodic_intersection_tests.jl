@@ -1,8 +1,8 @@
 begin
-using EnvelopeApproximation.GeometricStressEnergyTensor: ring_dome_complement_intersection, IntersectionDome, Vec3, EmptyArc, FullCircle
-using EnvelopeApproximation.GeometricStressEnergyTensor: PeriodicInterval, a, b, periodic_intersection!
+using EnvelopeApproximation.EnvelopeAnalysis: ring_dome_complement_intersection, IntersectionDome, Vec3, EmptyArc, FullCircle
+using EnvelopeApproximation.EnvelopeAnalysis: PeriodicInterval, a, b, periodic_intersection!
 using Test
-import EnvelopeApproximation.GeometricStressEnergyTensor.periodic_intersection!
+import EnvelopeApproximation.EnvelopeAnalysis.periodic_intersection!
 using Intervals
 import Intervals.IntervalSet
 import Base: ≈, ==, ∈   

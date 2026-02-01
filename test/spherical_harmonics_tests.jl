@@ -131,4 +131,29 @@ using EnvelopeApproximation.SphericalHarmonics
 
     end
 
+    @testset "Exponential Function: f = exp(sin(θ)cos(ϕ))" begin
+        # This function requires an infinite number of SH modes to represent exactly,
+        # but it has a clean analytical integral: 4π * sinh(1).
+        
+        # 1. Define the function (returns vector as per API)
+        # Note: sin(θ)cos(ϕ) is the Cartesian x-coordinate on the sphere
+        f_exp(ϕ, θ) = [exp(sin(θ) * cos(ϕ))]
+        
+        # 2. Define analytical expected value
+        expected_val = 4π * sinh(1.0)
+        
+        # 3. Compute using SHPlan
+        # We use a sufficiently high lmax because the series is infinite (though converges fast)
+        lmax = 30
+        K = 1
+        plan = SHPlan(lmax, K)
+        
+        # integrate_angular returns a Vector, so we extract the first element
+        computed_val = integrate_angular(plan, f_exp)[1]
+        
+        # 4. Verify
+        # We use a real comparison since the imaginary part should be negligible/zero
+        @test real(computed_val) ≈ expected_val atol=1e-12
+        @test abs(imag(computed_val)) < 1e-12
+    end
 end

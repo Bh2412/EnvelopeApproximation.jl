@@ -1,9 +1,10 @@
 begin
     using EnvelopeApproximation.BubbleBasics
+    using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubblesEvolution
     import EnvelopeApproximation.BubblesEvolution: BallSpace
-    using EnvelopeApproximation.GeometricStressEnergyTensor
-    import EnvelopeApproximation.GeometricStressEnergyTensor: Δ, intersection_domes, IntersectionDome, polar_limits
+    using EnvelopeApproximation.EnvelopeAnalysis
+    import EnvelopeApproximation.EnvelopeAnalysis: intersection_domes, IntersectionDome, polar_limits
     using Distributions
     using QuadGK
     using Test
@@ -17,6 +18,32 @@ begin
 end
 
 begin
+
+struct Δ
+    arcs_buffer:: Vector{PeriodicInterval}
+    limits_buffer:: Vector{Tuple{Float64, Float64}}
+    intersection_buffer:: Vector{PeriodicInterval}
+end
+
+function _buffers(n)
+    arcs_buffer = PeriodicInterval[]
+    limits_buffer = Tuple{Float64, Float64}[]
+    intersection_buffer = Vector{PeriodicInterval}[]
+    resize!(arcs_buffer, n)
+    resize!(limits_buffer, 2n)
+    resize!(intersection_buffer, n)
+    return arcs_buffer, limits_buffer, intersection_buffer
+end
+
+Δ(n:: Int64) = Δ(_buffers(n)...)
+
+function (δ:: Δ)(μ:: Float64, bubble:: Bubble, 
+                 intersection_domes:: Vector{IntersectionDome}):: Float64
+    periodic_intervals = ring_domes_complement_intersection!(μ, bubble.radius, intersection_domes, 
+                                                             δ.arcs_buffer, δ.limits_buffer, δ.intersection_buffer)
+    return sum((p.Δ for p in periodic_intervals), init=0.)
+end
+
 
 function bubble_surface_area(bubble:: Bubble, domes:: Vector{IntersectionDome}, _Δ:: Δ; kwargs...)
     _polar_limits = polar_limits(bubble.radius, domes)
@@ -33,7 +60,7 @@ function surface_area(bubbles:: Bubbles, _Δ:: Δ; kwargs...):: Float64
 end
 
 function surface_area(bubbles:: Bubbles, ball_space:: BallSpace, _Δ:: Δ; kwargs...):: Float64
-    domes = intersection_domes(bubbles, ball_space)
+    domes = intersection_domes(bubbles, ball_space, Vacuum())
     _surface_area = 0.
     for (i, bubble) in enumerate(bubbles)
         _surface_area += bubble_surface_area(bubble, domes[i], _Δ; kwargs...)
@@ -169,7 +196,7 @@ begin
     bubbless = current_bubbles.(snapshots)
     _Δ = Δ(max(length.(bubbless)...))
     N = 4^9
-    @testset "General Ensemble With Reflective Boundary Conditions" begin
+    @testset "General Ensemble With Vacuum Boundary" begin
         for bubbles in bubbless
             sa1 = surface_area(bubbles, ball_space, _Δ)
             @assert sa1 < surface_area(bubbles, _Δ)
