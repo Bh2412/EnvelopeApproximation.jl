@@ -4,8 +4,9 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.Spaces
-import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
+using EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
+using Random
 
 export Π, AzimuthalReduction, MonteCarloSampling
 

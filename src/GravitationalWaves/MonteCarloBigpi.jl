@@ -1,3 +1,7 @@
+module MonteCarloBigpi
+
+using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.BubbleBasics: Bubble
@@ -247,3 +251,4 @@ function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot::
     return Measurements.correlated_values(mean_Π, σ, corr)
 end
 
+end
