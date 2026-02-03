@@ -400,15 +400,17 @@ function dot_products(x̂₁:: SVector{3,Float64}, x̂₂:: SVector{3,Float64}, 
     return SVector{5,Float64}(1., c_12 ^ 2, c_12 * c₁ * c₂, c₁ ^ 2 + c₂ ^ 2, c₁ ^ 2 * c₂ ^ 2)
 end
 
-function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: Float64)
+function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: Float64):: Float64
     return dot(coeffs(z), dot_products(x̂₁, x̂₂, n̂))
 end
 
 function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: AbstractVector{Float64})
     prods =  dot_products(x̂₁, x̂₂, n̂)
-    return map(z) do _z
-        dot(coeffs(_z), prods)
+    v = similar(z)
+    @inbounds for i in eachindex(z)
+        v[i] = dot(coeffs(z[i]), prods)
     end
+    return v
 end
     
 function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, box_space::BoxSpace;
