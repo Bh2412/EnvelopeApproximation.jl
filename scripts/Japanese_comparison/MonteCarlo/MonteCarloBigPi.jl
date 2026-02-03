@@ -371,28 +371,19 @@ function small_z_coeffs(z::Real)
     z2 = z * z
     z4 = z2 * z2
     
-    # Component 1: 4π * (-2/15 + z²/21)
-    c1 = 4π * (-2.0/15.0 + z2/21.0 - z4/756.0)
-    
-    # Component 2: 4π * (2/5 - 11z²/105)
-    c2 = 4π * (2.0/5.0 - 11.0*z2/105.0 + 4.0*z4/135.0)
-    
-    # Component 3: 8π * (2z²/35)
-    c3 = 8π * (2.0*z2/35.0 - 4.0*z4/315.0)
-    
-    # Component 4: 4π * (-4z²/105)
-    c4 = 4π * (-4.0*z2/105.0 + 4.0*z4/315.0)
-    
-    # Component 5: 2π * (z⁴/945)
-    c5 = 2π * (z4/945.0)
+    c1 = π * (-8//15 + 4//21 * z2 - 11//945 * z4)
+    c2 = π * (8//5 - 44//105 * z2 + 23//945 * z4)
+    c3 = π * (16//35 * z2 - 32//945 * z4)
+    c4 = π * (-16//105 * z2 + 2//189 * z4)
+    c5 = π * (2//945 * z4)
     
     return SVector{5, Float64}(c1, c2, c3, c4, c5)
 end
 
 function coeffs(z:: Real):: SVector{5,Float64}
-    # if z < 1e-4
-    #     return small_z_coeffs(z)
-    # end
+    if z < 1e-4
+        return small_z_coeffs(z)
+    end
 
     j₀, j₁, j₂, j₃, j₄ = first_5_spherical_bessels(z)
     return SVector{5,Float64}(4π * ((- 1. / 2) * j₀ + j₁ / z + j₂ / (2 * (z ^ 2))), 
