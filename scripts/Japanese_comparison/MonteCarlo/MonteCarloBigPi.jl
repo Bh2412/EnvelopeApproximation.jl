@@ -2,7 +2,7 @@ begin
     using EnvelopeApproximation.Spaces
     using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubbleBasics: Bubble
-    using EnvelopeApproximation.GeometricStressEnergyTensor: IntersectionDome, intersection_domes, unfold_periodic_bubbles
+    using EnvelopeApproximation.EnvelopeAnalysis: IntersectionDome, intersection_domes, unfold_periodic_bubbles, append_periodic_bubbles!, inanydome, n̂
     using StaticArrays
     using LinearAlgebra
     using HCubature
@@ -11,52 +11,6 @@ begin
     using QuadGK
     using StatsBase
     using Bessels: sphericalbesselj
-end
-
-# Unit normal vector for given (μ, ϕ)
-function n̂(μ::Real, ϕ::Real)::SVector{3,Float64}
-    sin_theta = sqrt(clamp(1 - μ^2, 0.0, 1.0))
-    n_y, n_x = sin_theta .* sincos(ϕ)
-    n_z = μ
-    return SVector(n_x, n_y, n_z)
-end
-
-# Check if a point is in any dome
-# μ is cos(theta), ϕ is azimuthal
-function inanydome(x̂::SVector{3,Float64}, R::Real, domes::Vector{IntersectionDome})::Bool
-    for dome in domes
-        # The distance from center along this direction projected onto normal
-        # dome.h is the distance to the cutting plane
-        projection = dot(x̂, dome.n̂) * R
-
-        if dome.dome_like
-            # Cap case: Intersection is "above" the plane
-            if projection > dome.h
-                return true # Covered
-            end
-        else
-            # Complement case: Intersection is "below" the plane
-            if projection < dome.h
-                return true # Covered
-            end
-        end
-    end
-    return false
-end
-
-function inanydome(μ::Real, ϕ::Real, R::Real, domes::Vector{IntersectionDome})::Bool
-    x̂ = n̂(μ, ϕ)
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(x̂::SVector{3,Float64}, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(x̂, R, domes)
-end
-
-function inanydome(μ::Real, ϕ::Real, bubble::Bubble, domes::Vector{IntersectionDome})::Bool
-    R = bubble.radius
-    return inanydome(μ, ϕ, R, domes)
 end
 
 function phases(μ::Real, ks::Vector{Float64}, R::Real)::Vector{ComplexF64}
@@ -417,28 +371,19 @@ function small_z_coeffs(z::Real)
     z2 = z * z
     z4 = z2 * z2
     
-    # Component 1: 4π * (-2/15 + z²/21)
-    c1 = 4π * (-2.0/15.0 + z2/21.0 - z4/756.0)
-    
-    # Component 2: 4π * (2/5 - 11z²/105)
-    c2 = 4π * (2.0/5.0 - 11.0*z2/105.0 + 4.0*z4/135.0)
-    
-    # Component 3: 8π * (2z²/35)
-    c3 = 8π * (2.0*z2/35.0 - 4.0*z4/315.0)
-    
-    # Component 4: 4π * (-4z²/105)
-    c4 = 4π * (-4.0*z2/105.0 + 4.0*z4/315.0)
-    
-    # Component 5: 2π * (z⁴/945)
-    c5 = 2π * (z4/945.0)
+    c1 = π * (-8//15 + 4//21 * z2 - 11//945 * z4)
+    c2 = π * (8//5 - 44//105 * z2 + 23//945 * z4)
+    c3 = π * (16//35 * z2 - 32//945 * z4)
+    c4 = π * (-16//105 * z2 + 2//189 * z4)
+    c5 = π * (2//945 * z4)
     
     return SVector{5, Float64}(c1, c2, c3, c4, c5)
 end
 
 function coeffs(z:: Real):: SVector{5,Float64}
-    # if z < 1e-4
-    #     return small_z_coeffs(z)
-    # end
+    if z < 1e-4
+        return small_z_coeffs(z)
+    end
 
     j₀, j₁, j₂, j₃, j₄ = first_5_spherical_bessels(z)
     return SVector{5,Float64}(4π * ((- 1. / 2) * j₀ + j₁ / z + j₂ / (2 * (z ^ 2))), 
@@ -455,15 +400,17 @@ function dot_products(x̂₁:: SVector{3,Float64}, x̂₂:: SVector{3,Float64}, 
     return SVector{5,Float64}(1., c_12 ^ 2, c_12 * c₁ * c₂, c₁ ^ 2 + c₂ ^ 2, c₁ ^ 2 * c₂ ^ 2)
 end
 
-function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: Float64)
+function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: Float64):: Float64
     return dot(coeffs(z), dot_products(x̂₁, x̂₂, n̂))
 end
 
 function integrated_projected(x̂₁:: SVector{3, Float64}, x̂₂:: SVector{3, Float64}, n̂:: SVector{3, Float64}, z:: AbstractVector{Float64})
     prods =  dot_products(x̂₁, x̂₂, n̂)
-    return map(z) do _z
-        dot(coeffs(_z), prods)
+    v = similar(z)
+    @inbounds for i in eachindex(z)
+        v[i] = dot(coeffs(z[i]), prods)
     end
+    return v
 end
     
 function direct_MC_Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, box_space::BoxSpace;

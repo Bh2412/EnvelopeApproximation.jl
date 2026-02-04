@@ -3,7 +3,7 @@ using CSV, DataFrames
 using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
-using EnvelopeApproximation.GeometricStressEnergyTensor
+using EnvelopeApproximation.EnvelopeAnalysis
 import EnvelopeApproximation.GravitationalPotentials: ψ_source, Ŋ, Φ, ψ
 using Plots
 

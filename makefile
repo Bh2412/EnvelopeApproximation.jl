@@ -4,7 +4,7 @@ JULIA_LIB_DIR = $(CURDIR)
 LIB_NAME = ring_dome_complement_intersection.so
 
 # Define the target shared library path
-TARGET = $(JULIA_LIB_DIR)/src/GeometricStressEnergyTensor/$(LIB_NAME)
+TARGET = $(JULIA_LIB_DIR)/src/EnvelopeAnalysis/$(LIB_NAME)
 
 # Default target
 all: test

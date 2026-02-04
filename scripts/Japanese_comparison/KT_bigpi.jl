@@ -1,10 +1,12 @@
 begin
     using EnvelopeApproximation
     using EnvelopeApproximation.BubbleBasics
+    using EnvelopeApproximation.Spaces
+    using EnvelopeApproximation.BoundaryConditions
     using EnvelopeApproximation.BubblesEvolution
-    using EnvelopeApproximation.BubblesEvolution: sample!, BallSpace
+    import EnvelopeApproximation.BubblesEvolution:sample_PT
     using StableRNGs
-    using EnvelopeApproximation.GeometricStressEnergyTensor: align_ẑ
+    using EnvelopeApproximation.EnvelopeAnalysis: align_ẑ
     # Import the physics kernel and the generic API
     using EnvelopeApproximation.GravitationalWaves: Π, Directional_Π, x̂_ix̂_j, Λx̂x̂
     using EnvelopeApproximation.SphericalHarmonics: SHPlan
@@ -26,74 +28,31 @@ Parameters taken from Kosowsky and Turner
 
 begin  # Setup
     β = 1.
-    Δt = (1 / β) / 1000
-    λ = 1.
-    ball_space = BallSpace(λ * 4.46 / β, EnvelopeApproximation.BubbleBasics.Point3(0., 0., 0.))
-    ball_space_volume = 4π / 3 * ball_space.radius ^ 3
-    # Γ(t) in Kosowsky and Turner differ from this work by a factor of unoccupied volume
-    eg = ExponentialGrowth(β, Δt, Γ_0 = ball_space_volume * 1.38 * 1e-3 * β ^ 4)
-    ensemble_size = 1000
+    Γ_0 = 1e-4
+    t_0 = 0.
+    tvp = 1 - 1e-5
+    v_wall = 1.
+    egp = ExponentialGrowthProcess(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
+    sequential_egp = ExponentialGrowthProcess{SequentialSampling}(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
     
-    N = 100
-    η = 0.99
-    rng = StableRNG(1)
-    
-    function _termination_strategy(rng:: StableRNG)
-        points_buffer = Vector{EnvelopeApproximation.BubbleBasics.Point3}(undef, N)
-        bubbles_buffer = Vector{Bubble}(undef, 10_000)
-
-        function termination_strategy(state, space, _):: Bool
-            ps = sample!(rng, N, space, points_buffer)
-            cbs = current_bubbles!(state, bubbles_buffer)
-            length(cbs) == 0 && return false
-            inside = sum((p ∈ cbs for p in ps), init=0.)
-            return inside / N ≥ η 
-        end
-        return termination_strategy
-    end
-    
-    _evolve(rng:: StableRNG) = evolve(eg, ball_space, termination_strategy=_termination_strategy(rng), rng=rng)
-    _evolve(seed:: Int) = _evolve(StableRNG(seed))
-
-    function sample_configuration(rng:: AbstractRNG)
-        seed = rand(rng, Int) |> abs
-        snapshot = _evolve(seed)
-        return (seed, snapshot)
-    end
-
-    function sample_later_than(rng::AbstractRNG, t::Real; max_attempts::Int=100)
-        for _ in 1:max_attempts
-            # 1. Generate a random configuration
-            # sample_configuration returns: (seed, snapshot, t_final, t_final)
-            # We need to capture the snapshot to check its duration.
-            res = sample_configuration(rng)
-            snapshot = res[2]
-            
-            # 2. Check if the simulation ran long enough
-            if snapshot.t >= t
-                # Success! 
-                # We return the seed and snapshot, but we override the times (t1, t2) 
-                # to be the requested 't', not the final simulation time 'snapshot.t'.
-                return (res[1], snapshot, Float64(t), Float64(t))
-            end
-        end
-        
-        # 3. Failure handling
-        error("Exceeded max attempts ($max_attempts) to get a configuration with duration T >= $t")
-    end
+    sample_PT(rng:: StableRNG) = sample_PT(rng, egp, box_space, Periodic(); padding=padding)
+    sample_PT(seed:: Int) = sample_PT(StableRNG(seed))
 end
+
+
 
 # --- Main Execution ---
 begin
+    t1 = t2 = 5.
+    direction = EnvelopeApproximation.BubbleBasics.Vec3(0., 0., 1.)
+    ks = logrange(β / 10., 10 * β, 100)
     num_realizations = 8
-    l_max = 64                
-    ks = logrange(β / 10., 10 * β, 100) 
-    t_target = 5.0
-    
+    l_max = 64
+
     results_Π = zeros(ComplexF64, num_realizations, length(ks))
     
     println("Starting simulation of $num_realizations realizations...")
-    println("Parameters: l_max=$l_max, target_time=$t_target")
+    println("Parameters: l_max=$l_max, t1=$t1, t2=$t2")
 
     Threads.@threads for i in 1:num_realizations
         seed = 1000 + i 
@@ -103,8 +62,8 @@ begin
         local_cft_plan = VectorQuadGKPlan{2}(; atol=1e-5, rtol=1e-3, initdiv=100)
 
         # 2. Physics Generation
-        seed_out, snapshot, t1, t2 = sample_later_than(StableRNG(seed), t_target)
-        _Λx̂x̂ = Λx̂x̂(length(snapshot.nucleations))
+        snapshot = sample_PT(seed)
+        _Λx̂x̂ = Λx̂x̂(1_000)
         
         # 3. Integration Plan 
         # (Imported from SphericalHarmonics.jl)
@@ -112,7 +71,7 @@ begin
         
         # 4. Compute Π
         # Note: Arguments match Source 115 in GravitationalWaves.jl
-        val_Π = Π(t1, t2, ks, snapshot, ball_space, local_cft_plan, angular_integration_plan, _Λx̂x̂)
+        val_Π = Π(t1, t2, ks, snapshot, box_space, Periodic(), local_cft_plan, angular_integration_plan, _Λx̂x̂)
         
         results_Π[i, :] = val_Π
         

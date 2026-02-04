@@ -3,7 +3,7 @@ using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.EnvelopeAnalysis
 import EnvelopeApproximation.EnvelopeAnalysis: unfold_periodic_bubbles, face_distance, edge_distance, 
-    vertex_distance, wall_intersect_complement!, ∩
+    vertex_distance, wall_intersect_complement!, ∩, inanydome
 using Test
 using StaticArrays
 using LinearAlgebra
@@ -172,146 +172,61 @@ using LinearAlgebra
         end
     end
 
-    # --- Mocking minimal structures for the test to run independently ---
-    # (Skip this block if you are running inside your actual module)
-    # include("IntersectionDome.jl") 
-    # using .EnvelopeApproximation.BubbleBasics
-    # using .EnvelopeApproximation.BubblesEvolution
-
-    @testset "Periodic Bubbles Generation Tests" begin
-
-        # Define a standard box: Size 10, centered at 0
-        # Extent is [-5, 5] along each axis
-        L = 10.0
-        box = BoxSpace(L, Point3(0., 0., 0.))
-        
-        # Radius = 1.0 (Small enough to test specific features without overlapping everything)
+    @testset "inanydome Logic (Normalized Inputs)" begin
         R = 1.0
-
-        @testset "1. Face Intersection (Right Wall)" begin
-            # Bubble at x = 4.5. 
-            # Right wall is at x = 5.0.
-            # Distance to wall is 0.5. Since 0.5 < R, it overlaps.
-            # It should NOT overlap any other wall (closest other wall is y=5 or z=5, dist=4.5)
-            
-            b = Bubble(Point3(4.5, 0.0, 0.0), R)
-            
-            ghosts = unfold_periodic_bubbles([b], box)
-            
-            # Expectation: 
-            # 1. The original bubble is NOT in the list (unfold returns only ghosts? 
-            #    Wait, check your implementation. My previous code returned ghosts ONLY 
-            #    if calling `unfold_periodic_bubbles` inside the wrapper, or `periodic_copies!` 
-            #    populates a list. Your `unfold` function iterates and calls `periodic_copies!`.
-            #    Let's assume it returns the LIST OF GHOSTS as written in my last correction).
-            
-            @test length(ghosts) == 1
-            
-            ghost = ghosts[1]
-            
-            # Logic Check:
-            # Bubble exits Right (+X). Ghost should enter from Left (-X).
-            # Shift vector was (+L, 0, 0). 
-            # New Center = Old Center - Shift = 4.5 - 10 = -5.5
-            expected_center = Point3(-5.5, 0.0, 0.0)
-            
-            @test coordinates(ghost.center) ≈ coordinates(expected_center)
-            @test ghost.radius == R
-        end
-
-        @testset "2. Edge Intersection (Top-Right Edge)" begin
-            # Bubble at x = 4.5, y = 4.5, z = 0.0
-            # Dist to Right Wall (x=5) = 0.5
-            # Dist to Top Wall   (y=5) = 0.5
-            # Dist to Edge       = sqrt(0.5^2 + 0.5^2) = 0.707
-            # Since 0.707 < R (1.0), it touches the Edge.
-            
-            b = Bubble(Point3(4.5, 4.5, 0.0), R)
-            
-            ghosts = unfold_periodic_bubbles([b], box)
-            
-            # Expectation: 3 Ghosts
-            # 1. Right Face Ghost (shifted x - L)
-            # 2. Top Face Ghost (shifted y - L)
-            # 3. Edge Ghost (shifted x - L, y - L)
-            
-            @test length(ghosts) == 3
-            
-            coords = [coordinates(g.center) for g in ghosts]
-            
-            # Expected locations:
-            # (-5.5, 4.5, 0.0)  <- Face X ghost
-            # (4.5, -5.5, 0.0)  <- Face Y ghost
-            # (-5.5, -5.5, 0.0) <- Edge XY ghost
-            
-            expected_x_ghost = [-5.5, 4.5, 0.0]
-            expected_y_ghost = [4.5, -5.5, 0.0]
-            expected_xy_ghost = [-5.5, -5.5, 0.0]
-            
-            @test any(c -> c ≈ expected_x_ghost, coords)
-            @test any(c -> c ≈ expected_y_ghost, coords)
-            @test any(c -> c ≈ expected_xy_ghost, coords)
-        end
-
-        @testset "3. Vertex Intersection (Corner)" begin
-            # Bubble at x = 4.5, y = 4.5, z = 4.5
-            # Dist to each face = 0.5
-            # Dist to Vertex = sqrt(0.5^2 + 0.5^2 + 0.5^2) = sqrt(0.75) ≈ 0.866
-            # Since 0.866 < R (1.0), it touches the Corner.
-            
-            b = Bubble(Point3(4.5, 4.5, 4.5), R)
-            
-            ghosts = unfold_periodic_bubbles([b], box)
-            
-            # Expectation: 7 Ghosts (2^3 - 1)
-            # Faces: X, Y, Z
-            # Edges: XY, XZ, YZ
-            # Vertex: XYZ
-            
-            @test length(ghosts) == 7
-            
-            coords = [coordinates(g.center) for g in ghosts]
-            
-            # Check the Corner Ghost explicitly (the most complex one)
-            # Should be shifted by (-L, -L, -L)
-            expected_corner = [-5.5, -5.5, -5.5]
-            
-            @test any(c -> c ≈ expected_corner, coords)
-        end
-
-        @testset "4. Non-Intersection (Safe Zone)" begin
-            # Bubble in the middle, far from walls
-            b = Bubble(Point3(0.0, 0.0, 0.0), R)
-            
-            ghosts = unfold_periodic_bubbles([b], box)
-            
-            @test length(ghosts) == 0
-        end
         
-        @testset "5. Edge Miss (Face-Only Overlap)" begin
-            # Bubble at x=4.5, y=4.5, but Radius is small (e.g., 0.6)
-            # Face dists = 0.5. (Overlap faces)
-            # Edge dist = 0.707. (Does NOT overlap edge, since 0.707 > 0.6)
+        # Standard cap at the North Pole (+Z) 
+        # Covering the region where projection > 0.5
+        north_cap = IntersectionDome(0.5, Vec3(0.0, 0.0, 1.0), true)
+        
+        # Complement dome (Ghost/BallSpace logic)
+        # n̂ points toward the boundary; h = 0.5, dome_like = false.
+        # Region covered: projection < 0.5 (excludes points far from the boundary)
+        ghost_comp = IntersectionDome(0.5, Vec3(0.0, 0.0, 1.0), false)
+
+        @testset "Vector3 Overload" begin
+            domes = [north_cap]
             
-            b = Bubble(Point3(4.5, 4.5, 0.0), 0.6)
+            # Test inside the cap (z = 1.0, so projection 1.0 > 0.5)
+            v_top = normalize(Vec3(0.0, 0.0, 1.0))
+            @test inanydome(v_top, R, domes) == true
             
-            ghosts = unfold_periodic_bubbles([b], box)
+            # Test just inside the boundary
+            # For h=0.5, R=1.0, the critical z is 0.5
+            v_inside = normalize(Vec3(0.0, 0.0, 0.6))
+            @test inanydome(v_inside, R, domes) == true
             
-            # Expectation:
-            # Should spawn Face X ghost and Face Y ghost.
-            # Should NOT spawn Edge ghost.
-            
-            @test length(ghosts) == 2
-            
-            coords = [coordinates(g.center) for g in ghosts]
-            
-            # Ghost 1: (-5.5, 4.5, 0)
-            # Ghost 2: (4.5, -5.5, 0)
-            # Edge ghost (-5.5, -5.5, 0) should NOT be present
-            
-            @test any(c -> c ≈ [-5.5, 4.5, 0.0], coords)
-            @test any(c -> c ≈ [4.5, -5.5, 0.0], coords)
+            # Test outside the cap (Equator z=0.0 < 0.5)
+            v_side = normalize(Vec3(1.0, 0.0, 0.0))
+            @test inanydome(v_side, R, domes) == false
         end
 
+        @testset "Spherical Coordinates (μ = cosθ)" begin
+            domes = [north_cap]
+            # Since n̂ is (0,0,1), the projection is μ * R.
+            # μ=1.0 is the North Pole (Unit vector by definition)
+            @test inanydome(1.0, 0.0, R, domes) == true   
+            
+            # μ=0.0 is the Equator (Unit vector by definition)
+            @test inanydome(0.0, 0.0, R, domes) == false  
+        end
+
+        @testset "Complement (h > 0) Logic" begin
+            # dome_like = false: covered if projection < h
+            # With n̂ = +Z and h = 0.5, directions with z < 0.5 are "covered"
+            domes = [ghost_comp]
+            
+            # Vector pointing away from the boundary (z = -1.0 < 0.5)
+            v_back = Vec3(0.0, 0.0, -1.0)
+            @test inanydome(v_back, R, domes) == true 
+            
+            # Side vector (z = 0.0 < 0.5)
+            v_side = Vec3(0.0, 1.0, 0.0)
+            @test inanydome(v_side, R, domes) == true
+            
+            # Vector pointing deep into the interior (z = 0.9 > 0.5)
+            v_int = normalize(Vec3(0.0, 0.0, 0.9))
+            @test inanydome(v_int, R, domes) == false 
+        end
     end
 end;

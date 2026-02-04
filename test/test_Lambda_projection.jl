@@ -3,7 +3,7 @@ using LinearAlgebra
 using StaticArrays
 using EnvelopeApproximation
 # Access the internal function Λ from the GravitationalWaves module
-const GW = EnvelopeApproximation.GravitationalWaves
+const GW = EnvelopeApproximation.GravitationalWaves.AzimuthalReductionBigpi
 const Λ = GW.Λ
 
 @testset "Λ (Lambda) Projection Tests" begin
