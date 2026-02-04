@@ -29,7 +29,8 @@ struct MonteCarloSampling <: AbstractPiStrategy
     rng::AbstractRNG
 end
 
-MonteCarloSampling(N=1_000_000) = MonteCarloSampling(N, Random.default_rng())
+MonteCarloSampling(N::Int) = MonteCarloSampling(N, Random.default_rng())
+MonteCarloSampling(;N:: Int, rng:: Random.AbstractRNG=Random.default_rng) = MonteCarloSampling(N, rng)
 
 function Π(t1:: Real, t2:: Real, ωs:: AbstractVector{<: Real}, snapshot:: BubblesSnapShot, space:: AbstractSpace, 
            boundary_condition:: BoundaryCondition, strategy::AbstractPiStrategy; ΔV=1.0)

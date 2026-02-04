@@ -1,5 +1,6 @@
 module MonteCarloBigpi
 
+using EnvelopeApproximation
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
@@ -176,8 +177,8 @@ end
 function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot:: BubblesSnapShot, space::BoxSpace, boundary_condition:: Periodic;
     N_samples:: Int=1_000_000, rng:: AbstractRNG=Random.default_rng(), ΔV:: Float64=1.0):: Vector{Measurement}
     
-    bubbles1 = append_periodic_bubbles!(current_bubbles(snapshot, t1), box_space)
-    bubbles2 = append_periodic_bubbles!(current_bubbles(snapshot, t2), box_space)
+    bubbles1 = append_periodic_bubbles!(collect(current_bubbles(snapshot, t1)), space)
+    bubbles2 = append_periodic_bubbles!(collect(current_bubbles(snapshot, t2)), space)
 
     if isempty(bubbles1) | isempty(bubbles2)
         return zeros(Measurement{Float64}, length(ks))
@@ -185,8 +186,8 @@ function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot::
 
     # Since we include the periodic copies, going forward we may treat the problem as if it 
     # is with Vacuum boundary conditions
-    domes_dict1 = intersection_domes(bubbles1, box_space, Vacuum())
-    domes_dict2 = intersection_domes(bubbles2, box_space, Vacuum())
+    domes_dict1 = intersection_domes(bubbles1, space, Vacuum())
+    domes_dict2 = intersection_domes(bubbles2, space, Vacuum())
 
     # 1. Setup Bubble Selection Probabilities (Proportional to R^3)
     weights1 = map(b -> b.radius^3, bubbles1)
@@ -194,7 +195,7 @@ function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot::
     prefactor = begin
         total_weight1 = sum(weights1)
         total_weight2 = sum(weights2)
-        4π / 9 * (ΔV ^ 2) * total_weight1 * total_weight2 / EnvelopeApproximation.BubblesEvolution.volume(box_space)
+        4π / 9 * (ΔV ^ 2) * total_weight1 * total_weight2 / EnvelopeApproximation.BubblesEvolution.volume(space)
     end # This prefactor transforms the result from an average to an integral over the domain
 
     # Create a sampler for efficient selection
