@@ -27,7 +27,7 @@ begin  # Setup
     tvp = 1 - 1e-5
     v_wall = 1.
     egp = ExponentialGrowthProcess(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
-    L = 20. / β
+    L = 80. / β
     center = EnvelopeApproximation.BubbleBasics.Point3(0., 0., 0.)
     space = BoxSpace(L, center)
     padding=0.
@@ -43,7 +43,7 @@ begin
     initial_seed = 5122
     N = Threads.nthreads() * 1
     seeds = initial_seed:(initial_seed + N - 1)
-    N_samples = 1_000_000
+    N_samples = 10_000_000
     res_lock = ReentrantLock()
     Π_res = zeros(Measurement{Float64}, length(ks))
     
@@ -64,7 +64,7 @@ begin
     include("Japanese_comparison/PlottingJapaneseFormula.jl")
     fig, ax = japanese_Π_plot(t1, t2, ks, Γ_0; atol=1e-13, rtol=1e-3)
     vals, errs = Measurements.value.(Π_res), Measurements.uncertainty.(Π_res)
-    mask = (abs.(vals) .- errs) .> 0
+    mask = ((abs.(vals) .- errs) .> 0) .& (vals .> 0.)
     CM.scatter!(ax, ks[mask], vals[mask]; color=:red, label="Monte Carlo")
     CM.errorbars!(ax, ks[mask], abs.(vals[mask]), errs[mask]; color=:red)
     axislegend(ax, position = :lb)
