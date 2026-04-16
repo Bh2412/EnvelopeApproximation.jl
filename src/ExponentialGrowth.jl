@@ -133,8 +133,14 @@ function sample_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProces
     
     L = bbox.L
     wall_radius = radial_profile(process)
-    
-    for (t, p) in candidate_nucleations
+
+    # Forcing the first nucleation to be centralized to minimize boundary effects.
+    if !isempty(candidate_nucleations)
+        first_time, _ = first(candidate_nucleations)
+        push!(tv_nucleations, Nucleation((time=first_time, site=center(bbox))))
+    end
+
+    for (t, p) in candidate_nucleations[2:end]
         if is_physical(t, p, L, tv_nucleations, wall_radius)
             push!(tv_nucleations, Nucleation((time=t, site=p)))
         end
@@ -155,6 +161,15 @@ function sample_nucleations(rng:: AbstractRNG, process:: ExponentialGrowthProces
     β = process.β
     Γ_0 = process.Γ_0
     t_0 = process.t_0
+
+    # Forcing the first nucleation to be centralized to minimize boundary effects.
+    t_cand = next_event_time(rng, t_last, V, β, Γ_0, t_0)
+    if t_cand > process.t_end
+        return tv_nucleations
+    end
+    
+    push!(tv_nucleations, Nucleation((time=t_cand, site=center(bbox))))
+    t_last = t_cand
     
     while true
         t_cand = next_event_time(rng, t_last, V, β, Γ_0, t_0)

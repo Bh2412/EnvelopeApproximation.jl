@@ -26,6 +26,10 @@ function ∈(p:: Point3, space:: AbstractSpace):: Bool
     throw("Cant check membership of point $p in abstract space $space")
 end
 
+function center(space:: AbstractSpace):: Point3
+    throw("Cant compute center of abstract space $space")
+end
+
 struct BoxSpace <: AbstractSpace
     L::Float64        # Side length of the cube
     center::Point3    
@@ -34,6 +38,9 @@ struct BoxSpace <: AbstractSpace
 end
 
 volume(s::BoxSpace) = s.L^3
+
+center(space::BoxSpace) = space.center
+
 
 ∈(p:: Point3, box_space:: BoxSpace) = begin
     d = p - box_space.center
@@ -93,6 +100,7 @@ end
 
 ∈(p:: Point3, ball_space:: BallSpace) = norm(p - ball_space.center) <= ball_space.radius
 volume(space:: BallSpace):: Float64 = (4 / 3) * π * space.radius ^ 3
+center(space:: BallSpace) = space.center
 
 function bounding_box(space:: BallSpace):: BoxSpace
     r = space.radius
