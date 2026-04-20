@@ -8,7 +8,7 @@ using EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
 using Random
 
-export Π, AzimuthalReduction, MonteCarloSampling
+export Π, Π_single, AzimuthalReduction, MonteCarloSampling
 
 include("GravitationalWaves/AzimuthalReductionBigpi.jl")
 include("GravitationalWaves/MonteCarloBigpi.jl")
@@ -44,12 +44,18 @@ function Π(t1:: Real, t2:: Real, ωs:: AbstractVector{<: Real}, snapshot:: Bubb
                                      strategy.plan, strategy.angular_plan, strategy.buffer; ΔV=ΔV)
 end
 
-function Π(t1:: Real, t2:: Real, ωs:: AbstractVector{<: Real}, snapshot:: BubblesSnapShot, space:: AbstractSpace, 
+function Π(t1:: Real, t2:: Real, ωs:: AbstractVector{<: Real}, snapshot:: BubblesSnapShot, space:: AbstractSpace,
            boundary_condition:: BoundaryCondition, strategy::MonteCarloSampling; ΔV=1.0)
-    # Calls the logic from MonteCarloBigpi.jl 
+    # Calls the logic from MonteCarloBigpi.jl
     # Note: MC method currently assumes BoxSpace/Periodic logic inside
-    return MonteCarloBigpi.Π(t1, t2, ωs, snapshot, space, boundary_condition; 
+    return MonteCarloBigpi.Π(t1, t2, ωs, snapshot, space, boundary_condition;
                              N_samples=strategy.N_samples, rng=strategy.rng, ΔV=ΔV)
+end
+
+function Π_single(t1::Real, t2::Real, ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot, space::AbstractSpace,
+                   boundary_condition::BoundaryCondition, strategy::MonteCarloSampling; ΔV=1.0)
+    return MonteCarloBigpi.Π_single(t1, t2, ks, snapshot, space, boundary_condition;
+                                    N_samples=strategy.N_samples, rng=strategy.rng, ΔV=ΔV)
 end
 
 end

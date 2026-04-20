@@ -6,7 +6,7 @@ using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.BubbleBasics: Bubble
-using EnvelopeApproximation.EnvelopeAnalysis: IntersectionDome, intersection_domes, unfold_periodic_bubbles, append_periodic_bubbles!, inanydome, n̂
+using EnvelopeApproximation.EnvelopeAnalysis: IntersectionDome, intersection_domes, unfold_periodic_bubbles, append_periodic_bubbles!, original_bubble_groups, inanydome, n̂
 using StaticArrays
 using LinearAlgebra
 using HCubature
@@ -247,6 +247,83 @@ function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot::
     # Final Statistics
     mean_Π = S_1 ./ N_samples
     Σ_Π = Symmetric((S_S - (1 / N_samples) * (S_1 * S_1')) ./ (N_samples * (N_samples - 1))) # Covariance matrix
+    σ, corr = decompose_covariance(Σ_Π)
+    corr = nullify_negative_eigenvalues(corr)
+    return Measurements.correlated_values(mean_Π, σ, corr)
+end
+
+function Π_single(t1::Float64, t2::Float64, ks::AbstractVector{Float64}, snapshot::BubblesSnapShot, space::BoxSpace, ::Periodic;
+    N_samples::Int=1_000_000, rng::AbstractRNG=Random.default_rng(), ΔV::Float64=1.0)::Vector{Measurement}
+
+    # Bubbles shared between t1 and t2 are those present at the earlier time.
+    t_early = min(t1, t2)
+    n_shared = length(current_bubbles(snapshot, t_early))
+
+    if n_shared == 0
+        return zeros(Measurement{Float64}, length(ks))
+    end
+
+    origin_map1 = Int[]
+    bubbles1 = append_periodic_bubbles!(collect(current_bubbles(snapshot, t1)), space, origin_map1)
+    origin_map2 = Int[]
+    bubbles2 = append_periodic_bubbles!(collect(current_bubbles(snapshot, t2)), space, origin_map2)
+
+    domes_dict1 = intersection_domes(bubbles1, space, Vacuum())
+    domes_dict2 = intersection_domes(bubbles2, space, Vacuum())
+
+    copy_groups1 = original_bubble_groups(origin_map1, n_shared)
+    copy_groups2 = original_bubble_groups(origin_map2, n_shared)
+
+    # Weight for original bubble i: R_i(t1)^3 * R_i(t2)^3 * n_i1 * n_i2.
+    # The n_i1 * n_i2 factor absorbs the uniform copy sub-sampling, so no per-sample correction is needed.
+    weights = [bubbles1[i].radius^3 * bubbles2[i].radius^3 *
+               length(copy_groups1[i]) * length(copy_groups2[i]) for i in 1:n_shared]
+    W = sum(weights)
+    prefactor = 4π / 9 * ΔV^2 * W / EnvelopeApproximation.BubblesEvolution.volume(space)
+
+    orig_sampler = Weights(weights)
+
+    N = length(ks)
+    val = zeros(Float64, N)
+    S_1 = zeros(Float64, N)
+    S_S = zeros(Float64, N, N)
+
+    for _ in 1:N_samples
+        i = sample(rng, 1:n_shared, orig_sampler)
+
+        copies1_i = copy_groups1[i]
+        copies2_i = copy_groups2[i]
+        idx1 = copies1_i[rand(rng, 1:length(copies1_i))]
+        idx2 = copies2_i[rand(rng, 1:length(copies2_i))]
+
+        bubble1 = bubbles1[idx1]
+        domes1  = domes_dict1[idx1]
+        bubble2 = bubbles2[idx2]
+        domes2  = domes_dict2[idx2]
+
+        μ₁ = 2.0 * rand(rng) - 1.0
+        ϕ₁ = 2π * rand(rng)
+        x̂₁ = n̂(μ₁, ϕ₁)
+
+        μ₂ = 2.0 * rand(rng) - 1.0
+        ϕ₂ = 2π * rand(rng)
+        x̂₂ = n̂(μ₂, ϕ₂)
+
+        if inanydome(x̂₁, bubble1, domes1) || inanydome(x̂₂, bubble2, domes2)
+            continue
+        end
+
+        r = bubble1.radius * x̂₁ + coordinates(bubble1.center) - (bubble2.radius * x̂₂ + coordinates(bubble2.center))
+        d = norm(r)
+        _n̂ = r / d
+        z = ks .* d
+        val = integrated_projected(x̂₁, x̂₂, _n̂, z) * (prefactor)
+        S_1 .+= val
+        BLAS.syr!('U', 1.0, val, S_S)
+    end
+
+    mean_Π = S_1 ./ N_samples
+    Σ_Π = Symmetric((S_S - (1 / N_samples) * (S_1 * S_1')) ./ (N_samples * (N_samples - 1)))
     σ, corr = decompose_covariance(Σ_Π)
     corr = nullify_negative_eigenvalues(corr)
     return Measurements.correlated_values(mean_Π, σ, corr)
