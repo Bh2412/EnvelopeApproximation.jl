@@ -221,6 +221,10 @@ function Π(t1:: Float64, t2:: Float64, ks:: AbstractVector{Float64}, snapshot::
         bubble2 = bubbles2[idx2]
         domes2 = domes_dict2[idx2]  
 
+        if idx1 !== idx2
+            continue
+        end
+
         # Sample two points on the sphere
         μ₁ = 2.0 * rand(rng) - 1.0
         ϕ₁ = 2π * rand(rng)
