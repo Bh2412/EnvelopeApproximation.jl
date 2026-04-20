@@ -17,7 +17,7 @@ using QuadGK
 using IterTools
 
 export IntersectionDome, intersection_domes, *, ⊆
-export unfold_periodic_bubbles, append_periodic_bubbles!
+export unfold_periodic_bubbles, append_periodic_bubbles!, original_bubble_groups
 export PeriodicInterval, mod2π, ∈, EmptyArc, FullCircle, complement, a, b
 export ring_domes_complement_intersection!
 
