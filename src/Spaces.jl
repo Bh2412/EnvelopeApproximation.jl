@@ -1,6 +1,7 @@
 module Spaces
 
 import EnvelopeApproximation.BubbleBasics: Vec3, Point3, coordinates
+import EnvelopeApproximation.BoundaryConditions: Periodic
 import Random.AbstractRNG
 using StatsBase
 import StatsBase.sample
@@ -9,7 +10,7 @@ using Distributions
 import Random
 using LinearAlgebra
 
-export AbstractSpace, BoxSpace, BallSpace, volume, sample, bounding_box, ∈
+export AbstractSpace, BoxSpace, BallSpace, volume, sample, bounding_box, ∈, harmonic_modes
 
 abstract type AbstractSpace end
 
@@ -114,13 +115,24 @@ function sample(rng:: AbstractRNG, n:: Int64, space:: BallSpace):: Vector{Point3
     r = rand(rng, Uniform(0., space.radius ^ 3), n) .^ (1 / 3)
     # ϕ is distributed uniformly over (0, 2π)
     ϕ = rand(rng, Uniform(0., 2π) , n)
-    # μ is distributed uniformly over (-1., 1.) 
+    # μ is distributed uniformly over (-1., 1.)
     μ = rand(rng, Uniform(-1., 1.), n)
     v = begin
         s = (x -> sqrt(1 - x^2)).(μ)
         @. Vec3(r * s * cos(ϕ), r * s * sin(ϕ), r * μ)
     end
     return @. (space.center, ) + v
+end
+
+function harmonic_modes(space::BoxSpace, ::Periodic, n_max::Int)::Vector{Vec3}
+    k0 = 2π / space.L
+    modes = Vec3[]
+    sizehint!(modes, (2n_max + 1)^3)
+    for n1 in -n_max:n_max, n2 in -n_max:n_max, n3 in -n_max:n_max
+        push!(modes, Vec3(k0 * n1, k0 * n2, k0 * n3))
+    end
+    sort!(modes; by = k -> k[1]^2 + k[2]^2 + k[3]^2)
+    return modes
 end
 
 end
