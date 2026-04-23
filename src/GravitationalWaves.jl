@@ -8,7 +8,7 @@ using EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.AngularIntegrationInterface: AbstractAngularIntegrationPlan, integrate_angular
 using Random
 
-export Π, Π_single, AzimuthalReduction, MonteCarloSampling
+export Π, Π_single, Directional_Π, AzimuthalReduction, MonteCarloSampling
 
 include("GravitationalWaves/AzimuthalReductionBigpi.jl")
 include("GravitationalWaves/MonteCarloBigpi.jl")
@@ -56,6 +56,13 @@ function Π_single(t1::Real, t2::Real, ks::AbstractVector{<:Real}, snapshot::Bub
                    boundary_condition::BoundaryCondition, strategy::MonteCarloSampling; ΔV=1.0)
     return MonteCarloBigpi.Π_single(t1, t2, ks, snapshot, space, boundary_condition;
                                     N_samples=strategy.N_samples, rng=strategy.rng, ΔV=ΔV)
+end
+
+function Directional_Π(n̂_vec, t1::Real, t2::Real, ωs::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
+                        space::AbstractSpace, boundary_condition::BoundaryCondition,
+                        strategy::AzimuthalReduction; ΔV=1.0)
+    return AzimuthalReductionBigpi.Directional_Π(n̂_vec, Float64(t1), Float64(t2), ωs, snapshot, space,
+                                                  boundary_condition, strategy.plan, strategy.buffer; ΔV=ΔV)
 end
 
 end
