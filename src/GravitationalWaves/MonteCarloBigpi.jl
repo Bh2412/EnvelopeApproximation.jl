@@ -317,7 +317,7 @@ function Π_single(t1::Float64, t2::Float64, ks::AbstractVector{Float64}, snapsh
         d = norm(r)
         _n̂ = r / d
         z = ks .* d
-        val = integrated_projected(x̂₁, x̂₂, _n̂, z) * (prefactor)
+        val = integrated_projected(x̂₁, x̂₂, _n̂, z) * prefactor
         S_1 .+= val
         BLAS.syr!('U', 1.0, val, S_S)
     end

@@ -91,7 +91,7 @@ mutable struct Λx̂x̂
     intersection_buffer:: Vector{PeriodicInterval}
 end
 
-Λx̂x̂(n:: Int64) = Λx̂x̂(_buffers(n)...)
+Λx̂x̂(n:: Int64) = Λx̂x̂(ring_domes_complement_buffers(n)...)
 
 function (f:: Λx̂x̂)(μ:: Float64, bubble:: Bubble, 
                    intersection_domes:: Vector{IntersectionDome}):: SVector{2, Float64}
@@ -181,8 +181,26 @@ function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64},
     return V
 end
 
-function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64}, 
-                 bubbles:: Bubbles, 
+function ∂iϕ∂jϕ(ks:: AbstractVector{Float64},
+                bubbles:: Bubbles,
+                space:: BoxSpace,
+                boundary_condition:: Periodic,
+                plan:: CFTPlan,
+                _x̂_ix̂_j:: x̂_ix̂_j;
+                ΔV:: Float64 = 1.):: Matrix{ComplexF64}
+    V = zeros(ComplexF64, 6, length(ks))
+    periodic_bubbles = unfold_periodic_bubbles(bubbles, space)
+    bubbles = vcat(bubbles, periodic_bubbles)
+    domes = intersection_domes(bubbles, space, Vacuum())
+    @inbounds for (bubble_index, _domes) in domes
+        bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes,
+                                    plan, _x̂_ix̂_j; ΔV=ΔV)
+    end
+    return V
+end
+
+function Λ∂iϕ∂jϕ(ks:: AbstractVector{Float64},
+                 bubbles:: Bubbles,
                  space:: BoxSpace,
                  boundary_condition:: Periodic,
                  plan:: CFTPlan,
@@ -261,7 +279,7 @@ function Directional_Π(_n̂:: Vec3, t1:: Float64, t2:: Float64, ωs:: AbstractV
     bubbles2 = current_bubbles(_snap, t2)
     T1 = ∂iϕ∂jϕ(ωs, bubbles1, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV)
     T2 = ∂iϕ∂jϕ(ωs, bubbles2, space, boundary_condition, plan, _x̂_ix̂_j; ΔV=ΔV)
-    return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(spce)
+    return @. Λ($eachcol(T1), $eachcol(T2)) / $volume(space)
 end
 
 # Eq. 16 in "gravitational waves from bubble collisions: analytic derivation".
@@ -313,7 +331,7 @@ function Π(t1::Float64,
     # and ensure the output format matches what SphericalHarmonics expects.
     function f_wrapper(ϕ::Float64, θ::Float64)
         # Convert angles to unit vector [cite: 8, 104]
-        n_vec = n̂(SVector{2, Float64}(ϕ, θ)) 
+        n_vec = n̂(cos(θ), ϕ)
         
         # Call the physics kernel 
         return Directional_Π(n_vec, t1, t2, ωs, snapshot, space, boundary_condition, cft_plan, _x̂_ix̂_j; ΔV=ΔV)
@@ -356,7 +374,7 @@ function Π(t1::Float64,
     # and ensure the output format matches what SphericalHarmonics expects.
     function f_wrapper(ϕ::Float64, θ::Float64)
         # Convert angles to unit vector [cite: 8, 104]
-        n_vec = n̂(SVector{2, Float64}(ϕ, θ)) 
+        n_vec = n̂(cos(θ), ϕ)
         
         # Call the physics kernel 
         return Directional_Π(n_vec, t1, t2, ωs, snapshot, space, boundary_condition, cft_plan, _Λx̂x̂; ΔV=ΔV)
