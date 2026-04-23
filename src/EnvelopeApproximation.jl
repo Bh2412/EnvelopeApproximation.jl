@@ -2,9 +2,9 @@ module EnvelopeApproximation
 
 include("BubbleBasics.jl")
 
-include("Spaces.jl")
-
 include("BoundaryConditions.jl")
+
+include("Spaces.jl")
 
 include("BubblesEvolution.jl")
 
