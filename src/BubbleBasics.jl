@@ -1,7 +1,7 @@
 module BubbleBasics
 
 using Distances
-import Base: ∈, keys, +, -, lastindex, length, getindex
+import Base: ∈, keys, +, -, *, lastindex, length, getindex
 using StaticArrays
 import LinearAlgebra: norm, ⋅
 import Base: +, -
@@ -22,6 +22,7 @@ coordinates(p:: Point3):: SVector{3, Float64} = p.coordinates
 +(p:: Point3, v:: Vec3):: Point3 = Point3(coordinates(p) .+ v)
 -(p:: Point3, v:: Vec3):: Point3 = Point3(coordinates(p) .- v)
 -(p1:: Point3, p2:: Point3):: Vec3 = coordinates(p1) .- coordinates(p2)
+*(R:: AbstractMatrix{Float64}, p:: Point3):: Point3 = Point3(R * coordinates(p))
 
 with_origin(p:: Point3, o:: Point3) = Point3(p - o)
 

@@ -11,6 +11,7 @@ import Distances.pairwise
 import Base.∈
 using Distributions
 import Base.isless
+import Base: *
 import Random
 using LinearAlgebra
 
@@ -30,6 +31,9 @@ speed_of_light_profile(t:: Float64, c:: Float64 = 1.):: Float64 = c * t
 
 BubblesSnapShot(nucleations:: Vector{Nucleation}, t:: Float64) = BubblesSnapShot(nucleations, t, speed_of_light_profile)
 BubblesSnapShot() = BubblesSnapShot(Vector{Nucleation}(), 0., speed_of_light_profile)
+
+*(R:: AbstractMatrix{Float64}, snap:: BubblesSnapShot):: BubblesSnapShot =
+    BubblesSnapShot(map(nuc -> (time=nuc[:time], site=R * nuc[:site]), snap.nucleations), snap.t, snap.radial_profile)
 
 function at_earlier_time(snap:: BubblesSnapShot, t:: Float64):: BubblesSnapShot
     nucleations = filter(nuc -> nuc[:time] <= t, snap.nucleations)
