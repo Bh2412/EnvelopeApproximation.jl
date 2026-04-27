@@ -5,6 +5,8 @@ using LaTeXStrings
 
 function japanese_Π_plot(t1:: Real, t2:: Real, ks:: AbstractVector{<:Real},
     G_star:: Real; 
+    plot_single:: Bool = true,
+    plot_double:: Bool = true,
     atol:: Real = 1e-13, 
     rtol:: Real = 1e-3)
 
@@ -34,8 +36,12 @@ function japanese_Π_plot(t1:: Real, t2:: Real, ks:: AbstractVector{<:Real},
         yminorgridvisible = true
     )
 
+    if plot_single
+        lines!(ax, ks, pi_single, label = "Single Bubble", color = :red, linewidth = 2, linestyle = :dash)
+    end
+    if plot_double
+        lines!(ax, ks, pi_double, label = "Double Bubble", color = :blue, linewidth = 2, linestyle = :dash)
+    end
     lines!(ax, ks, pi_total, label = L"Total |\Pi|", color = :black, linewidth = 2)
-    lines!(ax, ks, pi_single, label = "Single Bubble", color = :red, linewidth = 2, linestyle = :dash)
-    lines!(ax, ks, pi_double, label = "Double Bubble", color = :blue, linewidth = 2, linestyle = :dash)
     return fig, ax
 end
