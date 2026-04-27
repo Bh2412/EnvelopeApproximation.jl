@@ -22,6 +22,8 @@ include("AngularIntegration/SphericalHarmonics.jl")
 
 include("GravitationalWaves.jl")
 
+include("TwoPointStressEnergyTensor.jl")
+
 include("Visualization.jl")
 
 end
