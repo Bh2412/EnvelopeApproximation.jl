@@ -20,6 +20,8 @@ include("AngularIntegration/AngularIntegrationInterface.jl")
 
 include("AngularIntegration/SphericalHarmonics.jl")
 
+include("StressEnergyTensorComponents.jl")
+
 include("GravitationalWaves.jl")
 
 include("TwoPointStressEnergyTensor.jl")
