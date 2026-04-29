@@ -6,7 +6,23 @@ using EnvelopeApproximation.Spaces: AbstractSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition
 using QuadGK
 
-export TwoPointAzimuthalReduction, TwoPointStressEnergyTensor, IntegratedTwoPointStressEnergyTensor
+export TwoPointAzimuthalReduction, TwoPointStressEnergyTensor,
+    TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
+    TimeIntegratedTwoPointStressEnergyTensor
+
+abstract type TimeIntegrationStrategy end
+
+struct QuadGKIntegration <: TimeIntegrationStrategy
+    rtol::Float64
+    atol::Float64
+    maxevals::Int
+end
+QuadGKIntegration(; rtol::Real=1e-3, atol::Real=0.0, maxevals::Int=typemax(Int)) =
+    QuadGKIntegration(Float64(rtol), Float64(atol), maxevals)
+
+struct UniformGridIntegration <: TimeIntegrationStrategy
+    N_t::Int
+end
 
 """
     TwoPointStressEnergyTensor(t1, t2, ωs, snapshot, space, boundary_condition, strategy; ΔV=1.0)
@@ -51,7 +67,7 @@ point and multiplied by e^{+ikt} and e^{-ikt} simultaneously.
 
 Returns a 6×6×Nk array of ComplexF64.
 """
-function IntegratedTwoPointStressEnergyTensor(
+function QuadGkTimeIntegratedTwoPointStressEnergyTensor(
     ωs::AbstractVector{<:Real},
     snapshot::BubblesSnapShot,
     space::AbstractSpace,
@@ -96,6 +112,105 @@ function IntegratedTwoPointStressEnergyTensor(
     end
 
     return result
+end
+
+function UniformGridIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::AbstractSpace,
+    boundary_condition::BoundaryCondition,
+    strategy::TwoPointAzimuthalReduction;
+    N_t::Int,
+    ΔV::Float64 = 1.0
+)::Array{ComplexF64, 3}
+    ωs_f = collect(Float64, ωs)
+    Nk   = length(ωs_f)
+
+    isempty(snapshot.nucleations) && return zeros(ComplexF64, 6, 6, Nk)
+
+    t_start = minimum(nuc[:time] for nuc in snapshot.nucleations)
+    t_end   = snapshot.t
+    Δt      = (t_end - t_start) / (N_t - 1)
+    t_grid  = t_start .+ (0:N_t-1) .* Δt
+
+    # Evaluate T_ij sequentially (leaving parallelization for the outer Monte Carlo loop)
+    T_vals = Array{ComplexF64, 3}(undef, 6, Nk, N_t)
+    for m in 1:N_t
+        bubbles = current_bubbles(snapshot, Float64(t_grid[m]))
+        T_vals[:, :, m] = ∂iϕ∂jϕ(ωs_f, bubbles, space, boundary_condition,
+                                    strategy.plan, strategy.buffer; ΔV=ΔV)
+    end
+
+    # Trapezoidal weights: endpoints get half weight
+    T_vals[:, :, 1]   .*= 0.5
+    T_vals[:, :, end] .*= 0.5
+
+    V_inv  = 1.0 / volume(space)
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+
+    # Directly compute the discrete integral for the exact ω
+    for ki in 1:Nk
+        ω = ωs_f[ki]
+        ap = zeros(ComplexF64, 6)
+        am = zeros(ComplexF64, 6)
+        
+        for m in 1:N_t
+            t = t_grid[m]
+            @views T_vec = T_vals[:, ki, m] # Avoids allocating a new vector
+            
+            ap .+= T_vec .* cis(+ω * t)
+            am .+= T_vec .* cis(-ω * t)
+        end
+        
+        ap .*= Δt
+        am .*= Δt
+        
+        result[:, :, ki] = (ap * ap' .+ am * am') .* (V_inv / 2)
+    end
+
+    return result
+end
+
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::AbstractSpace,
+    boundary_condition::BoundaryCondition,
+    spatial_strategy::TwoPointAzimuthalReduction,
+    time_strategy::TimeIntegrationStrategy;
+    ΔV::Float64 = 1.0
+)::Array{ComplexF64, 3}
+    throw(ArgumentError("Unsupported for abstract type: $(typeof(time_strategy))"))
+end
+
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::AbstractSpace,
+    boundary_condition::BoundaryCondition,
+    spatial_strategy::TwoPointAzimuthalReduction,
+    time_strategy::QuadGKIntegration;
+    ΔV::Float64 = 1.0
+)::Array{ComplexF64, 3}
+    QuadGkTimeIntegratedTwoPointStressEnergyTensor(
+        ωs, snapshot, space, boundary_condition, spatial_strategy;
+        ΔV=ΔV, rtol=time_strategy.rtol, atol=time_strategy.atol, maxevals=time_strategy.maxevals
+    )
+end
+
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::AbstractSpace,
+    boundary_condition::BoundaryCondition,
+    spatial_strategy::TwoPointAzimuthalReduction,
+    time_strategy::UniformGridIntegration;
+    ΔV::Float64 = 1.0
+)::Array{ComplexF64, 3}
+    UniformGridIntegratedTwoPointStressEnergyTensor(
+        ωs, snapshot, space, boundary_condition, spatial_strategy;
+        N_t=time_strategy.N_t, ΔV=ΔV
+    )
 end
 
 end
