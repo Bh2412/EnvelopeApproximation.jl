@@ -5,7 +5,7 @@ using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.EnvelopeAnalysis: ring_domes_complement_intersection!,
     ring_domes_complement_buffers, PeriodicInterval, IntersectionDome,
-    intersection_domes, unfold_periodic_bubbles
+    intersection_domes, append_periodic_bubbles!, original_bubble_groups
 import EnvelopeApproximation.CFTInterface: CFTPlan, fourier_modes
 using EnvelopeApproximation.ChebyshevCFT: VectorChebyshevPlanWithAtol, VectorChebyshevPlan
 using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
@@ -88,16 +88,52 @@ function bubble_∂iϕ∂jϕ_contribution!(V::AbstractMatrix{ComplexF64},
     @. V += $reshape(es, 1, $length(ks)) * modes
 end
 
+function contribution_indices(n_bubbles::Int, bubble_indices):: Vector{Int}
+    bubble_indices isa Colon && return Base.OneTo(n_bubbles)
+    if bubble_indices isa Integer
+        bubble_indices < 1 && throw(ArgumentError("bubble_indices must contain positive indices"))
+        return bubble_indices <= n_bubbles ? (bubble_indices:bubble_indices) : Int[]
+    end
+
+    selected = Int[]
+    for bubble_index in bubble_indices
+        bubble_index < 1 && throw(ArgumentError("bubble_indices must contain positive indices"))
+        bubble_index <= n_bubbles && push!(selected, Int(bubble_index))
+    end
+    return selected
+end
+
+function periodic_selected_indices(bubbles::Bubbles, box::BoxSpace, bubble_indices)::  Tuple{Bubbles, Vector{Int}}
+    n_original = length(bubbles)
+    selected_originals = contribution_indices(n_original, bubble_indices)
+    isempty(selected_originals) && return Bubble[], Int[]
+
+    origin_map = Int[]
+    periodic_bubbles = append_periodic_bubbles!(collect(bubbles), box, origin_map)
+    groups = original_bubble_groups(origin_map, n_original)
+
+    selected_indices = Int[]
+    for original_index in selected_originals
+        append!(selected_indices, groups[original_index])
+    end
+    return periodic_bubbles, selected_indices
+end
+
 function ∂iϕ∂jϕ(ks::AbstractVector{Float64},
                 bubbles::AbstractVector{Bubble},
                 space::AbstractSpace,
                 boundary_condition::Vacuum,
                 plan::CFTPlan,
                 _x̂_ix̂_j::x̂_ix̂_j;
-                ΔV::Float64=1.)::Matrix{ComplexF64}
+                ΔV::Float64=1.,
+                bubble_indices=:)::Matrix{ComplexF64}
     V = zeros(ComplexF64, 6, length(ks))
+    selected_indices = contribution_indices(length(bubbles), bubble_indices)
+    isempty(selected_indices) && return V
+
     domes = intersection_domes(bubbles, space, boundary_condition)
-    @inbounds for (bubble_index, _domes) in domes
+    @inbounds for bubble_index in selected_indices
+        _domes = domes[bubble_index]
         bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes,
                                     plan, _x̂_ix̂_j; ΔV=ΔV)
     end
@@ -110,12 +146,16 @@ function ∂iϕ∂jϕ(ks::AbstractVector{Float64},
                 boundary_condition::Periodic,
                 plan::CFTPlan,
                 _x̂_ix̂_j::x̂_ix̂_j;
-                ΔV::Float64=1.)::Matrix{ComplexF64}
+                ΔV::Float64=1.,
+                bubble_indices=:)::Matrix{ComplexF64}
     V = zeros(ComplexF64, 6, length(ks))
-    periodic_bubbles = unfold_periodic_bubbles(bubbles, space)
-    bubbles = vcat(bubbles, periodic_bubbles)
+    bubbles, selected_indices = periodic_selected_indices(bubbles, space, bubble_indices)
+    isempty(selected_indices) && return V
+
     domes = intersection_domes(bubbles, space, Vacuum())
-    @inbounds for (bubble_index, _domes) in domes
+
+    @inbounds for bubble_index in selected_indices
+        _domes = domes[bubble_index]
         bubble_∂iϕ∂jϕ_contribution!(V, ks, bubbles[bubble_index], _domes,
                                     plan, _x̂_ix̂_j; ΔV=ΔV)
     end

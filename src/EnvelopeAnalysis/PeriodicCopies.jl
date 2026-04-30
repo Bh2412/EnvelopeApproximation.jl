@@ -138,6 +138,16 @@ function append_periodic_bubbles!(bubbles:: Bubbles, box:: BoxSpace):: Bubbles
     return bubbles
 end
 
+function append_periodic_bubbles!(bubbles::Bubbles, box::BoxSpace, origin_map::Vector{Int})::Bubbles
+    n_orig = length(bubbles)
+    append!(origin_map, 1:n_orig)
+    sizehint!(bubbles, n_orig * 27)
+    for idx in 1:n_orig
+        periodic_copies!(bubbles, bubbles[idx], box, idx, origin_map)
+    end
+    return bubbles
+end
+
 """
     original_bubble_groups(origin_map, n_groups) -> Vector{Vector{Int}}
 
@@ -150,14 +160,4 @@ function original_bubble_groups(origin_map::AbstractVector{Int}, n_groups::Int):
         1 <= k <= n_groups && push!(groups[k], i)
     end
     return groups
-end
-
-function append_periodic_bubbles!(bubbles::Bubbles, box::BoxSpace, origin_map::Vector{Int})::Bubbles
-    n_orig = length(bubbles)
-    append!(origin_map, 1:n_orig)
-    sizehint!(bubbles, n_orig * 27)
-    for idx in 1:n_orig
-        periodic_copies!(bubbles, bubbles[idx], box, idx, origin_map)
-    end
-    return bubbles
 end
