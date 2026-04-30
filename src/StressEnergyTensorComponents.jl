@@ -13,7 +13,7 @@ using StaticArrays
 
 export x̂_ix̂_j, ∂iϕ∂jϕ, dispatch_fourier_modes,
        symmetric_tensor_indices, inverse_symmetric_tensor_indices,
-       TwoPointAzimuthalReduction,
+       ∂iϕ∂jϕ_AzimuthalReduction, T_ij_AzimuthalReduction,
        T_i_j_kernel, bubble_T_i_j_contribution!, T_ij
 
 @inline function ∫_ϕ_x̂_ix̂_j(μ::Float64, p::PeriodicInterval)
@@ -147,7 +147,11 @@ function bubble_T_i_j_contribution!(V::AbstractMatrix{ComplexF64},
     @. V += $reshape(kinetic_es, 1, $length(ks)) * $view(modes, 1:6, :)
 
     @inbounds for (k_idx, k) in enumerate(ks)
-        potential_scalar = cis(-k * z) * (im * ΔV * R^2 / k) * modes[7, k_idx]
+        potential_scalar = if iszero(k)
+            ComplexF64(ΔV * (4π / 3) * R^3)
+        else
+            cis(-k * z) * (im * ΔV * R^2 / k) * modes[7, k_idx]
+        end
         V[1, k_idx] += potential_scalar  # xx: δ₁₁ = 1
         V[4, k_idx] += potential_scalar  # yy: δ₂₂ = 1
         V[6, k_idx] += potential_scalar  # zz: δ₃₃ = 1
@@ -276,9 +280,14 @@ const symmetric_tensor_indices::Dict{Int, Tuple{Int, Int}} =
 const inverse_symmetric_tensor_indices::Dict{Tuple{Int, Int}, Int} =
     Dict(zip(values(symmetric_tensor_indices), keys(symmetric_tensor_indices)))
 
-struct TwoPointAzimuthalReduction
+struct ∂iϕ∂jϕ_AzimuthalReduction
     plan::CFTPlan
     buffer::x̂_ix̂_j
+end
+
+struct T_ij_AzimuthalReduction
+    plan::CFTPlan
+    kernel::T_i_j_kernel
 end
 
 end
