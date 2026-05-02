@@ -59,6 +59,8 @@ using EnvelopeApproximation.StressEnergyTensorContractions
     @test Λ_T(k_z)[3, 3] ≈ 1
     @test Λ_T(k_z)[5, 5] ≈ 1
     @test Λ_T(k_z)[1, 1] ≈ 0
+    @test Λ_T(2 .* k_z)[3, 3] ≈ 1 / 4
+    @test Λ_T(2 .* k_z)[5, 5] ≈ 1 / 4
 
     @test Λ_σσ(k_z)[1, 1] ≈ 1 / 4
     @test Λ_σσ(k_z)[1, 4] ≈ 1 / 4
