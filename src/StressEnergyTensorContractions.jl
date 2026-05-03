@@ -8,7 +8,8 @@ export symmetric_tensor_pairs,
        Λ_TT, Λ_T, Λ_pp, Λ_σσ, Λ_pσ,
        Lambda_TT, Lambda_T, Lambda_pp, Lambda_σσ, Lambda_pσ,
        contraction_matrix,
-       contract
+       contract,
+       all_contractions
 
 const symmetric_tensor_pairs = SVector(
     (1, 1),
@@ -121,5 +122,13 @@ of the `Λ_*` projector matrices or contractor functions.
 """
 contract(T::AbstractMatrix, Λ::AbstractMatrix) = tr(contraction_matrix(Λ) * T)
 contract(T::AbstractMatrix, contractor::Function, k::AbstractVector{<:Real}) = contract(T, contractor(k))
+
+all_contractions(T::AbstractMatrix, k::AbstractVector{<:Real}) = (
+    TT = contract(T, Λ_TT, k),
+    T = contract(T, Λ_T, k),
+    pp = contract(T, Λ_pp, k),
+    σσ = contract(T, Λ_σσ, k),
+    pσ = contract(T, Λ_pσ, k),
+)
 
 end
