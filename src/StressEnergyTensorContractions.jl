@@ -57,13 +57,12 @@ end
 """
     Λ_T(k)
 
-Vector contractor `P_im k_j k_n / k^2`.
+Vector contractor `P_im k_j k_n`.
 """
 function Λ_T(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
-    k_norm² = sum(abs2, k)
     k̂ = unit_direction(k)
     P(a, b) = δ(a, b) - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n] / k_norm²)
+    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n])
 end
 
 """
