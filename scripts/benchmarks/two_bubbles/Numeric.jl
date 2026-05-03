@@ -1,62 +1,47 @@
 begin
-    # 1. Imports
     using EnvelopeApproximation
-    using EnvelopeApproximation.GravitationalWaves
     using EnvelopeApproximation.BubbleBasics
     using EnvelopeApproximation.BubblesEvolution
     using EnvelopeApproximation.Spaces
     using EnvelopeApproximation.BoundaryConditions
-    using StaticArrays
-    using Measurements
-    using Random
-    using StableRNGs
+    using EnvelopeApproximation.StressEnergyTensorComponents
+    using EnvelopeApproximation.TwoPointStressEnergyTensorModule
+    using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
+    using EnvelopeApproximation.EnvelopeAnalysis: align_ẑ, symmetric_tensor_inverse_rotation
+    using LinearAlgebra
 end
 
-begin
-    # 2. Configuration Parameters
-    r_bubble = 5.0          # Bubble radius (time of interest)
-    d_sep    = 6.0          # Separation distance
-    L_box    = 40.0         # Box size
-    N_samples = 200_000     # MC samples
-    
-    # Wavenumbers k to evaluate
-    ks = collect(LinRange(0.1, 2.0, 10))
-end
+"""
+    NumericTwoPointTij(k̂, ks, r1, r2, d, ρ_vac=1.0, V=1.0)
 
-begin
-    # 3. System Setup (Two Bubbles)
-    # Define sites centered at ±d/2 along z
-    b1_site = Point3(0.0, 0.0, -d_sep/2)
-    b2_site = Point3(0.0, 0.0,  d_sep/2)
-    
-    # Create mock nucleation data (nucleated at t=0)
-    nucleations = [
-        (time=0.0, site=b1_site),
-        (time=0.0, site=b2_site)
-    ]
-    
-    # Create Snapshot and Space
-    snapshot = BubblesSnapShot(nucleations, r_bubble * 2.0)
-    space    = BoxSpace(L_box, Point3(0.0, 0.0, 0.0))
-end
+Computes ⟨T_ij(k) T_lm(-k)⟩ / V for two bubbles of radii r1, r2 separated
+by distance d along ẑ, evaluated at all magnitudes in `ks` along direction `k̂`.
 
-begin
-    # 4. Computation using GravitationalWaves Interface
-    println("Running Monte Carlo computation via GravitationalWaves interface...")
-    
-    # Define the Strategy
-    mc_strategy = MonteCarloSampling(N=N_samples, rng=StableRNG(1))
-    
-    # Call the high-level Π function
-    # Note: We pass 'ks' to the argument 'ωs' as they are equivalent in this context (c=1)
-    pi_results = Π(
-        r_bubble,      # t1
-        r_bubble,      # t2
-        ks,            # ωs (k vector)
-        snapshot,
-        space,
-        Periodic(),    # Boundary Condition
-        mc_strategy;   # The Strategy
-        ΔV=1.0
-    )
+The system is rotated so that `k̂` aligns with ẑ (azimuthal reduction), the full
+`ks` vector is passed to `TwoPointStressEnergyTensor` in a single call, then each
+6×6 slice is rotated back to the original frame via
+D = symmetric_tensor_inverse_rotation(align_ẑ(k̂)).
+
+Returns a 6×6×Nk Array{ComplexF64, 3} in the symmetric tensor basis
+(xx, xy, xz, yy, yz, zz).
+"""
+function NumericTwoPointTij(k̂::AbstractVector{T}, ks::AbstractVector{<:Real},
+                             r1::T, r2::T, d::T,
+                             ρ_vac::T=one(T), V::T=one(T))::Array{ComplexF64, 3} where T<:Real
+    R = align_ẑ(Vec3(Float64.(k̂)))
+
+    t    = max(Float64(r1), Float64(r2))
+    nuc1 = (time = t - Float64(r1), site = Point3(0., 0., -Float64(d) / 2))
+    nuc2 = (time = t - Float64(r2), site = Point3(0., 0.,  Float64(d) / 2))
+    snapshot = R * BubblesSnapShot(Nucleation[nuc1, nuc2], t)
+
+    space    = BoxSpace(cbrt(Float64(V)))
+    plan     = VectorQuadGKPlan{7}()
+    strategy = T_ij_AzimuthalReduction(plan, T_i_j_kernel(2))
+
+    result_rotated = TwoPointStressEnergyTensor(t, t, collect(Float64, ks), snapshot, space,
+                                                Vacuum(), strategy; ΔV = Float64(ρ_vac))
+    D  = symmetric_tensor_inverse_rotation(R)
+    Dt = D'
+    return stack(D * result_rotated[:, :, ki] * Dt for ki in axes(result_rotated, 3))
 end

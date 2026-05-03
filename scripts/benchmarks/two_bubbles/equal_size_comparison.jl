@@ -11,11 +11,10 @@ end
 
 # --- Configuration ---
 begin
-    r1    = 5.0
-    r2    = 3.0
+    r     = 5.0
     d     = 6.0
     ρ_vac = 1.0
-    L     = 6 * (max(r1, r2) + d / 2)
+    L     = 6 * (r + d / 2)
     V     = L^3
 
     ks = collect(LinRange(0.1, 2.0, 100))
@@ -25,16 +24,16 @@ begin
     k̂s     = [normalize([sqrt(max(1 - cξ^2, 0.)), 0., cξ]) for cξ in cos_ξs]
     colors  = [:steelblue, :crimson, :forestgreen, :darkorange]
 
-    println("r1=$r1  r2=$r2  d=$d  L=$L  $(length(ks)) k-points  $(length(cos_ξs)) directions")
+    println("r=$r  d=$d  L=$L  $(length(ks)) k-points  $(length(cos_ξs)) directions")
 end
 
 # --- Compute ---
 begin
     println("Computing numeric (T_ij azimuthal reduction)...")
-    numerics = [NumericTwoPointTij(k̂, ks, r1, r2, d, ρ_vac, V) for k̂ in k̂s]
+    numerics = [NumericTwoPointTij(k̂,  ks, r, r, d, ρ_vac, V) for k̂ in k̂s]
 
     println("Computing analytic...")
-    analytics = [[AnalyticTwoPointTij(k .* k̂s[di], r1, r2, d, ρ_vac, V) for k in ks]
+    analytics = [[AnalyticTwoPointTij(k .* k̂s[di], r, r, d, ρ_vac, V) for k in ks]
                  for di in eachindex(cos_ξs)]
 end
 
@@ -101,7 +100,7 @@ begin
         [dir_labels,  style_labels],
         ["k̂ direction", "style"])
 
-    CM.save("$(@__DIR__)/two_bubble_unequal_contractions.png", fig)
-    println("Saved two_bubble_unequal_contractions.png")
+    CM.save("$(@__DIR__)/two_bubble_contractions.png", fig)
+    println("Saved two_bubble_contractions.png")
     fig
 end
