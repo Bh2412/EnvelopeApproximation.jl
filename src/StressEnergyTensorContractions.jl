@@ -62,8 +62,9 @@ Vector contractor `P_im k_j k_n`.
 """
 function Λ_T(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
+    absksquared = norm(k) ^ 2
     P(a, b) = δ(a, b) - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n])
+    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n]) / absksquared
 end
 
 """
