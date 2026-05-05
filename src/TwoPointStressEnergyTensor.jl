@@ -1,15 +1,17 @@
 module TwoPointStressEnergyTensorModule
 
 using EnvelopeApproximation.StressEnergyTensorComponents
+using EnvelopeApproximation.RayTracingStressEnergyTensor
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
-using EnvelopeApproximation.Spaces: AbstractSpace, volume
-using EnvelopeApproximation.BoundaryConditions: BoundaryCondition
+using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
+using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
 using QuadGK
 
 export TwoPointStressEnergyTensor,
     TemporalWeight, CosineWeight, ConstantWeight,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
-    TimeIntegratedTwoPointStressEnergyTensor
+    TimeIntegratedTwoPointStressEnergyTensor,
+    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor
 
 abstract type TemporalWeight end
 struct CosineWeight <: TemporalWeight end
@@ -675,6 +677,68 @@ function TimeIntegratedTwoPointStressEnergyTensor(
     UniformGridConstantIntegratedTwoPointStressEnergyTensor(
         ωs, snapshot, space, boundary_condition, spatial_strategy;
         N_t=time_strategy.N_t, ΔV=ΔV, bubble_indices=bubble_indices
+    )
+end
+
+# ── RayTracingT_ij_CosineWeight ──────────────────────────────────────────────────────
+
+"""
+    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space,
+        boundary_condition, strategy; ΔV=1.0, bubble_indices=:)
+
+Computes the time-integrated two-point correlator using ray-tracing with analytic time integrals.
+
+Uses deterministic spherical quadrature and closed-form evaluation of I₃(α; a, b) to compute:
+
+  δ^{cov}_{ij,lm} = (1/2V) [ A⁺_{ij}(k) conj(A⁺_{lm}(k)) + A⁻_{ij}(k) conj(A⁻_{lm}(k)) ]
+
+where A±_{ij}(k) are computed via ray tracing with collision detection.
+
+Returns a 6×6×Nk array of ComplexF64.
+"""
+function RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::BoxSpace,
+    boundary_condition::Periodic,
+    strategy::RayTracingT_ij_CosineWeight;
+    ΔV::Float64 = 1.0,
+    bubble_indices = :
+)::Array{ComplexF64, 3}
+    ωs_f = collect(Float64, ωs)
+    Nk = length(ωs_f)
+
+    isempty(snapshot.nucleations) && return zeros(ComplexF64, 6, 6, Nk)
+
+    V_inv = 1.0 / volume(space)
+
+    A_plus, A_minus = ray_T_ij(ωs_f, snapshot, space, boundary_condition, strategy;
+                                ΔV=ΔV, bubble_indices=bubble_indices)
+
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+    for ki in 1:Nk
+        ap = A_plus[:,  ki]
+        am = A_minus[:, ki]
+        result[:, :, ki] = (ap * ap' .+ am * am') .* (V_inv / 2)
+    end
+
+    return result
+end
+
+# Dispatch rule for unified API (no time_strategy needed; temporal weight only)
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::AbstractSpace,
+    boundary_condition::BoundaryCondition,
+    spatial_strategy::RayTracingT_ij_CosineWeight,
+    ::CosineWeight;
+    ΔV::Float64 = 1.0,
+    bubble_indices = :
+)::Array{ComplexF64, 3}
+    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(
+        ωs, snapshot, space, boundary_condition, spatial_strategy;
+        ΔV=ΔV, bubble_indices=bubble_indices
     )
 end
 

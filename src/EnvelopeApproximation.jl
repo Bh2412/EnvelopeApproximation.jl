@@ -24,6 +24,8 @@ include("StressEnergyTensorComponents.jl")
 
 include("StressEnergyTensorContractions.jl")
 
+include("RayTracingStressEnergyTensor.jl")
+
 include("GravitationalWaves.jl")
 
 include("TwoPointStressEnergyTensor.jl")
