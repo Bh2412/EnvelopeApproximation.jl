@@ -237,6 +237,124 @@ function find_collision_time(i::Int, center_i::SVector{3, Float64}, n̂::SVector
 end
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Structure-of-Arrays layout and per-source workspace for hot loop
+# ═══════════════════════════════════════════════════════════════════════════════
+
+struct NucleationSoA
+    x::Vector{Float64}
+    y::Vector{Float64}
+    z::Vector{Float64}
+    t::Vector{Float64}
+end
+
+function nucleation_soa(nucleations)
+    N = length(nucleations)
+    x = Vector{Float64}(undef, N)
+    y = Vector{Float64}(undef, N)
+    z = Vector{Float64}(undef, N)
+    t = Vector{Float64}(undef, N)
+    @inbounds for j in 1:N
+        c = nucleations[j][:site].coordinates
+        x[j] = c[1]
+        y[j] = c[2]
+        z[j] = c[3]
+        t[j] = nucleations[j][:time]
+    end
+    return NucleationSoA(x, y, z, t)
+end
+
+mutable struct SourceCollisionWorkspace
+    dx::Vector{Float64}
+    dy::Vector{Float64}
+    dz::Vector{Float64}
+    dt::Vector{Float64}
+    numer::Vector{Float64}
+    tau_floor::Vector{Float64}
+    candidates::Vector{Int}
+end
+
+function SourceCollisionWorkspace(N::Int)
+    return SourceCollisionWorkspace(
+        Vector{Float64}(undef, N),
+        Vector{Float64}(undef, N),
+        Vector{Float64}(undef, N),
+        Vector{Float64}(undef, N),
+        Vector{Float64}(undef, N),
+        Vector{Float64}(undef, N),
+        sizehint!(Int[], N),
+    )
+end
+
+function prepare_source_collision!(
+    ws::SourceCollisionWorkspace,
+    blockers::NucleationSoA,
+    xi::Float64, yi::Float64, zi::Float64, ti::Float64,
+    source_idx::Int,
+    t_end::Float64,
+    v::Float64,
+)
+    N = length(blockers.t)
+    resize!(ws.dx, N)
+    resize!(ws.dy, N)
+    resize!(ws.dz, N)
+    resize!(ws.dt, N)
+    resize!(ws.numer, N)
+    resize!(ws.tau_floor, N)
+    empty!(ws.candidates)
+
+    R_i_max = v * (t_end - ti)
+
+    @inbounds for j in 1:N
+        j == source_idx && continue
+
+        dx = xi - blockers.x[j]
+        dy = yi - blockers.y[j]
+        dz = zi - blockers.z[j]
+        dt = ti - blockers.t[j]
+
+        R_j_max = v * (t_end - blockers.t[j])
+
+        dist2 = dx*dx + dy*dy + dz*dz
+        max_reach = R_i_max + R_j_max
+
+        dist2 > max_reach^2 && continue # Filtering based on maximum reach: if the blocker is too far away to ever collide, skip.
+
+        numer     = v*v*dt*dt - dist2
+
+        ws.dx[j]        = dx
+        ws.dy[j]        = dy
+        ws.dz[j]        = dz
+        ws.dt[j]        = dt
+        ws.numer[j]     = numer
+        ws.tau_floor[j] = max(0.0, -dt) # The ray cannot collide before the blocker nucleates, so τ must be at least t_j - t_i.
+
+        push!(ws.candidates, j)
+    end
+end
+
+function find_collision_time(n1::Float64, n2::Float64, n3::Float64,
+                             ws::SourceCollisionWorkspace,
+                             t_i::Float64, t_end::Float64, v::Float64)::Float64
+    τ_min = t_end - t_i
+
+    @inbounds for j in ws.candidates
+        ndotdx = n1*ws.dx[j] + n2*ws.dy[j] + n3*ws.dz[j]
+        denom  = 2.0 * v * (ndotdx - v * ws.dt[j])
+
+        denom >= -1.0e-12 && continue
+
+        τ = ws.numer[j] / denom
+
+        τ < ws.tau_floor[j] - 1.0e-12 && continue
+        τ >= τ_min                      && continue
+
+        τ_min = max(ws.tau_floor[j], τ)
+    end
+
+    return τ_min
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Quadrature Schemes
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -330,39 +448,41 @@ end
 function nucleation_ray_T_ij_contribution!(ks::Vector{Float64},
                                            source_nucleation_idx::Int,
                                            source_nucleation::Nucleation,
-                                           nucleations::Vector{Nucleation},
+                                           blockers_soa::NucleationSoA,
+                                           ws::SourceCollisionWorkspace,
                                            markers::Vector{SphericalQuadratureMarker},
                                            t_end::Float64;
                                            ΔV::Float64=1.0, v::Float64=1., A_plus::Matrix{ComplexF64},
                                            A_minus::Matrix{ComplexF64})
-    t_i    = source_nucleation[:time]
+    t_i      = source_nucleation[:time]
     center_i = source_nucleation[:site].coordinates
-    z_i    = center_i[3]
+    xi, yi, zi = center_i[1], center_i[2], center_i[3]
+
+    prepare_source_collision!(ws, blockers_soa, xi, yi, zi, t_i, source_nucleation_idx, t_end, v)
+
+    amp_base = (ΔV / 3.0) * v^3
+
     for marker in markers
         n̂ = marker.n̂
         w = marker.weight
+        n1, n2, n3 = n̂[1], n̂[2], n̂[3]
 
-        τ_stop = find_collision_time(source_nucleation_idx, center_i, n̂, nucleations, t_i, t_end, v)
+        τ_stop = find_collision_time(n1, n2, n3, ws, t_i, t_end, v)
 
-        # τ_start = 0 (bubble i just nucleated); skip if no time window
-        if τ_stop < 1.0e-12
-            continue
-        end
+        τ_stop < 1.0e-12 && continue
 
         for (k_idx, k) in enumerate(ks)
-            α_plus  = k * ( 1.0 - v * n̂[3])
-            α_minus = k * (-1.0 - v * n̂[3])
+            α_plus  = k * ( 1.0 - v * n3)
+            α_minus = k * (-1.0 - v * n3)
 
             I3_plus  = I3(α_plus,  0.0, τ_stop)
             I3_minus = I3(α_minus, 0.0, τ_stop)
 
-            phase_z = cis(-k * z_i)
-            amp = (ΔV / 3.0) * v^3 * w * phase_z
+            amp = amp_base * w * cis(-k * zi)
 
-            amp_plus  = amp * cis(k * t_i) * I3_plus
+            amp_plus  = amp * cis( k * t_i) * I3_plus
             amp_minus = amp * cis(-k * t_i) * I3_minus
 
-            n1, n2, n3 = n̂[1], n̂[2], n̂[3]
             A_plus[1, k_idx] += amp_plus  * n1 * n1
             A_plus[2, k_idx] += amp_plus  * n1 * n2
             A_plus[3, k_idx] += amp_plus  * n1 * n3
@@ -420,9 +540,12 @@ function ray_T_ij(ks::AbstractVector{Float64}, snapshot::BubblesSnapShot,
     full_nucleations = periodic_nucleations(snapshot.nucleations, v, 0.0, t_end, space)
     contributing_indices = contribution_indices(length(snapshot.nucleations), bubble_indices)
 
+    blockers_soa = nucleation_soa(full_nucleations)
+    ws = SourceCollisionWorkspace(length(full_nucleations))
+
     for idx in contributing_indices
         nuc = full_nucleations[idx]
-        nucleation_ray_T_ij_contribution!(ks_f, idx, nuc, full_nucleations, markers, t_end; ΔV, v, A_plus=A_plus, A_minus=A_minus)
+        nucleation_ray_T_ij_contribution!(ks_f, idx, nuc, blockers_soa, ws, markers, t_end; ΔV, v, A_plus=A_plus, A_minus=A_minus)
     end
     
     return A_plus, A_minus

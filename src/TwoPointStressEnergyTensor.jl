@@ -729,8 +729,8 @@ end
 function TimeIntegratedTwoPointStressEnergyTensor(
     ωs::AbstractVector{<:Real},
     snapshot::BubblesSnapShot,
-    space::AbstractSpace,
-    boundary_condition::BoundaryCondition,
+    space::BoxSpace,
+    boundary_condition::Periodic,
     spatial_strategy::RayTracingT_ij_CosineWeight,
     ::CosineWeight;
     ΔV::Float64 = 1.0,
