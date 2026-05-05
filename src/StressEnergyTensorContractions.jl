@@ -58,7 +58,7 @@ end
 """
     Λ_T(k)
 
-Vector contractor `P_im k_j k_n`.
+Vector contractor `P_im k_j k_n / k ^ 2`.
 """
 function Λ_T(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
