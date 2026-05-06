@@ -41,10 +41,9 @@ include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exports
 # ══════════════════════════════════
-export SphericalQuadratureMarker, SphericalQuadratureScheme,
+export SphericalQuadratureScheme,
        RayCastingT_ij_CosineWeight,
-       I3, collision_time, find_collision_time,
-       UniformSphericalCapScheme, get_markers,
+       UniformSphericalCapScheme,
        ray_T_ij
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -58,7 +57,7 @@ function nucleation_ray_T_ij_contribution!(
     blockers_soa::NucleationSoA,
     collision_ws::SourceCollisionWorkspace,
     mode_ws::SourceModeWorkspace,
-    markers::Vector{SphericalQuadratureMarker},
+    markers::AbstractVector{SphericalQuadratureMarker},
     t_end::Float64;
     ΔV::Float64 = 1.0,
     v::Float64 = 1.0,
@@ -131,8 +130,9 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
     ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
     Nk = length(ks_f)
 
-    empty_result = (zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk))
-    isempty(snapshot.nucleations) && return empty_result
+    if isempty(snapshot.nucleations)
+        return zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk)
+    end
 
     A_plus  = zeros(ComplexF64, 6, Nk)
     A_minus = zeros(ComplexF64, 6, Nk)
