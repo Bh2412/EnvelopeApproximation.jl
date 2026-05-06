@@ -4,6 +4,7 @@ Unit tests for ray-casting T_ij computation.
 
 using EnvelopeApproximation
 using EnvelopeApproximation.RayCastingStressEnergyTensor
+import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, collision_time, get_markers, SphericalQuadratureMarker
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
