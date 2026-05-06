@@ -36,6 +36,7 @@ include("RayCastingStressEnergyTensor/Strategies.jl")
 include("RayCastingStressEnergyTensor/CollisionSearch.jl")
 include("RayCastingStressEnergyTensor/I3Kernels.jl")
 include("RayCastingStressEnergyTensor/PeriodicBlockers.jl")
+include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exports
@@ -50,66 +51,55 @@ export SphericalQuadratureMarker, SphericalQuadratureScheme,
 # Ray-Casting T_ij Core Computation
 # ═══════════════════════════════════════════════════════════════════════════════
 
-function nucleation_ray_T_ij_contribution!(ks::Vector{Float64},
-                                           source_nucleation_idx::Int,
-                                           source_nucleation::Nucleation,
-                                           blockers_soa::NucleationSoA,
-                                           ws::SourceCollisionWorkspace,
-                                           markers::Vector{SphericalQuadratureMarker},
-                                           t_end::Float64;
-                                           ΔV::Float64=1.0, v::Float64=1., A_plus::Matrix{ComplexF64},
-                                           A_minus::Matrix{ComplexF64})
-    t_i      = source_nucleation[:time]
+function nucleation_ray_T_ij_contribution!(
+    ks::AbstractVector{<:Real},
+    source_nucleation_idx::Int,
+    source_nucleation::Nucleation,
+    blockers_soa::NucleationSoA,
+    collision_ws::SourceCollisionWorkspace,
+    mode_ws::SourceModeWorkspace,
+    markers::Vector{SphericalQuadratureMarker},
+    t_end::Float64;
+    ΔV::Float64 = 1.0,
+    v::Float64 = 1.0,
+    A_plus::Matrix{ComplexF64},
+    A_minus::Matrix{ComplexF64},
+)
+    t_i = source_nucleation[:time]
     center_i = source_nucleation[:site].coordinates
     xi, yi, zi = center_i[1], center_i[2], center_i[3]
 
-    prepare_source_collision!(ws, blockers_soa, xi, yi, zi, t_i, source_nucleation_idx, t_end, v)
+    prepare_source_collision!(
+        collision_ws, blockers_soa,
+        xi, yi, zi, t_i,
+        source_nucleation_idx, t_end, v,
+    )
 
     amp_base = (ΔV / 3.0) * v^3
 
-    phase_plus  = Vector{ComplexF64}(undef, length(ks))
-    phase_minus = Vector{ComplexF64}(undef, length(ks))
-
-    @inbounds for q in eachindex(ks)
-        k = ks[q]
-        phase_plus[q]  = amp_base * cis( k * ( t_i - zi))
-        phase_minus[q] = amp_base * cis(-k * ( t_i + zi))
-    end
+    resize!(mode_ws, length(ks))
+    prepare_source_phases!(mode_ws, ks, t_i, zi, amp_base)
 
     for marker in markers
         n̂ = marker.n̂
-        w = marker.weight
         n1, n2, n3 = n̂[1], n̂[2], n̂[3]
 
-        τ_stop = find_collision_time(n1, n2, n3, ws, t_i, t_end, v)
-
+        τ_stop = find_collision_time(n1, n2, n3, collision_ws, t_i, t_end, v)
         τ_stop < 1.0e-12 && continue
 
-        for (k_idx, k) in enumerate(ks)
-            α_plus  = k * ( 1.0 - v * n3)
-            α_minus = k * (-1.0 - v * n3)
-
-            I3_plus  = I3(α_plus,  0.0, τ_stop)
-            I3_minus = I3(α_minus, 0.0, τ_stop)
-
-            amp_plus = w *  phase_plus[k_idx]  * I3_plus
-            amp_minus = w * phase_minus[k_idx] * I3_minus
-
-            A_plus[1, k_idx] += amp_plus  * n1 * n1
-            A_plus[2, k_idx] += amp_plus  * n1 * n2
-            A_plus[3, k_idx] += amp_plus  * n1 * n3
-            A_plus[4, k_idx] += amp_plus  * n2 * n2
-            A_plus[5, k_idx] += amp_plus  * n2 * n3
-            A_plus[6, k_idx] += amp_plus  * n3 * n3
-
-            A_minus[1, k_idx] += amp_minus * n1 * n1
-            A_minus[2, k_idx] += amp_minus * n1 * n2
-            A_minus[3, k_idx] += amp_minus * n1 * n3
-            A_minus[4, k_idx] += amp_minus * n2 * n2
-            A_minus[5, k_idx] += amp_minus * n2 * n3
-            A_minus[6, k_idx] += amp_minus * n3 * n3
-        end
+        accumulate_marker_modes!(
+            A_plus, A_minus,
+            ks,
+            τ_stop,
+            n1, n2, n3,
+            marker.weight,
+            mode_ws.phase_plus,
+            mode_ws.phase_minus,
+            v,
+        )
     end
+
+    return nothing
 end
 
 """
@@ -134,11 +124,11 @@ For each k index q, the cosine-weighted tensor correlator is the 6×6 matrix
 
 where `'` denotes complex conjugate transpose.
 """
-function ray_T_ij(ks::AbstractVector{Float64}, snapshot::BubblesSnapShot,
+function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   space::BoxSpace, boundary_condition::Periodic,
                   strategy::RayCastingT_ij_CosineWeight;
                   ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)::Tuple{Matrix{ComplexF64}, Matrix{ComplexF64}}
-    ks_f = collect(Float64, ks)
+    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
     Nk = length(ks_f)
 
     empty_result = (zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk))
@@ -153,11 +143,26 @@ function ray_T_ij(ks::AbstractVector{Float64}, snapshot::BubblesSnapShot,
     contributing_indices = contribution_indices(length(snapshot.nucleations), bubble_indices)
 
     blockers_soa = NucleationSoA(full_nucleations)
-    ws = SourceCollisionWorkspace(length(full_nucleations))
+    collision_ws = SourceCollisionWorkspace(length(full_nucleations))
+    mode_ws = SourceModeWorkspace(Nk)
 
     for idx in contributing_indices
         nuc = full_nucleations[idx]
-        nucleation_ray_T_ij_contribution!(ks_f, idx, nuc, blockers_soa, ws, markers, t_end; ΔV, v, A_plus=A_plus, A_minus=A_minus)
+
+        nucleation_ray_T_ij_contribution!(
+            ks_f,
+            idx,
+            nuc,
+            blockers_soa,
+            collision_ws,
+            mode_ws,
+            markers,
+            t_end;
+            ΔV = ΔV,
+            v = v,
+            A_plus = A_plus,
+            A_minus = A_minus,
+        )
     end
     
     return A_plus, A_minus
