@@ -2,7 +2,7 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.EnvelopeAnalysis
-import EnvelopeApproximation.EnvelopeAnalysis: unfold_periodic_bubbles, face_distance, edge_distance, 
+import EnvelopeApproximation.EnvelopeAnalysis: unfold_periodic_bubbles, append_periodic_bubbles!, face_distance, edge_distance,
     vertex_distance, wall_intersect_complement!, ∩
 using Test
 using StaticArrays
@@ -141,6 +141,22 @@ using LinearAlgebra
         
         @test any(c -> c ≈ [-5.5, 4.5, 0.0], coords)
         @test any(c -> c ≈ [4.5, -5.5, 0.0], coords)
+    end
+
+    @testset "6. append_periodic_bubbles! preserves originals at their indices" begin
+        # Two bubbles: one near a wall (will spawn ghosts), one safely interior.
+        b1 = Bubble(Point3(4.5, 0.0, 0.0), R)   # near right wall → 1 ghost
+        b2 = Bubble(Point3(0.0, 0.0, 0.0), R)   # interior → no ghosts
+
+        bubbles = [b1, b2]
+        origin_map = Int[]
+        append_periodic_bubbles!(bubbles, box, origin_map)
+
+        # Originals must still sit at indices 1 and 2.
+        @test coordinates(bubbles[1].center) ≈ coordinates(b1.center)
+        @test bubbles[1].radius == b1.radius
+        @test coordinates(bubbles[2].center) ≈ coordinates(b2.center)
+        @test bubbles[2].radius == b2.radius
     end
 
 end
