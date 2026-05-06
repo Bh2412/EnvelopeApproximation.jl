@@ -90,38 +90,101 @@ end
 # ═══════════════════════════════════════════════════════════════════════════════
 
 """
-    I3(α, a, b) -> ComplexF64
+    I3(α::Float64, a::Float64, b::Float64) -> ComplexF64
 
 Evaluate ∫_a^b τ³ exp(iατ) dτ analytically.
-
-For α = 0:  (b⁴ − a⁴) / 4
-
-For |α| < 1e-10: Taylor series to avoid cancellation in the exact formula.
-
-For α ≠ 0: antiderivative via integration by parts,
-  F(τ) = exp(iατ) [τ³/(iα) − 3τ²/(iα)² + 6τ/(iα)³ − 6/(iα)⁴],
-  result = F(b) − F(a).
 """
 function I3(α::Float64, a::Float64, b::Float64)::ComplexF64
-    # Fast path: α exactly zero
+    iszero(a) && return I3_zero_lower(α, b) # Fast path
     iszero(α) && return ComplexF64((b^4 - a^4) / 4.0)
 
-    # Small |α| regime: Taylor series ∫τ³(1 + iατ - α²τ²/2 + ...)dτ avoids cancellation
-    if abs(α) < 1.0e-10
-        int_0 = (b^4 - a^4) / 4.0
-        int_1 = im * α * (b^5 - a^5) / 5.0
-        int_2 = -α^2 * (b^6 - a^6) / 12.0
-        return int_0 + int_1 + int_2
+    # Condition must check the maximum dimensionless phase, not just α.
+    max_x = abs(α) * max(abs(a), abs(b))
+
+    if max_x < 1.0e-4
+        # ∫ τ³ (1 + iατ - α²τ²/2 - iα³τ³/6 + α⁴τ⁴/24) dτ
+        a2, b2 = a*a, b*b
+        a3, b3 = a2*a, b2*b
+        a4, b4 = a2*a2, b2*b2
+        a5, b5 = a4*a, b4*b
+        a6, b6 = a5*a, b5*b
+        a7, b7 = a6*a, b6*b
+        a8, b8 = a7*a, b7*b
+        
+        return ComplexF64(
+            (b4 - a4)/4.0 - α^2*(b6 - a6)/12.0 + α^4*(b8 - a8)/192.0,
+            α*(b5 - a5)/5.0 - α^3*(b7 - a7)/42.0
+        )
     end
 
-    # General case: antiderivative via integration by parts.
-    # ∫ τ³ exp(iατ) dτ = exp(iατ) [τ³/(iα) − 3τ²/(iα)² + 6τ/(iα)³ − 6/(iα)⁴]
-    iα_inv = 1.0 / (im * α)
+    # General case: avoiding complex arithmetic
+    invα  = 1.0 / α
+    invα2 = invα * invα
+    invα3 = invα2 * invα
+    invα4 = invα2 * invα2
+    
+    a2, b2 = a*a, b*b
+    a3, b3 = a2*a, b2*b
 
-    result_b = cis(α * b) * (b^3 * iα_inv - 3*b^2 * iα_inv^2 + 6*b * iα_inv^3 - 6*iα_inv^4)
-    result_a = cis(α * a) * (a^3 * iα_inv - 3*a^2 * iα_inv^2 + 6*a * iα_inv^3 - 6*iα_inv^4)
+    # A(τ) = 3τ²/α² - 6/α⁴
+    # B(τ) = -τ³/α + 6τ/α³
+    Aa = 3.0*a2*invα2 - 6.0*invα4
+    Ba = -a3*invα + 6.0*a*invα3
+    
+    Ab = 3.0*b2*invα2 - 6.0*invα4
+    Bb = -b3*invα + 6.0*b*invα3
 
-    return result_b - result_a
+    sa, ca = sincos(α*a)
+    sb, cb = sincos(α*b)
+
+    # F(τ) = (cos(ατ)A - sin(ατ)B) + i(sin(ατ)A + cos(ατ)B)
+    return ComplexF64(
+        (cb*Ab - sb*Bb) - (ca*Aa - sa*Ba),
+        (sb*Ab + cb*Bb) - (sa*Aa + ca*Ba)
+    )
+end
+
+@inline function I3_zero_lower(α::Float64, b::Float64)::ComplexF64
+    # ∫₀ᵇ τ³ exp(i α τ) dτ
+
+    b2 = b*b
+    b3 = b2*b
+    b4 = b2*b2
+
+    x = abs(α * b)
+
+    # Small phase: Taylor expansion in ατ.
+    # ∫ τ³ ∑ₘ (iατ)^m/m! dτ
+    if x < 1.0e-4
+        b5 = b4*b
+        b6 = b5*b
+        b7 = b6*b
+        b8 = b7*b
+
+        return ComplexF64(
+            b4/4 - α*α*b6/12 + α^4*b8/192,
+            α*b5/5 - α^3*b7/42
+        )
+    end
+
+    invα  = 1.0 / α
+    invα2 = invα * invα
+    invα3 = invα2 * invα
+    invα4 = invα2 * invα2
+
+    # Antiderivative:
+    # e^{iαb}[b³/(iα) - 3b²/(iα)² + 6b/(iα)³ - 6/(iα)⁴] + 6/(iα)⁴
+    #
+    # Written as real arithmetic to avoid complex powers.
+    A = 3.0*b2*invα2 - 6.0*invα4
+    B = -b3*invα + 6.0*b*invα3
+
+    s, c = sincos(α*b)
+
+    return ComplexF64(
+        c*A - s*B + 6.0*invα4,
+        s*A + c*B
+    )
 end
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -462,6 +525,15 @@ function nucleation_ray_T_ij_contribution!(ks::Vector{Float64},
 
     amp_base = (ΔV / 3.0) * v^3
 
+    phase_plus  = Vector{ComplexF64}(undef, length(ks))
+    phase_minus = Vector{ComplexF64}(undef, length(ks))
+
+    @inbounds for q in eachindex(ks)
+        k = ks[q]
+        phase_plus[q]  = amp_base * cis( k * ( t_i - zi))
+        phase_minus[q] = amp_base * cis(-k * ( t_i + zi))
+    end
+
     for marker in markers
         n̂ = marker.n̂
         w = marker.weight
@@ -478,10 +550,8 @@ function nucleation_ray_T_ij_contribution!(ks::Vector{Float64},
             I3_plus  = I3(α_plus,  0.0, τ_stop)
             I3_minus = I3(α_minus, 0.0, τ_stop)
 
-            amp = amp_base * w * cis(-k * zi)
-
-            amp_plus  = amp * cis( k * t_i) * I3_plus
-            amp_minus = amp * cis(-k * t_i) * I3_minus
+            amp_plus = w *  phase_plus[k_idx]  * I3_plus
+            amp_minus = w * phase_minus[k_idx] * I3_minus
 
             A_plus[1, k_idx] += amp_plus  * n1 * n1
             A_plus[2, k_idx] += amp_plus  * n1 * n2
