@@ -1,5 +1,5 @@
 """
-Unit tests for ray-tracing T_ij computation.
+Unit tests for ray-casting T_ij computation.
 """
 
 using EnvelopeApproximation
@@ -8,13 +8,13 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
-using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor
+using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
 using Test
 using StaticArrays
 using LinearAlgebra
 using QuadGK
 
-@testset "Ray Tracing Stress Energy Tensor" begin
+@testset "Ray Casting Stress Energy Tensor" begin
 
     # ═════════════════════════════════════════════════════════════════════════════
     # Test: I₃ Analytic Integral
@@ -101,14 +101,14 @@ using QuadGK
     # Test: ray_T_ij returns a (A_plus, A_minus) tuple of correct shape
     # ═════════════════════════════════════════════════════════════════════════════
 
-    @testset "Single Bubble Ray-Tracing" begin
+    @testset "Single Bubble Ray-Casting" begin
         nuc = (time=0.0, site=Point3(0.0, 0.0, 0.0))
         snapshot = BubblesSnapShot([nuc], 1.0)
         space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
         bc = Periodic()
 
         scheme = UniformSphericalCapScheme(4, 8)
-        strategy = RayTracingT_ij_CosineWeight(scheme)
+        strategy = RayCastingT_ij_CosineWeight(scheme)
 
         ks = [0.5, 1.0, 2.0]
         A_plus, A_minus = ray_T_ij(ks, snapshot, space, bc, strategy; ΔV=1.0)
@@ -128,7 +128,7 @@ using QuadGK
     # Test: Two-point correlator is Hermitian and has positive diagonal
     # ═════════════════════════════════════════════════════════════════════════════
 
-    @testset "RayTracingCosineTimeIntegratedTwoPointTensor" begin
+    @testset "RayCastingCosineTimeIntegratedTwoPointTensor" begin
         nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
         nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
         snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
@@ -136,10 +136,10 @@ using QuadGK
         bc = Periodic()
 
         scheme = UniformSphericalCapScheme(4, 8)
-        strategy = RayTracingT_ij_CosineWeight(scheme)
+        strategy = RayCastingT_ij_CosineWeight(scheme)
 
         ks = [0.5, 1.0]
-        result = RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(
+        result = RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
             ks, snapshot, space, bc, strategy; ΔV=1.0
         )
 
@@ -159,4 +159,4 @@ using QuadGK
 
 end  # @testset
 
-println("All ray-tracing tests passed!")
+println("All ray-casting tests passed!")

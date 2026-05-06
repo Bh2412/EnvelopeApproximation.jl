@@ -11,7 +11,7 @@ export TwoPointStressEnergyTensor,
     TemporalWeight, CosineWeight, ConstantWeight,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
     TimeIntegratedTwoPointStressEnergyTensor,
-    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor
+    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
 
 abstract type TemporalWeight end
 struct CosineWeight <: TemporalWeight end
@@ -680,28 +680,28 @@ function TimeIntegratedTwoPointStressEnergyTensor(
     )
 end
 
-# ── RayTracingT_ij_CosineWeight ──────────────────────────────────────────────────────
+# ── RayCastingT_ij_CosineWeight ──────────────────────────────────────────────────────
 
 """
-    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space,
+    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space,
         boundary_condition, strategy; ΔV=1.0, bubble_indices=:)
 
-Computes the time-integrated two-point correlator using ray-tracing with analytic time integrals.
+Computes the time-integrated two-point correlator using ray-Casting with analytic time integrals.
 
 Uses deterministic spherical quadrature and closed-form evaluation of I₃(α; a, b) to compute:
 
   δ^{cov}_{ij,lm} = (1/2V) [ A⁺_{ij}(k) conj(A⁺_{lm}(k)) + A⁻_{ij}(k) conj(A⁻_{lm}(k)) ]
 
-where A±_{ij}(k) are computed via ray tracing with collision detection.
+where A±_{ij}(k) are computed via ray Casting with collision detection.
 
 Returns a 6×6×Nk array of ComplexF64.
 """
-function RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(
+function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
     ωs::AbstractVector{<:Real},
     snapshot::BubblesSnapShot,
     space::BoxSpace,
     boundary_condition::Periodic,
-    strategy::RayTracingT_ij_CosineWeight;
+    strategy::RayCastingT_ij_CosineWeight;
     ΔV::Float64 = 1.0,
     bubble_indices = :
 )::Array{ComplexF64, 3}
@@ -731,12 +731,12 @@ function TimeIntegratedTwoPointStressEnergyTensor(
     snapshot::BubblesSnapShot,
     space::BoxSpace,
     boundary_condition::Periodic,
-    spatial_strategy::RayTracingT_ij_CosineWeight,
+    spatial_strategy::RayCastingT_ij_CosineWeight,
     ::CosineWeight;
     ΔV::Float64 = 1.0,
     bubble_indices = :
 )::Array{ComplexF64, 3}
-    RayTracingCosineTimeIntegratedTwoPointStressEnergyTensor(
+    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
         ωs, snapshot, space, boundary_condition, spatial_strategy;
         ΔV=ΔV, bubble_indices=bubble_indices
     )
