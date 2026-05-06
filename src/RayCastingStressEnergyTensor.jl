@@ -1,5 +1,5 @@
 """
-    RayTracingStressEnergyTensor
+    RayCastingStressEnergyTensor
 
 Ray-tracing method for computing T_ij using deterministic spherical quadrature
 and analytic time integration via the I₃(α; a, b) formula.
@@ -20,7 +20,7 @@ is evaluated analytically:
 
 where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 """
-module RayTracingStressEnergyTensor
+module RayCastingStressEnergyTensor
 
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Bubble, Nucleation
@@ -621,4 +621,4 @@ function ray_T_ij(ks::AbstractVector{Float64}, snapshot::BubblesSnapShot,
     return A_plus, A_minus
 end
 
-end # module RayTracingStressEnergyTensor
+end # module RayCastingStressEnergyTensor

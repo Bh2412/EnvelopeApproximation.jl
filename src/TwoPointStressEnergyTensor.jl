@@ -1,7 +1,7 @@
 module TwoPointStressEnergyTensorModule
 
 using EnvelopeApproximation.StressEnergyTensorComponents
-using EnvelopeApproximation.RayTracingStressEnergyTensor
+using EnvelopeApproximation.RayCastingStressEnergyTensor
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
 using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic

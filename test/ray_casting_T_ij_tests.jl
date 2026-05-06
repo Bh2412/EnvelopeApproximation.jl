@@ -3,7 +3,7 @@ Unit tests for ray-tracing T_ij computation.
 """
 
 using EnvelopeApproximation
-using EnvelopeApproximation.RayTracingStressEnergyTensor
+using EnvelopeApproximation.RayCastingStressEnergyTensor
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
