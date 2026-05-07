@@ -46,112 +46,21 @@ function SourceCollisionWorkspace(N::Int)
     )
 end
 
-"""
-    collision_time(center_i::SVector{3, Float64}, center_j::SVector{3, Float64}, n̂::SVector{3, Float64},
-                   t_i::Float64, t_j::Float64, v::Float64)::Union{Float64, Nothing}
-
-Compute the collision time τ of a ray from bubble i along direction n̂ with bubble j.
-
-The ray position at time τ (measured from t_i) is:
-  x(τ) = x_i + v·τ·n̂
-
-The ray collides with bubble j when:
-  |x_i + v·τ·n̂ - x_j| = v·(t_i + τ - t_j)
-
-Squaring and simplifying yields:
-  τ = (v²Δt² - |Δx|²) / (2v(n̂ · Δx - v·Δt))
-
-where Δx = x_i - x_j, Δt = t_i - t_j.
-
-Returns τ if collision occurs (τ ≥ 0 and within time window); otherwise returns nothing.
-
-# Arguments
-- `center_i::SVector{3, Float64}`: Center of the source bubble
-- `center_j::SVector{3, Float64}`: Center of the target bubble
-- `n̂::SVector{3, Float64}`: Ray direction (unit vector)
-- `t_i::Float64`: Nucleation time of bubble i
-- `t_j::Float64`: Nucleation time of bubble j
-- `v::Float64`: Bubble wall velocity
-
-# Returns
-Union{Float64, Nothing}: Collision time τ if valid, nothing otherwise
-"""
 function collision_time(center_i::SVector{3, Float64}, center_j::SVector{3, Float64}, n̂::SVector{3, Float64},
                         t_i::Float64, t_j::Float64, v::Float64)::Union{Float64, Nothing}
-    # Compute Δx = x_i - x_j and Δt = t_i - t_j
     Δx = center_i - center_j
     Δt = t_i - t_j
 
-    # Compute denominator: 2v(n̂·Δx - v·Δt)
-    n̂_dot_Δx = dot(n̂, Δx)
-    denom = 2.0 * v * (n̂_dot_Δx - v * Δt)
+    denom = 2.0 * v * (dot(n̂, Δx) - v * Δt)
+    denom > -1.0e-12 && return nothing
 
-    # OPTIMIZATION: Since nucleations never overlap, numer (v²Δt² - |Δx|²) is ALWAYS <= 0.
-    # Therefore, for τ to be positive, denom MUST be strictly negative.
-    # If denom >= 0, the ray is moving away from the bubble or parallel, and will never collide.
-    if denom > -1.0e-12
-        return nothing
-    end
-
-    # Compute numerator: v²Δt² - |Δx|²
-    Δx_norm_sq = sum(abs2, Δx)
-    numer = v^2 * Δt^2 - Δx_norm_sq
-
-    # Solve for τ
+    numer = v^2 * Δt^2 - sum(abs2, Δx)
     τ = numer / denom
 
-    # τ must be non-negative AND must occur after bubble j has nucleated.
-    # The earliest valid τ is max(0, t_j − t_i) = max(0, −Δt).
-    τ_min = max(0.0, -Δt)
-    if τ < τ_min - 1.0e-12
-        return nothing
-    end
+    τ_floor = max(0.0, -Δt)
+    τ < τ_floor - 1.0e-12 && return nothing
 
-    return max(τ_min, τ)
-end
-
-"""
-    find_collision_time(i::Int, center_i::SVector{3, Float64}, n̂::SVector{3, Float64},
-                        nucleations::Vector, t_i::Float64, t_end::Float64, v::Float64)::Float64
-
-Find the earliest collision time for a ray from bubble `i` along direction n̂.
-
-Loops through all other bubbles (and ghosts) to compute their collision times,
-maintaining a running minimum.
-
-# Arguments
-- `i::Int`: Index of the source bubble (used to skip self-intersection)
-- `center_i::SVector{3, Float64}`: Center of the source bubble
-- `n̂::SVector{3, Float64}`: Ray direction
-- `nucleations::Vector`: Collection of all bubbles in the system (including periodic ghosts)
-- `t_i::Float64`: Nucleation time of bubble i
-- `t_end::Float64`: End of valid time window
-- `v::Float64`: Bubble wall velocity
-
-# Returns
-Float64: Minimum collision time, or t_end - t_i if no collision occurs
-"""
-function find_collision_time(i::Int, center_i::SVector{3, Float64}, n̂::SVector{3, Float64},
-                             nucleations::Vector, t_i::Float64, t_end::Float64, v::Float64)::Float64
-    τ_min = Inf
-
-    for (idx, nuc_j) in enumerate(nucleations)
-        # Skip the exact source bubble
-        idx == i && continue
-
-        center_j = nuc_j[:site].coordinates
-        t_j = nuc_j[:time]
-
-        τ_coll = collision_time(center_i, center_j, n̂, t_i, t_j, v)
-
-        # Update running minimum if a valid, earlier collision is found
-        if τ_coll !== nothing && τ_coll < τ_min
-            τ_min = τ_coll
-        end
-    end
-
-    # Ray survives until the minimum of the collision time or the end of the simulation
-    return min(τ_min, t_end - t_i)
+    return max(τ_floor, τ)
 end
 
 function prepare_source_collision!(
@@ -200,6 +109,40 @@ function prepare_source_collision!(
         push!(ws.candidates, j)
     end
 end
+
+function prepare_source_collision!(
+    ws::SourceCollisionWorkspace,
+    blockers::NucleationSoA,
+    source_nucleation::Nucleation,
+    source_idx::Int,
+    t_end::Float64,
+    v::Float64,
+)
+    center_i = source_nucleation[:site].coordinates
+    return prepare_source_collision!(
+        ws, blockers,
+        center_i[1], center_i[2], center_i[3], source_nucleation[:time],
+        source_idx, t_end, v,
+    )
+end
+
+"""
+Find the earliest collision time for a ray from bubble `i` along direction n̂.
+
+Loops through all blockers to compute their collision time with the ray.
+Returns the minimum one.
+
+# Arguments
+- `n̂::SVector{3, Float64}`: Ray direction
+- `ws::SourceCollisionWorkspace`: Precomputed workspace containing blocker data, usually filtered
+    for optimization.
+- `t_i::Float64`: Nucleation time of the source bubble
+- `t_end::Float64`: End of valid time window
+- `v::Float64`: Bubble wall velocity
+
+# Returns
+Float64: Minimum collision time, or t_end - t_i if no collision occurs
+"""
 
 function find_collision_time(n̂:: SVector{3,Float64},
                              ws::SourceCollisionWorkspace,

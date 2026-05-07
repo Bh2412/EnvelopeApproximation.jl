@@ -4,7 +4,8 @@ Unit tests for ray-casting T_ij computation.
 
 using EnvelopeApproximation
 using EnvelopeApproximation.RayCastingStressEnergyTensor
-import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, collision_time, get_markers, SphericalQuadratureMarker, compute_sincos_grid!
+import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, collision_time, get_markers, SphericalQuadratureMarker, compute_sincos_grid!,
+    CosineWeight, ConstantWeight, KineticTerm, PotentialTerm, TotalStressTerm
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
@@ -131,7 +132,8 @@ using QuadGK
         strategy = RayCastingT_ij_CosineWeight(scheme)
 
         ks = [0.5, 1.0, 2.0]
-        A_plus, A_minus = ray_T_ij(ks, snapshot, space, bc, strategy; ΔV=1.0)
+        acc = ray_T_ij(ks, snapshot, space, bc, strategy; ΔV=1.0)
+        A_plus, A_minus = amplitudes(acc)
 
         @test size(A_plus)  == (6, 3)
         @test size(A_minus) == (6, 3)
@@ -142,6 +144,71 @@ using QuadGK
         # Single bubble with no collisions: A_minus = conj(A_plus) because
         # the integrand for A− is the complex conjugate of A+ (α → −α reflects as well).
         @test isapprox(A_minus, conj.(A_plus), rtol=1e-6)
+    end
+
+    @testset "Generalized Ray-Casting API" begin
+        nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+        nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
+        snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+
+        scheme = UniformSphericalCapScheme(4, 8)
+        ks = [0.5, 1.0]
+
+        strategy_acc = ray_T_ij(
+            ks, snapshot, space, bc, RayCastingT_ij_CosineWeight(scheme); ΔV=1.0
+        )
+        cosine_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+
+        @test cosine_acc isa CosineAccumulant
+        @test amplitudes(cosine_acc)[1] ≈ amplitudes(strategy_acc)[1]
+        @test amplitudes(cosine_acc)[2] ≈ amplitudes(strategy_acc)[2]
+
+        kinetic_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        kinetic_cosine_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        potential_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            PotentialTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        constant_potential_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            PotentialTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        total_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            TotalStressTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        constant_total_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            TotalStressTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+
+        @test kinetic_acc isa ConstantAccumulant
+        @test potential_acc isa CosineAccumulant
+        @test constant_potential_acc isa ConstantAccumulant
+        @test size(amplitudes(kinetic_acc)) == (6, 2)
+        @test any(!iszero, amplitudes(kinetic_acc))
+        @test amplitudes(total_acc)[1] ≈ amplitudes(kinetic_cosine_acc)[1] .+ amplitudes(potential_acc)[1]
+        @test amplitudes(total_acc)[2] ≈ amplitudes(kinetic_cosine_acc)[2] .+ amplitudes(potential_acc)[2]
+        @test amplitudes(constant_total_acc) ≈ amplitudes(kinetic_acc) .+ amplitudes(constant_potential_acc)
+        @test_throws ArgumentError ray_T_ij(
+            [0.0], snapshot, space, bc,
+            PotentialTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        @test_throws ArgumentError ray_T_ij(
+            [0.0], snapshot, space, bc,
+            PotentialTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
     end
 
     # ═════════════════════════════════════════════════════════════════════════════

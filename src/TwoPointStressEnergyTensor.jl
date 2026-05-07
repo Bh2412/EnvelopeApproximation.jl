@@ -1,7 +1,7 @@
 module TwoPointStressEnergyTensorModule
 
 using EnvelopeApproximation.StressEnergyTensorComponents
-using EnvelopeApproximation.RayCastingStressEnergyTensor
+using EnvelopeApproximation.RayCastingStressEnergyTensor: RayCastingT_ij_CosineWeight, amplitudes, ray_T_ij
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
 using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
@@ -712,8 +712,10 @@ function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
 
     V_inv = 1.0 / volume(space)
 
-    A_plus, A_minus = ray_T_ij(ωs_f, snapshot, space, boundary_condition, strategy;
-                                ΔV=ΔV, bubble_indices=bubble_indices)
+    A_plus, A_minus = amplitudes(
+        ray_T_ij(ωs_f, snapshot, space, boundary_condition, strategy;
+                 ΔV=ΔV, bubble_indices=bubble_indices)
+    )
 
     result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
     for ki in 1:Nk

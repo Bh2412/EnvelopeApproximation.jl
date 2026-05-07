@@ -31,13 +31,33 @@ import EnvelopeApproximation.StressEnergyTensorComponents: contribution_indices
 using StaticArrays
 using LinearAlgebra
 
+abstract type StressTensorTerm end
+abstract type TimeWeight end
+abstract type Accumulant{W<:TimeWeight} end
+
+struct KineticTerm <: StressTensorTerm end
+struct PotentialTerm <: StressTensorTerm end
+struct TotalStressTerm <: StressTensorTerm end
+
+struct CosineWeight <: TimeWeight end
+struct ConstantWeight <: TimeWeight end
+
+struct CosineAccumulant <: Accumulant{CosineWeight}
+    A_plus::Matrix{ComplexF64}
+    A_minus::Matrix{ComplexF64}
+end
+
+struct ConstantAccumulant <: Accumulant{ConstantWeight}
+    A::Matrix{ComplexF64}
+end
+
 include("RayCastingStressEnergyTensor/SphericalQuadratureScheme.jl")
-include("RayCastingStressEnergyTensor/Strategies.jl")
 include("RayCastingStressEnergyTensor/CollisionSearch.jl")
-include("RayCastingStressEnergyTensor/I2Kernels.jl")  
+include("RayCastingStressEnergyTensor/I2Kernels.jl")
 include("RayCastingStressEnergyTensor/I3Kernels.jl")
-include("RayCastingStressEnergyTensor/PeriodicBlockers.jl")
 include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
+include("RayCastingStressEnergyTensor/Strategies.jl")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exports
@@ -45,40 +65,85 @@ include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
 export SphericalQuadratureScheme,
        RayCastingT_ij_CosineWeight,
        UniformSphericalCapScheme,
+       StressTensorTerm,
+       KineticTerm,
+       PotentialTerm,
+       TotalStressTerm,
+       TimeWeight,
+       CosineWeight,
+       ConstantWeight,
+       Accumulant,
+       CosineAccumulant,
+       ConstantAccumulant,
+       ModeWorkspace,
+       CosineModeWorkspace,
+       ConstantModeWorkspace,
+       amplitudes,
        ray_T_ij
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Ray-Casting T_ij Core Computation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+allocate_accumulant(::CosineWeight, ::StressTensorTerm, Nk::Int) =
+    CosineAccumulant(zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk))
+
+allocate_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
+    ConstantAccumulant(zeros(ComplexF64, 6, Nk))
+
+amplitudes(acc::CosineAccumulant) = (acc.A_plus, acc.A_minus)
+amplitudes(acc::ConstantAccumulant) = acc.A
+
+check_ks(::KineticTerm, ks) = nothing
+function check_ks(::Union{PotentialTerm, TotalStressTerm}, ks)
+    any(iszero, ks) && throw(ArgumentError("k = 0 is not supported for PotentialTerm/TotalStressTerm"))
+end
+
+function build_periodic_blockers(snapshot::BubblesSnapShot, space::BoxSpace,
+                                  v::Float64, t_end::Float64)
+    original_times = map(nuc -> nuc[:time], snapshot.nucleations)
+    original_centers = map(nuc -> nuc[:site].coordinates, snapshot.nucleations)
+
+    bubbles = Bubble[]
+    sizehint!(bubbles, length(original_centers))
+
+    D_ray_max = v * t_end
+    for i in eachindex(original_centers)
+        R_b_max = v * (t_end - original_times[i])
+        R_pad = D_ray_max + R_b_max
+        push!(bubbles, Bubble(Point3(original_centers[i]), R_pad))
+    end
+
+    origin_map = Int[]
+    padded_bubbles = append_periodic_bubbles!(bubbles, space, origin_map)
+
+    padded_times = original_times[origin_map]
+    return map((t, b) -> (time=t, site=b.center), padded_times, padded_bubbles)
+end
+
 function nucleation_ray_T_ij_contribution!(
+    accumulant::Accumulant{W},
+    weight::W,
+    term::StressTensorTerm,
     ks::AbstractVector{<:Real},
     source_nucleation_idx::Int,
     source_nucleation::Nucleation,
     blockers_soa::NucleationSoA,
     collision_ws::SourceCollisionWorkspace,
-    mode_ws::SourceModeWorkspace,
+    mode_ws::ModeWorkspace{W},
     markers::AbstractVector{SphericalQuadratureMarker},
     t_end::Float64;
     ΔV::Float64 = 1.0,
     v::Float64 = 1.0,
-    A_plus::Matrix{ComplexF64},
-    A_minus::Matrix{ComplexF64},
-)
+) where {W<:TimeWeight}
     t_i = source_nucleation[:time]
-    center_i = source_nucleation[:site].coordinates
-    xi, yi, zi = center_i[1], center_i[2], center_i[3]
 
     prepare_source_collision!(
         collision_ws, blockers_soa,
-        xi, yi, zi, t_i,
-        source_nucleation_idx, t_end, v,
+        source_nucleation, source_nucleation_idx, t_end, v,
     )
 
-    amp_base = (ΔV / 3.0) * v^3
-
-    resize!(mode_ws, length(ks))
-    prepare_source_phases!(mode_ws, ks, t_i, zi, amp_base)
+    prepare_source_modes!(mode_ws, weight, ks, source_nucleation)
 
     for marker in markers
         n̂ = marker.n̂
@@ -87,13 +152,15 @@ function nucleation_ray_T_ij_contribution!(
         τ_stop < 1.0e-12 && continue
 
         accumulate_marker_modes!(
-            A_plus,
-            A_minus,
+            accumulant,
+            weight,
+            term,
             ks,
             τ_stop,
             n̂,
             marker.weight,
             mode_ws,
+            ΔV,
             v,
         )
     end
@@ -102,70 +169,76 @@ function nucleation_ray_T_ij_contribution!(
 end
 
 """
-Compute the time-integrated amplitudes
+    ray_T_ij(ks, snapshot, space, boundary_condition;
+             term=KineticTerm(), weight=CosineWeight(),
+             quadrature=UniformSphericalCapScheme(16, 32),
+             ΔV=1.0, v=1.0, bubble_indices=:)
 
-  A±_I(k) = (ΔV/3) ∑_i ∑_a w_a n̂_{a,I} e^{-ikzᵢ} e^{±iktᵢ} v³
-            I₃(k(±1-vn̂_z); 0, τ_stop)
+Compute ray-cast time-integrated stress-tensor amplitudes.
 
-where I labels the six symmetric tensor components
-xx=1, xy=2, xz=3, yy=4, yz=5, zz=6.
+- `term`: local contribution, e.g. `KineticTerm`, `PotentialTerm`, `TotalStressTerm`
+- `weight`: time weighting, e.g. `CosineWeight` or `ConstantWeight`
+- `quadrature`: ray directions
 
-Returns two 6×Nk matrices, `A_plus` and `A_minus`, whose columns correspond
-to individual k values.
-
-For each k index q, the cosine-weighted tensor correlator is the 6×6 matrix
-
-  D[:, :, q] =
-      (1/(2V)) * (
-          A_plus[:, q]  * A_plus[:, q]' +
-          A_minus[:, q] * A_minus[:, q]'
-      )
-
-where `'` denotes complex conjugate transpose.
+Returns an `Accumulant`. Use `amplitudes(acc)` to access the stored arrays.
 """
+function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
+                  space::BoxSpace, boundary_condition::Periodic;
+                  term::StressTensorTerm=KineticTerm(),
+                  weight::TimeWeight=CosineWeight(),
+                  quadrature::SphericalQuadratureScheme=UniformSphericalCapScheme(16, 32),
+                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)
+    return ray_T_ij(
+        ks, snapshot, space, boundary_condition,
+        term, weight, quadrature;
+        ΔV=ΔV, v=v, bubble_indices=bubble_indices,
+    )
+end
+
+function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
+                  space::BoxSpace, ::Periodic,
+                  term::StressTensorTerm,
+                  weight::W,
+                  quadrature::SphericalQuadratureScheme;
+                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TimeWeight}
+    check_ks(term, ks)
+    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
+    Nk = length(ks_f)
+    accumulant = allocate_accumulant(weight, term, Nk)
+
+    isempty(snapshot.nucleations) && return accumulant
+
+    markers = get_markers(quadrature)
+    t_end = snapshot.t
+    blocker_nucleations = build_periodic_blockers(snapshot, space, v, t_end)
+    contributing_indices = contribution_indices(length(snapshot.nucleations), bubble_indices)
+
+    blockers_soa = NucleationSoA(blocker_nucleations)
+    collision_ws = SourceCollisionWorkspace(length(blocker_nucleations))
+    mode_ws = ModeWorkspace(weight, Nk)
+
+    for idx in contributing_indices
+        nuc = snapshot.nucleations[idx]
+
+        nucleation_ray_T_ij_contribution!(
+            accumulant, weight, term, ks_f,
+            idx, nuc, blockers_soa, collision_ws, mode_ws, markers, t_end;
+            ΔV=ΔV, v=v,
+        )
+    end
+
+    return accumulant
+end
+
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   space::BoxSpace, boundary_condition::Periodic,
                   strategy::RayCastingT_ij_CosineWeight;
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)::Tuple{Matrix{ComplexF64}, Matrix{ComplexF64}}
-    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    Nk = length(ks_f)
-
-    if isempty(snapshot.nucleations)
-        return zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk)
-    end
-
-    A_plus  = zeros(ComplexF64, 6, Nk)
-    A_minus = zeros(ComplexF64, 6, Nk)
-    markers = strategy.markers
-
-    t_end = snapshot.t
-    full_nucleations = periodic_nucleations(snapshot.nucleations, v, 0.0, t_end, space)
-    contributing_indices = contribution_indices(length(snapshot.nucleations), bubble_indices)
-
-    blockers_soa = NucleationSoA(full_nucleations)
-    collision_ws = SourceCollisionWorkspace(length(full_nucleations))
-    mode_ws = SourceModeWorkspace(Nk)
-
-    for idx in contributing_indices
-        nuc = full_nucleations[idx]
-
-        nucleation_ray_T_ij_contribution!(
-            ks_f,
-            idx,
-            nuc,
-            blockers_soa,
-            collision_ws,
-            mode_ws,
-            markers,
-            t_end;
-            ΔV = ΔV,
-            v = v,
-            A_plus = A_plus,
-            A_minus = A_minus,
-        )
-    end
-    
-    return A_plus, A_minus
+                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)
+    return ray_T_ij(
+        ks, snapshot, space, boundary_condition,
+        KineticTerm(), CosineWeight(), strategy.quadrature;
+        ΔV=ΔV, v=v, bubble_indices=bubble_indices,
+    )
 end
 
 end # module RayCastingStressEnergyTensor
