@@ -1,0 +1,349 @@
+"""
+Unit tests for ray-casting T_ij computation.
+"""
+
+using EnvelopeApproximation
+using EnvelopeApproximation.RayCastingStressEnergyTensor
+import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, collision_time, get_markers, SphericalQuadratureMarker, compute_sincos_grid!,
+    KineticTerm, PotentialTerm, TotalStressTerm
+using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BubblesEvolution
+using EnvelopeApproximation.Spaces
+using EnvelopeApproximation.BoundaryConditions
+using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor,
+    TimeIntegratedTwoPointStressEnergyTensor
+using Test
+using StaticArrays
+using LinearAlgebra
+using QuadGK
+
+@testset "Ray Casting Stress Energy Tensor" begin
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Test: I₃ Analytic Integral
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "I3 Integral Evaluation" begin
+        # α = 0 case
+        @test isapprox(I3(0.0, 0.0, 1.0), (1.0^4 - 0.0^4) / 4.0, rtol=1e-10)
+        @test isapprox(imag(I3(0.0, 0.0, 1.0)), 0.0, atol=1e-14)
+
+        # Near-zero α uses Taylor series; should match α = 0 closely
+        @test isapprox(I3(1e-12, 0.0, 1.0), I3(0.0, 0.0, 1.0), rtol=1e-8)
+
+        # Swap limits changes sign
+        @test isapprox(I3(1.5, 0.5, 1.5), -I3(1.5, 1.5, 0.5), rtol=1e-10)
+
+        # Correctness against numerical quadrature — this catches wrong signs in the
+        # antiderivative formula.
+        for (α, a, b) in [(2.0, 0.0, 1.0), (0.5, 0.3, 2.0), (-1.0, 0.0, 3.0), (5.0, 1.0, 2.0)]
+            ref, _ = quadgk(τ -> τ^3 * cis(α * τ), a, b; rtol=1e-12)
+            @test isapprox(I3(α, a, b), ref, rtol=1e-8) broken=false
+        end
+    end
+
+    @testset "I2 Integral Evaluation" begin
+        # α = 0 case
+        @test isapprox(I2(0.0, 0.0, 1.0), (1.0^3 - 0.0^3) / 3.0, rtol=1e-10)
+        @test isapprox(imag(I2(0.0, 0.0, 1.0)), 0.0, atol=1e-14)
+
+        # Near-zero α uses Taylor series; should match α = 0 closely
+        @test isapprox(I2(1e-12, 0.0, 1.0), I2(0.0, 0.0, 1.0), rtol=1e-8)
+
+        # Swap limits changes sign
+        @test isapprox(I2(1.5, 0.5, 1.5), -I2(1.5, 1.5, 0.5), rtol=1e-10)
+
+        # Correctness against numerical quadrature — this catches wrong signs in the
+        # antiderivative formula.
+        for (α, a, b) in [(2.0, 0.0, 1.0), (0.5, 0.3, 2.0), (-1.0, 0.0, 3.0), (5.0, 1.0, 2.0)]
+            ref, _ = quadgk(τ -> τ^2 * cis(α * τ), a, b; rtol=1e-12)
+            @test isapprox(I2(α, a, b), ref, rtol=1e-8) broken=false
+        end
+    end
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Test: Collision Time Computation
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "Collision Time Computation" begin
+        v = 1.0
+
+        # Non-degenerate head-on case:
+        #   bubble i at origin nucleating at t=0
+        #   bubble j at (3,0,0) nucleating at t=-1  (radius=1 at t=0, so no overlap)
+        #   ray n̂=(1,0,0): wall of i meets wall of j at τ=1
+        #     check: |vτ n̂ − (3,0,0)| = |(1,0,0)−(3,0,0)| = 2 = v(1+1) ✓
+        center_i = SVector(0.0, 0.0, 0.0)
+        center_j = SVector(3.0, 0.0, 0.0)
+        t_i, t_j = 0.0, -1.0
+        n̂ = SVector(1.0, 0.0, 0.0)
+
+        τ = collision_time(center_i, center_j, n̂, t_i, t_j, v)
+        @test τ !== nothing
+        @test isapprox(τ, 1.0, rtol=1e-10)
+
+        # Ray pointing away: no collision
+        n̂_away = SVector(-1.0, 0.0, 0.0)
+        @test collision_time(center_i, center_j, n̂_away, t_i, t_j, v) === nothing
+
+        # Same-time nucleation: two bubbles at t=0, separated by 4 along x.
+        # Wall elements along +x meet at τ=2 (each travels half the gap).
+        center_k = SVector(4.0, 0.0, 0.0)
+        τ2 = collision_time(center_i, center_k, SVector(1.0, 0.0, 0.0), 0.0, 0.0, v)
+        @test τ2 !== nothing
+        @test isapprox(τ2, 2.0, rtol=1e-10)
+
+        # Later-nucleating bubble: bubble j nucleates at t=1 > t_i=0.
+        # Collision must not be reported before t_j = t=1, i.e. τ ≥ 1.
+        center_l = SVector(5.0, 0.0, 0.0)
+        τ3 = collision_time(center_i, center_l, SVector(1.0, 0.0, 0.0), 0.0, 1.0, v)
+        @test τ3 === nothing || τ3 >= 1.0 - 1e-10
+    end
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Test: Quadrature Scheme
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "UniformSphericalCapScheme" begin
+        scheme = UniformSphericalCapScheme(3, 4)
+        markers = get_markers(scheme)
+
+        @test length(markers) == 12
+
+        for marker in markers
+            @test isapprox(norm(marker.n̂), 1.0, rtol=1e-10)
+            @test marker.weight > 0.0
+        end
+
+        # Weights must sum to 4π (they are Δμ·Δϕ cells covering the full sphere)
+        @test isapprox(sum(m.weight for m in markers), 4π, rtol=1e-10)
+    end
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Test: ray_T_ij returns a (A_plus, A_minus) tuple of correct shape
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "Single Bubble Ray-Casting" begin
+        nuc = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+        snapshot = BubblesSnapShot([nuc], 1.0)
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+
+        scheme = UniformSphericalCapScheme(4, 8)
+        strategy = RayCastingSphericalQuadrature(scheme)
+
+        ks = [0.5, 1.0, 2.0]
+        acc = ray_T_ij(ks, snapshot, space, bc, KineticTerm(), CosineWeight(), scheme; ΔV=1.0)
+        A_plus, A_minus = amplitudes(acc)
+
+        @test size(A_plus)  == (6, 3)
+        @test size(A_minus) == (6, 3)
+
+        # A_plus and A_minus must differ (they carry opposite phase e^{+ikt} vs e^{-ikt})
+        @test !isapprox(A_plus, A_minus, rtol=1e-6)
+
+        # Single bubble with no collisions: A_minus = conj(A_plus) because
+        # the integrand for A− is the complex conjugate of A+ (α → −α reflects as well).
+        @test isapprox(A_minus, conj.(A_plus), rtol=1e-6)
+    end
+
+    @testset "Generalized Ray-Casting API" begin
+        nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+        nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
+        snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+
+        scheme = UniformSphericalCapScheme(4, 8)
+        ks = [0.5, 1.0]
+
+        cosine_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+
+        @test cosine_acc isa CosineAccumulant
+
+        kinetic_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        kinetic_cosine_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            KineticTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        potential_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            PotentialTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        constant_potential_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            PotentialTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        total_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            TotalStressTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+        constant_total_acc = ray_T_ij(
+            ks, snapshot, space, bc,
+            TotalStressTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+
+        @test kinetic_acc isa ConstantAccumulant
+        @test potential_acc isa CosineAccumulant
+        @test constant_potential_acc isa ConstantAccumulant
+        @test size(amplitudes(kinetic_acc)) == (6, 2)
+        @test any(!iszero, amplitudes(kinetic_acc))
+        @test amplitudes(total_acc)[1] ≈ amplitudes(kinetic_cosine_acc)[1] .+ amplitudes(potential_acc)[1]
+        @test amplitudes(total_acc)[2] ≈ amplitudes(kinetic_cosine_acc)[2] .+ amplitudes(potential_acc)[2]
+        @test amplitudes(constant_total_acc) ≈ amplitudes(kinetic_acc) .+ amplitudes(constant_potential_acc)
+        @test_throws ArgumentError ray_T_ij(
+            [0.0], snapshot, space, bc,
+            PotentialTerm(), ConstantWeight(), scheme; ΔV=1.0
+        )
+        @test_throws ArgumentError ray_T_ij(
+            [0.0], snapshot, space, bc,
+            PotentialTerm(), CosineWeight(), scheme; ΔV=1.0
+        )
+
+        strategy = RayCastingSphericalQuadrature(scheme)
+        for weight in (CosineWeight(), ConstantWeight())
+            for term in (KineticTerm(), TotalStressTerm())
+                result = TimeIntegratedTwoPointStressEnergyTensor(
+                    ks, snapshot, space, bc, strategy, weight; term=term, ΔV=1.0
+                )
+                @test size(result) == (6, 6, 2)
+                @test any(!iszero, result)
+                for ki in 1:2
+                    M = result[:, :, ki]
+                    @test isapprox(M, M', rtol=1e-8)
+                    for ij in 1:6
+                        @test real(M[ij, ij]) >= -1e-12
+                    end
+                end
+            end
+        end
+    end
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Test: Two-point correlator is Hermitian and has positive diagonal
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "RayCastingCosineTimeIntegratedTwoPointTensor" begin
+        nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+        nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
+        snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+
+        scheme = UniformSphericalCapScheme(4, 8)
+        strategy = RayCastingSphericalQuadrature(scheme)
+
+        ks = [0.5, 1.0]
+        result = RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
+            ks, snapshot, space, bc, strategy; ΔV=1.0
+        )
+
+        @test size(result) == (6, 6, 2)
+        @test any(!iszero, result)
+
+        for ki in 1:2
+            M = result[:, :, ki]
+            # Hermitian symmetry: M[i,j] = conj(M[j,i])
+            @test isapprox(M, M', rtol=1e-8)
+            # Diagonal entries are real non-negative (positive semi-definite diagonal)
+            for ij in 1:6
+                @test real(M[ij, ij]) >= -1e-12
+            end
+        end
+    end
+
+@testset "SinCos Grid" begin
+
+    function reference_sincos(ks, c_val, τ_stop)
+        multiplier = c_val * τ_stop
+        S = [sin(k * multiplier) for k in ks]
+        C = [cos(k * multiplier) for k in ks]
+        return S, C
+    end
+
+    @testset "basic correctness" begin
+        ks = range(0.1, 5.0, length=100)
+        S = Vector{Float64}(undef, 100)
+        C = Vector{Float64}(undef, 100)
+        compute_sincos_grid!(S, C, ks, 1.5, 2.3)
+        S_ref, C_ref = reference_sincos(ks, 1.5, 2.3)
+        @test S ≈ S_ref atol=1e-12
+        @test C ≈ C_ref atol=1e-12
+    end
+
+    @testset "single element" begin
+        ks = range(1.0, 1.0, length=1)
+        S = Vector{Float64}(undef, 1)
+        C = Vector{Float64}(undef, 1)
+        compute_sincos_grid!(S, C, ks, 2.0, 0.5)
+        @test S[1] ≈ sin(1.0 * 2.0 * 0.5) atol=1e-15
+        @test C[1] ≈ cos(1.0 * 2.0 * 0.5) atol=1e-15
+    end
+
+    @testset "zero start" begin
+        ks = range(0.0, 3.0, length=50)
+        S = Vector{Float64}(undef, 50)
+        C = Vector{Float64}(undef, 50)
+        compute_sincos_grid!(S, C, ks, 1.0, 1.0)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        @test S ≈ S_ref atol=1e-12
+        @test C ≈ C_ref atol=1e-12
+    end
+
+    @testset "phase accumulation across reset boundary" begin
+        # Use a length > reset_interval to exercise the reset path
+        ks = range(0.5, 4.0, length=200)
+        S = Vector{Float64}(undef, 200)
+        C = Vector{Float64}(undef, 200)
+        compute_sincos_grid!(S, C, ks, 0.8, 3.1)
+        S_ref, C_ref = reference_sincos(ks, 0.8, 3.1)
+        @test S ≈ S_ref atol=1e-10
+        @test C ≈ C_ref atol=1e-10
+    end
+
+    @testset "custom reset_interval" begin
+        ks = range(1.0, 10.0, length=300)
+        S1 = Vector{Float64}(undef, 300)
+        C1 = Vector{Float64}(undef, 300)
+        S2 = Vector{Float64}(undef, 300)
+        C2 = Vector{Float64}(undef, 300)
+        compute_sincos_grid!(S1, C1, ks, 1.0, 1.0; reset_interval=16)
+        compute_sincos_grid!(S2, C2, ks, 1.0, 1.0; reset_interval=128)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        @test S1 ≈ S_ref atol=1e-10
+        @test C1 ≈ C_ref atol=1e-10
+        @test S2 ≈ S_ref atol=1e-10
+        @test C2 ≈ C_ref atol=1e-10
+    end
+
+    @testset "no reset (reset_interval=0)" begin
+        ks = range(0.1, 2.0, length=100)
+        S = Vector{Float64}(undef, 100)
+        C = Vector{Float64}(undef, 100)
+        compute_sincos_grid!(S, C, ks, 1.0, 1.0; reset_interval=0)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        # Pure recurrence accumulates drift — use a looser tolerance
+        @test S ≈ S_ref atol=1e-10
+        @test C ≈ C_ref atol=1e-10
+    end
+
+    @testset "dimension mismatch throws" begin
+        ks = range(0.0, 1.0, length=10)
+        S = Vector{Float64}(undef, 9)
+        C = Vector{Float64}(undef, 10)
+        @test_throws DimensionMismatch compute_sincos_grid!(S, C, ks, 1.0, 1.0)
+        S2 = Vector{Float64}(undef, 10)
+        C2 = Vector{Float64}(undef, 9)
+        @test_throws DimensionMismatch compute_sincos_grid!(S2, C2, ks, 1.0, 1.0)
+    end
+
+    end
+
+end  # @testset
+;

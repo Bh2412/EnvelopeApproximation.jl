@@ -24,6 +24,11 @@ include("StressEnergyTensorComponents.jl")
 
 include("StressEnergyTensorContractions.jl")
 
+include("TemporalWeights.jl")
+export TemporalWeight, CosineWeight, ConstantWeight
+
+include("RayCastingStressEnergyTensor.jl")
+
 include("GravitationalWaves.jl")
 
 include("TwoPointStressEnergyTensor.jl")

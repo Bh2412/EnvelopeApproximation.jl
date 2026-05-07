@@ -1,19 +1,19 @@
 module TwoPointStressEnergyTensorModule
 
+import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
 using EnvelopeApproximation.StressEnergyTensorComponents
+using EnvelopeApproximation.RayCastingStressEnergyTensor: RayCastingSphericalQuadrature,
+    StressTensorTerm, KineticTerm, amplitudes, ray_T_ij
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
-using EnvelopeApproximation.Spaces: AbstractSpace, volume
-using EnvelopeApproximation.BoundaryConditions: BoundaryCondition
+using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
+using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
 using QuadGK
 
 export TwoPointStressEnergyTensor,
     TemporalWeight, CosineWeight, ConstantWeight,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
-    TimeIntegratedTwoPointStressEnergyTensor
-
-abstract type TemporalWeight end
-struct CosineWeight <: TemporalWeight end
-struct ConstantWeight <: TemporalWeight end
+    TimeIntegratedTwoPointStressEnergyTensor,
+    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
 
 abstract type TimeIntegrationStrategy end
 
@@ -675,6 +675,123 @@ function TimeIntegratedTwoPointStressEnergyTensor(
     UniformGridConstantIntegratedTwoPointStressEnergyTensor(
         ωs, snapshot, space, boundary_condition, spatial_strategy;
         N_t=time_strategy.N_t, ΔV=ΔV, bubble_indices=bubble_indices
+    )
+end
+
+# ── RayCastingSphericalQuadrature ────────────────────────────────────────────
+
+"""
+    TimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space, boundary_condition,
+        strategy::RayCastingSphericalQuadrature, weight::CosineWeight;
+        term=KineticTerm(), ΔV=1.0, bubble_indices=:)
+
+Ray-casting two-point correlator with cosine temporal weight:
+
+  (1/2V) [ A⁺_{ij}(k) conj(A⁺_{lm}(k)) + A⁻_{ij}(k) conj(A⁻_{lm}(k)) ]
+
+where A± are computed via ray casting with analytic τ-integrals. Pass `term=TotalStressTerm()`
+to include both kinetic and potential contributions.
+
+Returns a 6×6×Nk array of ComplexF64.
+"""
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::BoxSpace,
+    boundary_condition::Periodic,
+    strategy::RayCastingSphericalQuadrature,
+    ::CosineWeight;
+    term::StressTensorTerm = KineticTerm(),
+    ΔV::Float64 = 1.0,
+    bubble_indices = :
+)
+    ωs_f = ωs isa AbstractRange ? ωs : collect(Float64, ωs)
+    Nk = length(ωs_f)
+
+    isempty(snapshot.nucleations) && return zeros(ComplexF64, 6, 6, Nk)
+
+    V_inv = 1.0 / volume(space)
+    A_plus, A_minus = amplitudes(
+        ray_T_ij(ωs_f, snapshot, space, boundary_condition,
+                 term, CosineWeight(), strategy.quadrature;
+                 ΔV=ΔV, bubble_indices=bubble_indices)
+    )
+
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+    for ki in 1:Nk
+        ap = A_plus[:,  ki]
+        am = A_minus[:, ki]
+        result[:, :, ki] = (ap * ap' .+ am * am') .* (V_inv / 2)
+    end
+
+    return result
+end
+
+"""
+    TimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space, boundary_condition,
+        strategy::RayCastingSphericalQuadrature, weight::ConstantWeight;
+        term=KineticTerm(), ΔV=1.0, bubble_indices=:)
+
+Ray-casting two-point correlator with constant temporal weight:
+
+  (1/V) A⁰_{ij}(k) conj(A⁰_{lm}(k))
+
+where A⁰ is computed via ray casting with analytic τ-integrals and no oscillating phase.
+Pass `term=TotalStressTerm()` to include both kinetic and potential contributions.
+
+Returns a 6×6×Nk array of ComplexF64.
+"""
+function TimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::BoxSpace,
+    boundary_condition::Periodic,
+    strategy::RayCastingSphericalQuadrature,
+    ::ConstantWeight;
+    term::StressTensorTerm = KineticTerm(),
+    ΔV::Float64 = 1.0,
+    bubble_indices = :
+)
+    ωs_f = ωs isa AbstractRange ? ωs : collect(Float64, ωs)
+    Nk = length(ωs_f)
+
+    isempty(snapshot.nucleations) && return zeros(ComplexF64, 6, 6, Nk)
+
+    V_inv = 1.0 / volume(space)
+    A = amplitudes(
+        ray_T_ij(ωs_f, snapshot, space, boundary_condition,
+                 term, ConstantWeight(), strategy.quadrature;
+                 ΔV=ΔV, bubble_indices=bubble_indices)
+    )
+
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+    for ki in 1:Nk
+        a = A[:, ki]
+        result[:, :, ki] = (a * a') .* V_inv
+    end
+
+    return result
+end
+
+"""
+    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space,
+        boundary_condition, strategy; ΔV=1.0, bubble_indices=:)
+
+Convenience wrapper for `TimeIntegratedTwoPointStressEnergyTensor` with `CosineWeight`
+and `KineticTerm`. See that function for full documentation.
+"""
+function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
+    ωs::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::BoxSpace,
+    boundary_condition::Periodic,
+    strategy::RayCastingSphericalQuadrature;
+    ΔV::Float64 = 1.0,
+    bubble_indices = :
+)
+    return TimeIntegratedTwoPointStressEnergyTensor(
+        ωs, snapshot, space, boundary_condition, strategy, CosineWeight();
+        term=KineticTerm(), ΔV=ΔV, bubble_indices=bubble_indices
     )
 end
 
