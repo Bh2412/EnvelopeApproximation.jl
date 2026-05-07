@@ -34,6 +34,7 @@ using LinearAlgebra
 include("RayCastingStressEnergyTensor/SphericalQuadratureScheme.jl")
 include("RayCastingStressEnergyTensor/Strategies.jl")
 include("RayCastingStressEnergyTensor/CollisionSearch.jl")
+include("RayCastingStressEnergyTensor/I2Kernels.jl")  
 include("RayCastingStressEnergyTensor/I3Kernels.jl")
 include("RayCastingStressEnergyTensor/PeriodicBlockers.jl")
 include("RayCastingStressEnergyTensor/ModeAccumulation.jl")

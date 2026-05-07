@@ -4,7 +4,7 @@ Unit tests for ray-casting T_ij computation.
 
 using EnvelopeApproximation
 using EnvelopeApproximation.RayCastingStressEnergyTensor
-import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, collision_time, get_markers, SphericalQuadratureMarker
+import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, collision_time, get_markers, SphericalQuadratureMarker, compute_sincos_grid!
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
@@ -37,6 +37,25 @@ using QuadGK
         for (α, a, b) in [(2.0, 0.0, 1.0), (0.5, 0.3, 2.0), (-1.0, 0.0, 3.0), (5.0, 1.0, 2.0)]
             ref, _ = quadgk(τ -> τ^3 * cis(α * τ), a, b; rtol=1e-12)
             @test isapprox(I3(α, a, b), ref, rtol=1e-8) broken=false
+        end
+    end
+
+    @testset "I2 Integral Evaluation" begin
+        # α = 0 case
+        @test isapprox(I2(0.0, 0.0, 1.0), (1.0^3 - 0.0^3) / 3.0, rtol=1e-10)
+        @test isapprox(imag(I2(0.0, 0.0, 1.0)), 0.0, atol=1e-14)
+
+        # Near-zero α uses Taylor series; should match α = 0 closely
+        @test isapprox(I2(1e-12, 0.0, 1.0), I2(0.0, 0.0, 1.0), rtol=1e-8)
+
+        # Swap limits changes sign
+        @test isapprox(I2(1.5, 0.5, 1.5), -I2(1.5, 1.5, 0.5), rtol=1e-10)
+
+        # Correctness against numerical quadrature — this catches wrong signs in the
+        # antiderivative formula.
+        for (α, a, b) in [(2.0, 0.0, 1.0), (0.5, 0.3, 2.0), (-1.0, 0.0, 3.0), (5.0, 1.0, 2.0)]
+            ref, _ = quadgk(τ -> τ^2 * cis(α * τ), a, b; rtol=1e-12)
+            @test isapprox(I2(α, a, b), ref, rtol=1e-8) broken=false
         end
     end
 
@@ -158,4 +177,92 @@ using QuadGK
         end
     end
 
-end;  # @testset
+@testset "SinCos Grid" begin
+
+    function reference_sincos(ks, c_val, τ_stop)
+        multiplier = c_val * τ_stop
+        S = [sin(k * multiplier) for k in ks]
+        C = [cos(k * multiplier) for k in ks]
+        return S, C
+    end
+
+    @testset "basic correctness" begin
+        ks = range(0.1, 5.0, length=100)
+        S = Vector{Float64}(undef, 100)
+        C = Vector{Float64}(undef, 100)
+        compute_sincos_grid!(S, C, ks, 1.5, 2.3)
+        S_ref, C_ref = reference_sincos(ks, 1.5, 2.3)
+        @test S ≈ S_ref atol=1e-12
+        @test C ≈ C_ref atol=1e-12
+    end
+
+    @testset "single element" begin
+        ks = range(1.0, 1.0, length=1)
+        S = Vector{Float64}(undef, 1)
+        C = Vector{Float64}(undef, 1)
+        compute_sincos_grid!(S, C, ks, 2.0, 0.5)
+        @test S[1] ≈ sin(1.0 * 2.0 * 0.5) atol=1e-15
+        @test C[1] ≈ cos(1.0 * 2.0 * 0.5) atol=1e-15
+    end
+
+    @testset "zero start" begin
+        ks = range(0.0, 3.0, length=50)
+        S = Vector{Float64}(undef, 50)
+        C = Vector{Float64}(undef, 50)
+        compute_sincos_grid!(S, C, ks, 1.0, 1.0)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        @test S ≈ S_ref atol=1e-12
+        @test C ≈ C_ref atol=1e-12
+    end
+
+    @testset "phase accumulation across reset boundary" begin
+        # Use a length > reset_interval to exercise the reset path
+        ks = range(0.5, 4.0, length=200)
+        S = Vector{Float64}(undef, 200)
+        C = Vector{Float64}(undef, 200)
+        compute_sincos_grid!(S, C, ks, 0.8, 3.1)
+        S_ref, C_ref = reference_sincos(ks, 0.8, 3.1)
+        @test S ≈ S_ref atol=1e-10
+        @test C ≈ C_ref atol=1e-10
+    end
+
+    @testset "custom reset_interval" begin
+        ks = range(1.0, 10.0, length=300)
+        S1 = Vector{Float64}(undef, 300)
+        C1 = Vector{Float64}(undef, 300)
+        S2 = Vector{Float64}(undef, 300)
+        C2 = Vector{Float64}(undef, 300)
+        compute_sincos_grid!(S1, C1, ks, 1.0, 1.0; reset_interval=16)
+        compute_sincos_grid!(S2, C2, ks, 1.0, 1.0; reset_interval=128)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        @test S1 ≈ S_ref atol=1e-10
+        @test C1 ≈ C_ref atol=1e-10
+        @test S2 ≈ S_ref atol=1e-10
+        @test C2 ≈ C_ref atol=1e-10
+    end
+
+    @testset "no reset (reset_interval=0)" begin
+        ks = range(0.1, 2.0, length=100)
+        S = Vector{Float64}(undef, 100)
+        C = Vector{Float64}(undef, 100)
+        compute_sincos_grid!(S, C, ks, 1.0, 1.0; reset_interval=0)
+        S_ref, C_ref = reference_sincos(ks, 1.0, 1.0)
+        # Pure recurrence accumulates drift — use a looser tolerance
+        @test S ≈ S_ref atol=1e-10
+        @test C ≈ C_ref atol=1e-10
+    end
+
+    @testset "dimension mismatch throws" begin
+        ks = range(0.0, 1.0, length=10)
+        S = Vector{Float64}(undef, 9)
+        C = Vector{Float64}(undef, 10)
+        @test_throws DimensionMismatch compute_sincos_grid!(S, C, ks, 1.0, 1.0)
+        S2 = Vector{Float64}(undef, 10)
+        C2 = Vector{Float64}(undef, 9)
+        @test_throws DimensionMismatch compute_sincos_grid!(S2, C2, ks, 1.0, 1.0)
+    end
+
+    end
+
+end  # @testset
+;
