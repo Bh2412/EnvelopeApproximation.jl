@@ -201,10 +201,11 @@ function prepare_source_collision!(
     end
 end
 
-function find_collision_time(n1::Float64, n2::Float64, n3::Float64,
+function find_collision_time(n̂:: SVector{3,Float64},
                              ws::SourceCollisionWorkspace,
                              t_i::Float64, t_end::Float64, v::Float64)::Float64
     τ_min = t_end - t_i
+    n1, n2, n3 = n̂
 
     @inbounds for j in ws.candidates
         ndotdx = n1*ws.dx[j] + n2*ws.dy[j] + n3*ws.dz[j]

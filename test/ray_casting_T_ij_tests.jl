@@ -158,6 +158,4 @@ using QuadGK
         end
     end
 
-end  # @testset
-
-println("All ray-casting tests passed!")
+end;  # @testset

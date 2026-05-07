@@ -705,7 +705,7 @@ function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
     ΔV::Float64 = 1.0,
     bubble_indices = :
 )::Array{ComplexF64, 3}
-    ωs_f = collect(Float64, ωs)
+    ωs_f = ωs isa AbstractRange ? ωs : collect(Float64, ωs)
     Nk = length(ωs_f)
 
     isempty(snapshot.nucleations) && return zeros(ComplexF64, 6, 6, Nk)

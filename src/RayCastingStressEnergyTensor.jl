@@ -81,19 +81,18 @@ function nucleation_ray_T_ij_contribution!(
 
     for marker in markers
         n̂ = marker.n̂
-        n1, n2, n3 = n̂[1], n̂[2], n̂[3]
 
-        τ_stop = find_collision_time(n1, n2, n3, collision_ws, t_i, t_end, v)
+        τ_stop = find_collision_time(n̂, collision_ws, t_i, t_end, v)
         τ_stop < 1.0e-12 && continue
 
         accumulate_marker_modes!(
-            A_plus, A_minus,
+            A_plus,
+            A_minus,
             ks,
             τ_stop,
-            n1, n2, n3,
+            n̂,
             marker.weight,
-            mode_ws.phase_plus,
-            mode_ws.phase_minus,
+            mode_ws,
             v,
         )
     end
