@@ -5,12 +5,13 @@ Unit tests for ray-casting T_ij computation.
 using EnvelopeApproximation
 using EnvelopeApproximation.RayCastingStressEnergyTensor
 import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, collision_time, get_markers, SphericalQuadratureMarker, compute_sincos_grid!,
-    CosineWeight, ConstantWeight, KineticTerm, PotentialTerm, TotalStressTerm
+    KineticTerm, PotentialTerm, TotalStressTerm
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
-using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
+using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor,
+    TimeIntegratedTwoPointStressEnergyTensor
 using Test
 using StaticArrays
 using LinearAlgebra
@@ -129,10 +130,10 @@ using QuadGK
         bc = Periodic()
 
         scheme = UniformSphericalCapScheme(4, 8)
-        strategy = RayCastingT_ij_CosineWeight(scheme)
+        strategy = RayCastingSphericalQuadrature(scheme)
 
         ks = [0.5, 1.0, 2.0]
-        acc = ray_T_ij(ks, snapshot, space, bc, strategy; ΔV=1.0)
+        acc = ray_T_ij(ks, snapshot, space, bc, KineticTerm(), CosineWeight(), scheme; ΔV=1.0)
         A_plus, A_minus = amplitudes(acc)
 
         @test size(A_plus)  == (6, 3)
@@ -156,17 +157,12 @@ using QuadGK
         scheme = UniformSphericalCapScheme(4, 8)
         ks = [0.5, 1.0]
 
-        strategy_acc = ray_T_ij(
-            ks, snapshot, space, bc, RayCastingT_ij_CosineWeight(scheme); ΔV=1.0
-        )
         cosine_acc = ray_T_ij(
             ks, snapshot, space, bc,
             KineticTerm(), CosineWeight(), scheme; ΔV=1.0
         )
 
         @test cosine_acc isa CosineAccumulant
-        @test amplitudes(cosine_acc)[1] ≈ amplitudes(strategy_acc)[1]
-        @test amplitudes(cosine_acc)[2] ≈ amplitudes(strategy_acc)[2]
 
         kinetic_acc = ray_T_ij(
             ks, snapshot, space, bc,
@@ -209,6 +205,24 @@ using QuadGK
             [0.0], snapshot, space, bc,
             PotentialTerm(), CosineWeight(), scheme; ΔV=1.0
         )
+
+        strategy = RayCastingSphericalQuadrature(scheme)
+        for weight in (CosineWeight(), ConstantWeight())
+            for term in (KineticTerm(), TotalStressTerm())
+                result = TimeIntegratedTwoPointStressEnergyTensor(
+                    ks, snapshot, space, bc, strategy, weight; term=term, ΔV=1.0
+                )
+                @test size(result) == (6, 6, 2)
+                @test any(!iszero, result)
+                for ki in 1:2
+                    M = result[:, :, ki]
+                    @test isapprox(M, M', rtol=1e-8)
+                    for ij in 1:6
+                        @test real(M[ij, ij]) >= -1e-12
+                    end
+                end
+            end
+        end
     end
 
     # ═════════════════════════════════════════════════════════════════════════════
@@ -223,7 +237,7 @@ using QuadGK
         bc = Periodic()
 
         scheme = UniformSphericalCapScheme(4, 8)
-        strategy = RayCastingT_ij_CosineWeight(scheme)
+        strategy = RayCastingSphericalQuadrature(scheme)
 
         ks = [0.5, 1.0]
         result = RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(

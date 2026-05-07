@@ -22,6 +22,7 @@ where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 """
 module RayCastingStressEnergyTensor
 
+import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Bubble, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
@@ -32,15 +33,11 @@ using StaticArrays
 using LinearAlgebra
 
 abstract type StressTensorTerm end
-abstract type TimeWeight end
-abstract type Accumulant{W<:TimeWeight} end
+abstract type Accumulant{W<:TemporalWeight} end
 
 struct KineticTerm <: StressTensorTerm end
 struct PotentialTerm <: StressTensorTerm end
 struct TotalStressTerm <: StressTensorTerm end
-
-struct CosineWeight <: TimeWeight end
-struct ConstantWeight <: TimeWeight end
 
 struct CosineAccumulant <: Accumulant{CosineWeight}
     A_plus::Matrix{ComplexF64}
@@ -63,13 +60,13 @@ include("RayCastingStressEnergyTensor/Strategies.jl")
 # Exports
 # ══════════════════════════════════
 export SphericalQuadratureScheme,
-       RayCastingT_ij_CosineWeight,
+       RayCastingSphericalQuadrature,
        UniformSphericalCapScheme,
        StressTensorTerm,
        KineticTerm,
        PotentialTerm,
        TotalStressTerm,
-       TimeWeight,
+       TemporalWeight,
        CosineWeight,
        ConstantWeight,
        Accumulant,
@@ -135,7 +132,7 @@ function nucleation_ray_T_ij_contribution!(
     t_end::Float64;
     ΔV::Float64 = 1.0,
     v::Float64 = 1.0,
-) where {W<:TimeWeight}
+) where {W<:TemporalWeight}
     t_i = source_nucleation[:time]
 
     prepare_source_collision!(
@@ -185,7 +182,7 @@ Returns an `Accumulant`. Use `amplitudes(acc)` to access the stored arrays.
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   space::BoxSpace, boundary_condition::Periodic;
                   term::StressTensorTerm=KineticTerm(),
-                  weight::TimeWeight=CosineWeight(),
+                  weight::TemporalWeight=CosineWeight(),
                   quadrature::SphericalQuadratureScheme=UniformSphericalCapScheme(16, 32),
                   ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)
     return ray_T_ij(
@@ -200,7 +197,7 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   term::StressTensorTerm,
                   weight::W,
                   quadrature::SphericalQuadratureScheme;
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TimeWeight}
+                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
     check_ks(term, ks)
     ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
     Nk = length(ks_f)
@@ -228,17 +225,6 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
     end
 
     return accumulant
-end
-
-function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, boundary_condition::Periodic,
-                  strategy::RayCastingT_ij_CosineWeight;
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)
-    return ray_T_ij(
-        ks, snapshot, space, boundary_condition,
-        KineticTerm(), CosineWeight(), strategy.quadrature;
-        ΔV=ΔV, v=v, bubble_indices=bubble_indices,
-    )
 end
 
 end # module RayCastingStressEnergyTensor

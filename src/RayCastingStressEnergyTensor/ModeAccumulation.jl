@@ -6,7 +6,7 @@ include("SinCosGrid.jl")
 # Mode workspace
 # ============================================================
 
-abstract type ModeWorkspace{W<:TimeWeight} end
+abstract type ModeWorkspace{W<:TemporalWeight} end
 
 mutable struct CosineModeWorkspace <: ModeWorkspace{CosineWeight}
     phase_plus::Vector{ComplexF64}
@@ -274,7 +274,7 @@ end
     marker_weight::Float64,
     ΔV::Float64,
     v::Float64,
-) where {W<:TimeWeight}
+) where {W<:TemporalWeight}
     return add_kinetic_mode!(acc, ws, weight, ks, q, τ_stop, nᵢnⱼ, n3, marker_weight, ΔV, v)
 end
 
@@ -291,7 +291,7 @@ end
     marker_weight::Float64,
     ΔV::Float64,
     v::Float64,
-) where {W<:TimeWeight}
+) where {W<:TemporalWeight}
     return add_potential_mode!(acc, ws, weight, ks, q, τ_stop, n3, marker_weight, ΔV, v)
 end
 
@@ -308,7 +308,7 @@ end
     marker_weight::Float64,
     ΔV::Float64,
     v::Float64,
-) where {W<:TimeWeight}
+) where {W<:TemporalWeight}
     add_kinetic_mode!(acc, ws, weight, ks, q, τ_stop, nᵢnⱼ, n3, marker_weight, ΔV, v)
     add_potential_mode!(acc, ws, weight, ks, q, τ_stop, n3, marker_weight, ΔV, v)
     return nothing
@@ -325,7 +325,7 @@ function accumulate_marker_modes!(
     ws::ModeWorkspace{W},
     ΔV::Float64,
     v::Float64,
-) where {W<:TimeWeight}
+) where {W<:TemporalWeight}
     nᵢnⱼ = outer_prod(n̂)
     n3 = n̂[3]
 
@@ -338,8 +338,8 @@ end
 
 function accumulate_marker_modes!(
     acc::CosineAccumulant,
-    weight::CosineWeight,
-    term::PotentialTerm,
+    ::CosineWeight,
+    ::PotentialTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
@@ -374,8 +374,8 @@ end
 
 function accumulate_marker_modes!(
     acc::ConstantAccumulant,
-    weight::ConstantWeight,
-    term::PotentialTerm,
+    ::ConstantWeight,
+    ::PotentialTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
@@ -404,8 +404,8 @@ end
 
 function accumulate_marker_modes!(
     acc::CosineAccumulant,
-    weight::CosineWeight,
-    term::TotalStressTerm,
+    ::CosineWeight,
+    ::TotalStressTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
@@ -449,8 +449,8 @@ end
 
 function accumulate_marker_modes!(
     acc::ConstantAccumulant,
-    weight::ConstantWeight,
-    term::TotalStressTerm,
+    ::ConstantWeight,
+    ::TotalStressTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
@@ -485,8 +485,8 @@ end
 
 function accumulate_marker_modes!(
     acc::ConstantAccumulant,
-    weight::ConstantWeight,
-    term::KineticTerm,
+    ::ConstantWeight,
+    ::KineticTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
@@ -518,8 +518,8 @@ end
 
 function accumulate_marker_modes!(
     acc::CosineAccumulant,
-    weight::CosineWeight,
-    term::KineticTerm,
+    ::CosineWeight,
+    ::KineticTerm,
     ks::AbstractRange{<:Real},
     τ_stop::Float64,
     n̂::SVector{3,Float64},
