@@ -3,8 +3,8 @@
 
 Evaluate ∫_a^b τ³ exp(iατ) dτ analytically.
 """
-function I3(α::Float64, a::Float64, b::Float64)::ComplexF64
-    iszero(a) && return I3_zero_lower(α, b) # Fast path
+function I3_from_sincos(α::Float64, a::Float64, b::Float64, sa::Float64, ca::Float64, sb::Float64, cb::Float64)::ComplexF64
+    iszero(a) && return I3_zero_lower_from_sincos(α, b, sb, cb) # Fast path
     iszero(α) && return ComplexF64((b^4 - a^4) / 4.0)
 
     # Condition must check the maximum dimensionless phase, not just α.
@@ -43,9 +43,6 @@ function I3(α::Float64, a::Float64, b::Float64)::ComplexF64
     Ab = 3.0*b2*invα2 - 6.0*invα4
     Bb = -b3*invα + 6.0*b*invα3
 
-    sa, ca = sincos(α*a)
-    sb, cb = sincos(α*b)
-
     # F(τ) = (cos(ατ)A - sin(ατ)B) + i(sin(ατ)A + cos(ατ)B)
     return ComplexF64(
         (cb*Ab - sb*Bb) - (ca*Aa - sa*Ba),
@@ -53,7 +50,13 @@ function I3(α::Float64, a::Float64, b::Float64)::ComplexF64
     )
 end
 
-@inline function I3_zero_lower(α::Float64, b::Float64)::ComplexF64
+function I3(α::Float64, a::Float64, b::Float64)::ComplexF64
+    sa, ca = sincos(α * a)
+    sb, cb = sincos(α * b)
+    return I3_from_sincos(α, a, b, sa, ca, sb, cb)
+end
+
+@inline function I3_zero_lower_from_sincos(α::Float64, b::Float64, s::Float64, c::Float64)::ComplexF64
     # ∫₀ᵇ τ³ exp(i α τ) dτ
 
     b2 = b*b
@@ -88,10 +91,13 @@ end
     A = 3.0*b2*invα2 - 6.0*invα4
     B = -b3*invα + 6.0*b*invα3
 
-    s, c = sincos(α*b)
-
     return ComplexF64(
         c*A - s*B + 6.0*invα4,
         s*A + c*B
     )
+end
+
+function I3_zero_lower(α::Float64, b::Float64)::ComplexF64
+    s, c = sincos(α * b)
+    return I3_zero_lower_from_sincos(α, b, s, c)
 end
