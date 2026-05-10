@@ -62,9 +62,8 @@ Vector contractor `P_im k_j k_n / k ^ 2`.
 """
 function Λ_T(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
-    absksquared = norm(k) ^ 2
     P(a, b) = δ(a, b) - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n]) / absksquared
+    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n])
 end
 
 """
@@ -97,7 +96,7 @@ Mixed pressure-anisotropic-stress contractor
 function Λ_pσ(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
     L(a, b) = δ(a, b) / 3.0 - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> 0.5 * L(i, j) * δ(m, n))
+    return projector_matrix((i, j, m, n) -> -0.5 * L(i, j) * δ(m, n))
 end
 
 const Lambda_TT = Λ_TT
