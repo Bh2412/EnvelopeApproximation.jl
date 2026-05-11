@@ -63,7 +63,8 @@ Vector contractor `P_im k_j k_n / k ^ 2`.
 function Λ_T(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
     P(a, b) = δ(a, b) - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> P(i, m) * k̂[j] * k̂[n])
+    _Λ_T(i, j, m, n) = 1. / 2 * P(i, m) * k̂[j] * k̂[n]
+    return projector_matrix((i, j, m, n) -> (1. / 2) * _Λ_T(i, j, m, n) + (1. / 2) * _Λ_T(j, i, m, n))
 end
 
 """
@@ -110,6 +111,7 @@ const Lambda_pσ = Λ_pσ
 
 Return the weighted matrix used to contract a six-by-six stored
 `<T_ij T_mn>` matrix with `tr(contraction_matrix(Λ) * T)`.
+This assumes i <-> j symmetry of the kernel of Λ
 """
 contraction_matrix(Λ::AbstractMatrix) = Matrix(contraction_weights) * Matrix(Λ)
 

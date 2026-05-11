@@ -56,19 +56,19 @@ using EnvelopeApproximation.StressEnergyTensorContractions
         @test Λ_pp()[j, i] ≈ 0
     end
 
-    @test Λ_T(k_z)[3, 3] ≈ 1
-    @test Λ_T(k_z)[5, 5] ≈ 1
-    @test Λ_T(k_z)[1, 1] ≈ 0
+    @test Λ_T(k_z)[3, 3] ≈ 0.25
+    @test Λ_T(k_z)[5, 5] ≈ 0.25
+    @test Λ_T(k_z)[1, 1] ≈ 0.0
 
     @test Λ_σσ(k_z)[1, 1] ≈ 1 / 4
     @test Λ_σσ(k_z)[1, 4] ≈ 1 / 4
     @test Λ_σσ(k_z)[1, 6] ≈ -1 / 2
     @test Λ_σσ(k_z)[6, 6] ≈ 1
 
-    @test Λ_pσ(k_z)[1, 1] ≈ 1 / 6
-    @test Λ_pσ(k_z)[1, 4] ≈ 1 / 6
-    @test Λ_pσ(k_z)[1, 6] ≈ 1 / 6
-    @test Λ_pσ(k_z)[6, 1] ≈ -1 / 3
+    @test Λ_pσ(k_z)[1, 1] ≈ -1 / 6
+    @test Λ_pσ(k_z)[1, 4] ≈ -1 / 6
+    @test Λ_pσ(k_z)[1, 6] ≈ -1 / 6
+    @test Λ_pσ(k_z)[6, 1] ≈ 1 / 3
 
     @testset "Λ_TT quadratic projection" begin
         @testset "Positivity and Reality" begin
