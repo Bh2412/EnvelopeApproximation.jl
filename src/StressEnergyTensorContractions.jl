@@ -52,7 +52,7 @@ stored in the six-component symmetric tensor basis
 function Λ_TT(k::AbstractVector{<:Real})::SMatrix{6,6,Float64}
     k̂ = unit_direction(k)
     P(a, b) = δ(a, b) - k̂[a] * k̂[b]
-    return projector_matrix((i, j, m, n) -> P(i, m) * P(j, n) - 0.5 * P(i, j) * P(m, n))
+    return projector_matrix((i, j, m, n) -> 0.5 * (P(i, m) * P(j, n) - 0.5 * P(i, j) * P(m, n)))
 end
 
 """
