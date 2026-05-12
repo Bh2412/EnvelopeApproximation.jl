@@ -3,7 +3,9 @@ module TwoPointStressEnergyTensorModule
 import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
 using EnvelopeApproximation.StressEnergyTensorComponents
 using EnvelopeApproximation.RayCastingStressEnergyTensor: RayCastingSphericalQuadrature,
-    StressTensorTerm, KineticTerm, amplitudes, ray_T_ij
+    StressTensorTerm, KineticTerm, PotentialTerm,
+    Accumulant, CosineAccumulant, ConstantAccumulant,
+    amplitudes, ray_T_ij
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
 using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
@@ -13,6 +15,7 @@ export TwoPointStressEnergyTensor,
     TemporalWeight, CosineWeight, ConstantWeight,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
     TimeIntegratedTwoPointStressEnergyTensor,
+    TimeIntegratedTwoPointStressEnergyTensorPieces,
     RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
 
 abstract type TimeIntegrationStrategy end
@@ -793,6 +796,87 @@ function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
         ωs, snapshot, space, boundary_condition, strategy, CosineWeight();
         term=KineticTerm(), ΔV=ΔV, bubble_indices=bubble_indices
     )
+end
+
+# ── Cross-product helpers ─────────────────────────────────────────────────────
+
+function _ray_cross_product(
+    acc_α::CosineAccumulant, acc_β::CosineAccumulant,
+    V_inv::Float64, Nk::Int,
+)
+    A_plus_α,  A_minus_α  = amplitudes(acc_α)
+    A_plus_β,  A_minus_β  = amplitudes(acc_β)
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+    for ki in 1:Nk
+        ap_α = A_plus_α[:,  ki];  am_α = A_minus_α[:, ki]
+        ap_β = A_plus_β[:,  ki];  am_β = A_minus_β[:, ki]
+        result[:, :, ki] = (ap_α * ap_β' .+ am_α * am_β') .* (V_inv / 2)
+    end
+    return result
+end
+
+function _ray_cross_product(
+    acc_α::ConstantAccumulant, acc_β::ConstantAccumulant,
+    V_inv::Float64, Nk::Int,
+)
+    A_α = amplitudes(acc_α)
+    A_β = amplitudes(acc_β)
+    result = Array{ComplexF64, 3}(undef, 6, 6, Nk)
+    for ki in 1:Nk
+        result[:, :, ki] = (A_α[:, ki] * A_β[:, ki]') .* V_inv
+    end
+    return result
+end
+
+# ── Pieces API · RayCastingSphericalQuadrature ────────────────────────────────
+
+"""
+    TimeIntegratedTwoPointStressEnergyTensorPieces(ks, snapshot, space,
+        boundary_condition, strategy, weight;
+        terms=(:K=>KineticTerm(), :V=>PotentialTerm()),
+        ΔV=1.0, bubble_indices=:, v=1.0)
+
+Compute the time-integrated two-point correlator split by source term.
+
+Runs the ray-casting geometry loop once and returns a nested `NamedTuple` of
+all cross-products between terms. For `terms = (:K => KineticTerm(), :V =>
+PotentialTerm())` the result has the shape
+
+    (K = (K = arr_KK, V = arr_KV),
+     V = (K = arr_VK, V = arr_VV))
+
+where `arr_αβ` is the 6×6×Nk array for the α×β cross-product:
+
+  CosineWeight:   (1/2V) [A⁺_α conj(A⁺_β)' + A⁻_α conj(A⁻_β)']
+  ConstantWeight: (1/V)   A⁰_α conj(A⁰_β)'
+
+The total correlator equals the sum over all (α,β) pairs.
+"""
+function TimeIntegratedTwoPointStressEnergyTensorPieces(
+    ks::AbstractVector{<:Real},
+    snapshot::BubblesSnapShot,
+    space::BoxSpace,
+    boundary_condition::Periodic,
+    strategy::RayCastingSphericalQuadrature,
+    weight::W;
+    terms = (:K => KineticTerm(), :V => PotentialTerm()),
+    ΔV::Float64 = 1.0,
+    bubble_indices = :,
+    v::Float64 = 1.0,
+) where {W<:TemporalWeight}
+    ks_f  = ks isa AbstractRange ? ks : collect(Float64, ks)
+    Nk    = length(ks_f)
+    V_inv = 1.0 / volume(space)
+
+    accs  = ray_T_ij(ks_f, snapshot, space, boundary_condition,
+                     terms, weight, strategy.quadrature;
+                     ΔV=ΔV, bubble_indices=bubble_indices, v=v)
+
+    names = map(first, terms)
+    return NamedTuple{names}(map(names) do name_α
+        acc_α = accs[name_α]
+        NamedTuple{names}(map(name_β -> _ray_cross_product(acc_α, accs[name_β], V_inv, Nk), names))
+    end)
 end
 
 end

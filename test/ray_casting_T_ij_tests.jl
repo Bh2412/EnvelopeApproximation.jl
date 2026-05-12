@@ -11,7 +11,8 @@ using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor,
-    TimeIntegratedTwoPointStressEnergyTensor
+    TimeIntegratedTwoPointStressEnergyTensor,
+    TimeIntegratedTwoPointStressEnergyTensorPieces
 using Test
 using StaticArrays
 using LinearAlgebra
@@ -286,6 +287,58 @@ using QuadGK
             @test A_minus_total ≈ A_minus_K .+ A_minus_V
         else
             @test amplitudes(acc_total) ≈ amplitudes(acc_KV.K) .+ amplitudes(acc_KV.V)
+        end
+    end
+end
+
+function total_piece(pieces::NamedTuple)
+    first_outer = first(values(first(values(pieces))))
+    total = zero(first_outer)
+
+    for row in values(pieces)
+        for arr in values(row)
+            total .+= arr
+        end
+    end
+
+    return total
+end
+
+@testset "TimeIntegratedTwoPointStressEnergyTensorPieces" begin
+    nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+    nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
+    snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
+    space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+    bc = Periodic()
+
+    scheme = UniformSphericalCapScheme(4, 8)
+    strategy = RayCastingSphericalQuadrature(scheme)
+    ks = range(0.5, 2.0, length=4)
+
+    for weight in (CosineWeight(), ConstantWeight())
+        total = TimeIntegratedTwoPointStressEnergyTensor(
+            ks, snapshot, space, bc, strategy, weight;
+            term=TotalStressTerm(), ΔV=1.0
+        )
+        pieces = TimeIntegratedTwoPointStressEnergyTensorPieces(
+            ks, snapshot, space, bc, strategy, weight; ΔV=1.0
+        )
+
+        @test pieces isa NamedTuple{(:K, :V)}
+        @test pieces.K isa NamedTuple{(:K, :V)}
+
+        # sum of all pieces equals the TotalStressTerm result
+        @test total_piece(pieces) ≈ total
+
+        # diagonal blocks are Hermitian (auto-correlations)
+        for ki in 1:length(ks)
+            @test isapprox(pieces.K.K[:, :, ki], pieces.K.K[:, :, ki]', rtol=1e-8)
+            @test isapprox(pieces.V.V[:, :, ki], pieces.V.V[:, :, ki]', rtol=1e-8)
+        end
+
+        # off-diagonal blocks satisfy KV = VK†  (complex conjugate transpose)
+        for ki in 1:length(ks)
+            @test isapprox(pieces.K.V[:, :, ki], pieces.V.K[:, :, ki]', rtol=1e-8)
         end
     end
 end

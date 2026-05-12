@@ -211,7 +211,7 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   quadrature::SphericalQuadratureScheme;
                   ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
     ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    check_ks(terms, ks)
+    check_ks(terms, ks_f)
     Nk = length(ks_f)
     accumulants = map(t -> allocate_accumulant(weight, t, Nk), terms)
 
