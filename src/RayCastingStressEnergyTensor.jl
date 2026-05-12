@@ -95,6 +95,7 @@ check_ks(::KineticTerm, ks) = nothing
 function check_ks(::Union{PotentialTerm, TotalStressTerm}, ks)
     any(iszero, ks) && throw(ArgumentError("k = 0 is not supported for PotentialTerm/TotalStressTerm"))
 end
+check_ks(terms::Tuple, ks) = foreach(t -> check_ks(t, ks), terms)
 
 function build_periodic_blockers(snapshot::BubblesSnapShot, space::BoxSpace,
                                   v::Float64, t_end::Float64)
@@ -119,9 +120,9 @@ function build_periodic_blockers(snapshot::BubblesSnapShot, space::BoxSpace,
 end
 
 function nucleation_ray_T_ij_contribution!(
-    accumulant::Accumulant{W},
+    accumulants::Tuple,
     weight::W,
-    term::StressTensorTerm,
+    terms::Tuple,
     ks::AbstractVector{<:Real},
     source_nucleation_idx::Int,
     source_nucleation::Nucleation,
@@ -148,18 +149,20 @@ function nucleation_ray_T_ij_contribution!(
         τ_stop = find_collision_time(n̂, collision_ws, t_i, t_end, v)
         τ_stop < 1.0e-12 && continue
 
-        accumulate_marker_modes!(
-            accumulant,
-            weight,
-            term,
-            ks,
-            τ_stop,
-            n̂,
-            marker.weight,
-            mode_ws,
-            ΔV,
-            v,
-        )
+        for i in eachindex(terms)
+            accumulate_marker_modes!(
+                accumulants[i],
+                weight,
+                terms[i],
+                ks,
+                τ_stop,
+                n̂,
+                marker.weight,
+                mode_ws,
+                ΔV,
+                v,
+            )
+        end
     end
 
     return nothing
@@ -193,17 +196,26 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
 end
 
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, ::Periodic,
+                  space::BoxSpace, bc::Periodic,
                   term::StressTensorTerm,
                   weight::W,
                   quadrature::SphericalQuadratureScheme;
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
-    check_ks(term, ks)
-    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    Nk = length(ks_f)
-    accumulant = allocate_accumulant(weight, term, Nk)
+                  kwargs...) where {W<:TemporalWeight}
+    return only(ray_T_ij(ks, snapshot, space, bc, (term,), weight, quadrature; kwargs...))
+end
 
-    isempty(snapshot.nucleations) && return accumulant
+function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
+                  space::BoxSpace, ::Periodic,
+                  terms::Tuple,
+                  weight::W,
+                  quadrature::SphericalQuadratureScheme;
+                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
+    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
+    check_ks(terms, ks)
+    Nk = length(ks_f)
+    accumulants = map(t -> allocate_accumulant(weight, t, Nk), terms)
+
+    isempty(snapshot.nucleations) && return accumulants
 
     markers = get_markers(quadrature)
     t_end = snapshot.t
@@ -218,13 +230,25 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
         nuc = snapshot.nucleations[idx]
 
         nucleation_ray_T_ij_contribution!(
-            accumulant, weight, term, ks_f,
+            accumulants, weight, terms, ks_f,
             idx, nuc, blockers_soa, collision_ws, mode_ws, markers, t_end;
             ΔV=ΔV, v=v,
         )
     end
 
-    return accumulant
+    return accumulants
+end
+
+function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
+                  space::BoxSpace, bc::Periodic,
+                  named_terms::Tuple{Vararg{Pair{Symbol,<:StressTensorTerm}}},
+                  weight::W,
+                  quadrature::SphericalQuadratureScheme;
+                  kwargs...) where {W<:TemporalWeight   }
+    names = map(first, named_terms)
+    terms = map(last, named_terms)
+    accs = ray_T_ij(ks, snapshot, space, bc, terms, weight, quadrature; kwargs...)
+    return NamedTuple{names}(accs)
 end
 
 end # module RayCastingStressEnergyTensor

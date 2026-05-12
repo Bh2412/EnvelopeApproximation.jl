@@ -258,6 +258,38 @@ using QuadGK
         end
     end
 
+@testset "Named Terms API" begin
+    nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+    nuc2 = (time=0.2, site=Point3(1.0, 0.0, 0.0))
+    snapshot = BubblesSnapShot([nuc1, nuc2], 2.0)
+    space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+    bc = Periodic()
+
+    scheme = UniformSphericalCapScheme(4, 8)
+    ks = range(0.5, 2.0, length=4)
+
+    for weight in (CosineWeight(), ConstantWeight())
+        acc_total = ray_T_ij(ks, snapshot, space, bc, TotalStressTerm(), weight, scheme; ΔV=1.0)
+        acc_KV    = ray_T_ij(ks, snapshot, space, bc,
+                             (:K => KineticTerm(), :V => PotentialTerm()),
+                             weight, scheme; ΔV=1.0)
+
+        @test acc_KV isa NamedTuple{(:K, :V)}
+        @test acc_KV.K isa typeof(acc_total)
+        @test acc_KV.V isa typeof(acc_total)
+
+        if weight isa CosineWeight
+            A_plus_total,  A_minus_total  = amplitudes(acc_total)
+            A_plus_K,      A_minus_K      = amplitudes(acc_KV.K)
+            A_plus_V,      A_minus_V      = amplitudes(acc_KV.V)
+            @test A_plus_total  ≈ A_plus_K  .+ A_plus_V
+            @test A_minus_total ≈ A_minus_K .+ A_minus_V
+        else
+            @test amplitudes(acc_total) ≈ amplitudes(acc_KV.K) .+ amplitudes(acc_KV.V)
+        end
+    end
+end
+
 @testset "SinCos Grid" begin
 
     function reference_sincos(ks, c_val, τ_stop)
