@@ -34,6 +34,16 @@ Simple uniform spherical cap quadrature: N_θ rings × N_ϕ azimuthal points.
 struct UniformSphericalCapScheme <: SphericalQuadratureScheme
     N_theta::Int
     N_phi::Int
+
+    function UniformSphericalCapScheme(N_theta::Int, N_phi::Int)
+        if N_theta <= 0
+            throw(ArgumentError("N_theta must be a positive integer, got $N_theta"))
+        end
+        if N_phi <= 0
+            throw(ArgumentError("N_phi must be a positive integer, got $N_phi"))
+        end
+        return new(N_theta, N_phi)
+    end
 end
 
 function get_markers(scheme::UniformSphericalCapScheme)::Vector{SphericalQuadratureMarker}
