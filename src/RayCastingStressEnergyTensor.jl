@@ -105,7 +105,7 @@ function build_periodic_blockers(snapshot::BubblesSnapShot, space::BoxSpace,
     bubbles = Bubble[]
     sizehint!(bubbles, length(original_centers))
 
-    D_ray_max = v * t_end
+    D_ray_max = v * (t_end - original_times[1])
     for i in eachindex(original_centers)
         R_b_max = v * (t_end - original_times[i])
         R_pad = D_ray_max + R_b_max
