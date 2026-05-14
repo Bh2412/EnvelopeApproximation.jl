@@ -1,6 +1,25 @@
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
+# Data and Results
+*.jld2
+*.dat
+*.zip
+runs/**/Results_*
+
+# Plots/Images (Unless they are documentation)
+*.png
+*.pdf
+
+# Rust Build Artifacts (Crucial!)
+rust/target/
+src/EnvelopeAnalysis/*.so
+src/EnvelopeAnalysis/*.dll
+src/EnvelopeAnalysis/*.dylib
+
+# Legacy/Misc
+.codex
+gitlog.txt
 /Manifest.toml
 scripts/debugging_integrand.ipynb
 scripts/verifying_new_potential_integral_computation_method/double_bubble.ipynb
