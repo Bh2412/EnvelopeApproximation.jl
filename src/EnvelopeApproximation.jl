@@ -1,38 +1,29 @@
 module EnvelopeApproximation
 
-include("BubbleBasics.jl")
+include("NucleationProcess/BubbleBasics.jl")
 
-include("BoundaryConditions.jl")
+include("API/BoundaryConditions.jl")
 
-include("Spaces.jl")
+include("API/Spaces.jl")
 
-include("BubblesEvolution.jl")
+include("NucleationProcess/BubblesEvolution.jl")
 
-include("CFT/CFTInteface.jl")
+include("CFT/CFTInterface.jl")
 
 include("CFT/ChebyshevCFT.jl")
 
 include("CFT/QuadGKCFT.jl")
 
-include("EnvelopeAnalysis.jl")
-
-include("AngularIntegration/AngularIntegrationInterface.jl")
-
-include("AngularIntegration/SphericalHarmonics.jl")
+include("EnvelopeAnalysis/EnvelopeAnalysis.jl")
 
 include("StressEnergyTensorComponents.jl")
 
 include("StressEnergyTensorContractions.jl")
 
-include("TemporalWeights.jl")
-export TemporalWeight, CosineWeight, ConstantWeight
+include("API/TemporalWeights.jl")
 
 include("RayCastingStressEnergyTensor.jl")
 
-include("GravitationalWaves.jl")
-
 include("TwoPointStressEnergyTensor.jl")
-
-include("Visualization.jl")
 
 end

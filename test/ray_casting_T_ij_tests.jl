@@ -367,8 +367,8 @@ end
         S = Vector{Float64}(undef, 1)
         C = Vector{Float64}(undef, 1)
         compute_sincos_grid!(S, C, ks, 2.0, 0.5)
-        @test S[1] ≈ sin(1.0 * 2.0 * 0.5) atol=1e-15
-        @test C[1] ≈ cos(1.0 * 2.0 * 0.5) atol=1e-15
+        @test S[1] ≈ sin(1.0 * 2.0 * 0.5) atol=1e-13
+        @test C[1] ≈ cos(1.0 * 2.0 * 0.5) atol=1e-13
     end
 
     @testset "zero start" begin

@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [ "main", "clean_main" ]
+    branches: [ "main", "clean_main", "WIP"]
   pull_request:
     branches: [ "main", "clean_main" ]
 
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: '1.1'
+          version: '1.10'
 
       # Caching helps speed up subsequent runs
       - uses: julia-actions/cache@v2
