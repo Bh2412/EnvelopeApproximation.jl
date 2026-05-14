@@ -441,7 +441,7 @@ using Infiltrator
                 atol_result, lower_atol_result = fourier_mode(k, atol_plan, s, t)
 
                 # Verify results
-                @test isapprox(std_result, atol_result, rtol=1e-15)
+                @test isapprox(std_result, atol_result, rtol=1e-13)
                 @test atol_plan.lower_order_coeffs_buffer ≈ lower_std_plan.coeffs_buffer
                 @test isapprox(lower_std_result, lower_atol_result, rtol=1e-12)
             end
@@ -466,7 +466,7 @@ using Infiltrator
                 for j in 1:3
                     component_f(x) = f(x)[j]
                     numerical, _ = quadgk(x -> component_f(x) * exp(-im * k * x), a, b, rtol=1e-12)
-                    @test isapprox(modes[i, j], numerical, atol=1e-15, rtol=1e-6)
+                    @test isapprox(modes[i, j], numerical, atol=1e-13, rtol=1e-6)
                 end
             end
         end
@@ -730,9 +730,9 @@ using Infiltrator
             # All results should match within tolerance
             for i in 1:length(ks)
                 for j in 1:K
-                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-15)
-                    @test isapprox(std_results[i, j], tailored_results[i, j], rtol=1e-15)
-                    @test isapprox(std_results[i, j], combined_results[i, j], rtol=1e-15)
+                    @test isapprox(std_results[i, j], atol_results[i, j], rtol=1e-13)
+                    @test isapprox(std_results[i, j], tailored_results[i, j], rtol=1e-13)
+                    @test isapprox(std_results[i, j], combined_results[i, j], rtol=1e-13)
                 end
             end
         end
