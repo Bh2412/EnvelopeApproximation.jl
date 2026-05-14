@@ -9,7 +9,3 @@ Strategy struct for ray-casting T_ij computation with CosineWeight temporal deco
 struct RayCastingSphericalQuadrature
     quadrature::SphericalQuadratureScheme
 end
-
-function RayCastingSphericalQuadrature(quadrature::SphericalQuadratureScheme)
-    return RayCastingSphericalQuadrature(quadrature)
-end

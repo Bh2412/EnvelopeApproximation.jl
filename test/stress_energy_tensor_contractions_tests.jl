@@ -18,28 +18,28 @@ using EnvelopeApproximation.StressEnergyTensorContractions
     xx, xy, xz, yy, yz, zz = tensor
 
     @test Λ_TT(k_z) * tensor ≈ SVector{6,ComplexF64}(
-        0.5 * (xx - yy),
-        xy,
+        0.25 * (xx - yy),
+        0.5 * xy,
         0,
-        0.5 * (yy - xx),
+        0.25 * (yy - xx),
         0,
         0,
     )
     @test Λ_TT(k_y) * tensor ≈ SVector{6,ComplexF64}(
-        0.5 * (xx - zz),
+        0.25 * (xx - zz),
         0,
-        xz,
+        0.5 * xz,
         0,
         0,
-        0.5 * (zz - xx),
+        0.25 * (zz - xx),
     )
     @test Λ_TT(k_x) * tensor ≈ SVector{6,ComplexF64}(
         0,
         0,
         0,
-        0.5 * (yy - zz),
-        yz,
-        0.5 * (zz - yy),
+        0.25 * (yy - zz),
+        0.5 * yz,
+        0.25 * (zz - yy),
     )
 
     T = reshape(ComplexF64.(1:36), 6, 6)
@@ -86,13 +86,13 @@ using EnvelopeApproximation.StressEnergyTensorContractions
             @test projected_power(T_trace, k_z) ≈ 0.0 atol=1e-12
 
             T_plus = make_tensor(xx=1, yy=-1)
-            @test projected_power(T_plus, k_z) ≈ 2.0 atol=1e-12
+            @test projected_power(T_plus, k_z) ≈ 1.0 atol=1e-12
 
             T_cross = make_tensor(xy=1)
-            @test projected_power(T_cross, k_z) ≈ 2.0 atol=1e-12
+            @test projected_power(T_cross, k_z) ≈ 1.0 atol=1e-12
 
             T_mixed = make_tensor(xx=1, yy=-1, xy=1)
-            @test projected_power(T_mixed, k_z) ≈ 4.0 atol=1e-12
+            @test projected_power(T_mixed, k_z) ≈ 2.0 atol=1e-12
         end
 
         @testset "Projection Property (Removal of non-GW terms)" begin
@@ -107,7 +107,7 @@ using EnvelopeApproximation.StressEnergyTensorContractions
                 T = rand(ComplexF64, 6)
                 xx, xy, yy = T[1], T[2], T[4]
 
-                expected = 0.5 * abs2(xx - yy) + 2.0 * abs2(xy)
+                expected = 0.25 * abs2(xx - yy) + 1.0 * abs2(xy)
                 computed = projected_power(T, k_z)
 
                 @test computed ≈ expected atol=1e-12
