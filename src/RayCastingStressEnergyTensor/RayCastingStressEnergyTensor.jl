@@ -51,10 +51,10 @@ struct ConstantAccumulant <: Accumulant{ConstantWeight}
     A::Matrix{ComplexF64}
 end
 
-include("RayCastingStressEnergyTensor/I2Kernels.jl")
-include("RayCastingStressEnergyTensor/I3Kernels.jl")
-include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
-include("RayCastingStressEnergyTensor/Strategies.jl")
+include("I2Kernels.jl")
+include("I3Kernels.jl")
+include("ModeAccumulation.jl")
+include("Strategies.jl")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

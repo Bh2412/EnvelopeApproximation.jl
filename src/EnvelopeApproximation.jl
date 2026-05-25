@@ -22,9 +22,9 @@ include("StressEnergyTensorContractions.jl")
 
 include("API/TemporalWeights.jl")
 
-include("RayCastingLightConesSurface.jl")
+include("RayCastingLightConeSurface/RayCastingLightConeSurface.jl")
 
-include("RayCastingStressEnergyTensor.jl")
+include("RayCastingStressEnergyTensor/RayCastingStressEnergyTensor.jl")
 
 include("TwoPointStressEnergyTensor.jl")
 

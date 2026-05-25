@@ -9,8 +9,8 @@ using EnvelopeApproximation.Spaces: BoxSpace
 using EnvelopeApproximation.BoundaryConditions: Periodic
 using EnvelopeApproximation.EnvelopeAnalysis: append_periodic_bubbles!
 
-include("RayCastingLightConeSurface/CollisionSearch.jl")
-include("RayCastingLightConeSurface/SphericalQuadratureScheme.jl")
+include("CollisionSearch.jl")
+include("SphericalQuadratureScheme.jl")
 
 export LightConeSource,
        LightConeSurfaceContext,
