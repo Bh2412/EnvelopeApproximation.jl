@@ -19,7 +19,7 @@ export LightConeSource,
        integrate_lightcone_surfaces!,
        integrate_lightcone_surfaces,
        allocate_accumulant,
-       prepare_source!,
+       prepare_kernel!,
        accumulate_ray!,
        ray_stop_time,
        SphericalQuadratureScheme,
@@ -120,7 +120,7 @@ end
 
 function allocate_accumulant end
 
-prepare_source!(kernel, source::LightConeSource) = nothing
+prepare_kernel!(kernel, source::LightConeSource) = nothing
 
 function accumulate_ray! end
 
@@ -142,7 +142,7 @@ function integrate_lightcone_surfaces!(
 
     for source in sources
         prepare_source!(context, source)
-        foreach(kernel -> prepare_source!(kernel, source), kernels)
+        foreach(kernel -> prepare_kernel!(kernel, source), kernels)
 
         for marker in markers
             n̂ = marker.n̂

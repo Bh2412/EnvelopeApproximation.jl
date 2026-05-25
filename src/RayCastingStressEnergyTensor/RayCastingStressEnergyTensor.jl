@@ -29,7 +29,7 @@ using EnvelopeApproximation.BoundaryConditions: Periodic
 using StaticArrays
 using LinearAlgebra
 
-import ..RayCastingLightConeSurfaces: allocate_accumulant, prepare_source!, accumulate_ray!
+import ..RayCastingLightConeSurfaces: allocate_accumulant, prepare_kernel!, accumulate_ray!
 using ..RayCastingLightConeSurfaces:
     LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
     collision_time,
@@ -131,7 +131,7 @@ function allocate_accumulant(kernel::FourierStressTensorKernel)
     return _alloc_accumulant(kernel.weight, kernel.term, length(kernel.ks))
 end
 
-function prepare_source!(kernel::FourierStressTensorKernel, source::LightConeSource)
+function prepare_kernel!(kernel::FourierStressTensorKernel, source::LightConeSource)
     prepare_source_modes!(kernel.mode_ws, kernel.weight, kernel.ks, source)
     return nothing
 end
