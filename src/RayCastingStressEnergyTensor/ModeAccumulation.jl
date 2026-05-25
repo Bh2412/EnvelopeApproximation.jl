@@ -97,6 +97,42 @@ function prepare_source_modes!(
     return nothing
 end
 
+function prepare_source_modes!(
+    ws::CosineModeWorkspace,
+    ::CosineWeight,
+    ks::AbstractVector{<:Real},
+    source::LightConeSource,
+)
+    resize!(ws, length(ks))
+
+    t_i = source.time
+    z_i = source.center[3]
+
+    @inbounds for q in eachindex(ks)
+        ws.phase_plus[q]  = cis( ks[q] * (t_i - z_i))
+        ws.phase_minus[q] = cis(-ks[q] * (t_i + z_i))
+    end
+
+    return nothing
+end
+
+function prepare_source_modes!(
+    ws::ConstantModeWorkspace,
+    ::ConstantWeight,
+    ks::AbstractVector{<:Real},
+    source::LightConeSource,
+)
+    resize!(ws, length(ks))
+
+    z_i = source.center[3]
+
+    @inbounds for q in eachindex(ks)
+        ws.phase[q] = cis(-ks[q] * z_i)
+    end
+
+    return nothing
+end
+
 # ============================================================
 # Tensor component helpers
 # ============================================================

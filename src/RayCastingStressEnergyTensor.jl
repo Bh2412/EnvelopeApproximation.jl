@@ -23,19 +23,21 @@ where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 module RayCastingStressEnergyTensor
 
 import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
-using EnvelopeApproximation.BubbleBasics
-using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Bubble, Nucleation
+using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
 using EnvelopeApproximation.BoundaryConditions: Periodic
-using EnvelopeApproximation.EnvelopeAnalysis: append_periodic_bubbles!
-import EnvelopeApproximation.StressEnergyTensorComponents: contribution_indices
 using StaticArrays
 using LinearAlgebra
+
+import ..RayCastingLightConeSurfaces: allocate_accumulant, prepare_source!, accumulate_ray!
+using ..RayCastingLightConeSurfaces:
+    LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
+    collision_time
 
 abstract type StressTensorTerm end
 abstract type Accumulant{W<:TemporalWeight} end
 
-struct KineticTerm <: StressTensorTerm end
+struct KineticTerm   <: StressTensorTerm end
 struct PotentialTerm <: StressTensorTerm end
 struct TotalStressTerm <: StressTensorTerm end
 
@@ -49,7 +51,6 @@ struct ConstantAccumulant <: Accumulant{ConstantWeight}
 end
 
 include("RayCastingStressEnergyTensor/SphericalQuadratureScheme.jl")
-include("RayCastingStressEnergyTensor/CollisionSearch.jl")
 include("RayCastingStressEnergyTensor/I2Kernels.jl")
 include("RayCastingStressEnergyTensor/I3Kernels.jl")
 include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
@@ -58,7 +59,7 @@ include("RayCastingStressEnergyTensor/Strategies.jl")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exports
-# ══════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 export SphericalQuadratureScheme,
        RayCastingSphericalQuadrature,
        UniformSphericalCapScheme,
@@ -75,18 +76,13 @@ export SphericalQuadratureScheme,
        ModeWorkspace,
        CosineModeWorkspace,
        ConstantModeWorkspace,
+       FourierStressTensorKernel,
        amplitudes,
        ray_T_ij
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Ray-Casting T_ij Core Computation
+# Accumulant helpers
 # ═══════════════════════════════════════════════════════════════════════════════
-
-allocate_accumulant(::CosineWeight, ::StressTensorTerm, Nk::Int) =
-    CosineAccumulant(zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk))
-
-allocate_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
-    ConstantAccumulant(zeros(ComplexF64, 6, Nk))
 
 amplitudes(acc::CosineAccumulant) = (acc.A_plus, acc.A_minus)
 amplitudes(acc::ConstantAccumulant) = acc.A
@@ -97,76 +93,67 @@ function check_ks(::Union{PotentialTerm, TotalStressTerm}, ks)
 end
 check_ks(terms::Tuple, ks) = foreach(t -> check_ks(t, ks), terms)
 
-function build_periodic_blockers(snapshot::BubblesSnapShot, space::BoxSpace,
-                                  v::Float64, t_end::Float64)
-    original_times = map(nuc -> nuc[:time], snapshot.nucleations)
-    original_centers = map(nuc -> nuc[:site].coordinates, snapshot.nucleations)
+# Internal allocators used by the early-return path and by allocate_accumulant(kernel).
+_alloc_accumulant(::CosineWeight, ::StressTensorTerm, Nk::Int) =
+    CosineAccumulant(zeros(ComplexF64, 6, Nk), zeros(ComplexF64, 6, Nk))
 
-    bubbles = Bubble[]
-    sizehint!(bubbles, length(original_centers))
+_alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
+    ConstantAccumulant(zeros(ComplexF64, 6, Nk))
 
-    D_ray_max = v * (t_end - original_times[1])
-    for i in eachindex(original_centers)
-        R_b_max = v * (t_end - original_times[i])
-        R_pad = D_ray_max + R_b_max
-        push!(bubbles, Bubble(Point3(original_centers[i]), R_pad))
-    end
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fourier stress-energy kernel
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    origin_map = Int[]
-    padded_bubbles = append_periodic_bubbles!(bubbles, space, origin_map)
+"""
+    FourierStressTensorKernel{T,W}
 
-    padded_times = original_times[origin_map]
-    return map((t, b) -> (time=t, site=b.center), padded_times, padded_bubbles)
+Kernel that accumulates Fourier-mode stress-energy amplitudes inside the generic
+`integrate_lightcone_surfaces` engine.
+
+Packages the physics parameters that used to live inside `ray_T_ij`:
+`term`, `weight`, `ks`, `mode_ws`, `ΔV`, `v`.
+
+All kernels built for the same call share a single `mode_ws` instance because
+they all write the same phases; sharing avoids redundant work.
+"""
+struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector}
+    term::T
+    weight::W
+    ks::K
+    mode_ws::ModeWorkspace{W}
+    ΔV::Float64
+    v::Float64
 end
 
-function nucleation_ray_T_ij_contribution!(
-    accumulants::Tuple,
-    weight::W,
-    terms::Tuple,
-    ks::AbstractVector{<:Real},
-    source_nucleation_idx::Int,
-    source_nucleation::Nucleation,
-    blockers_soa::NucleationSoA,
-    collision_ws::SourceCollisionWorkspace,
-    mode_ws::ModeWorkspace{W},
-    markers::AbstractVector{SphericalQuadratureMarker},
-    t_end::Float64;
-    ΔV::Float64 = 1.0,
-    v::Float64 = 1.0,
-) where {W<:TemporalWeight}
-    t_i = source_nucleation[:time]
+# --- extensions of the RayCastingLightConeSurfaces generic kernel interface ---
 
-    prepare_source_collision!(
-        collision_ws, blockers_soa,
-        source_nucleation, source_nucleation_idx, t_end, v,
-    )
+function allocate_accumulant(kernel::FourierStressTensorKernel)
+    return _alloc_accumulant(kernel.weight, kernel.term, length(kernel.ks))
+end
 
-    prepare_source_modes!(mode_ws, weight, ks, source_nucleation)
-
-    for marker in markers
-        n̂ = marker.n̂
-
-        τ_stop = find_collision_time(n̂, collision_ws, t_i, t_end, v)
-        τ_stop < 1.0e-12 && continue
-
-        for i in eachindex(terms)
-            accumulate_marker_modes!(
-                accumulants[i],
-                weight,
-                terms[i],
-                ks,
-                τ_stop,
-                n̂,
-                marker.weight,
-                mode_ws,
-                ΔV,
-                v,
-            )
-        end
-    end
-
+function prepare_source!(kernel::FourierStressTensorKernel, source::LightConeSource)
+    prepare_source_modes!(kernel.mode_ws, kernel.weight, kernel.ks, source)
     return nothing
 end
+
+function accumulate_ray!(
+    acc::Accumulant,
+    kernel::FourierStressTensorKernel,
+    ::LightConeSource,
+    n̂::SVector{3,Float64},
+    wΩ::Float64,
+    τ_stop::Float64,
+)
+    accumulate_marker_modes!(
+        acc, kernel.weight, kernel.term, kernel.ks,
+        τ_stop, n̂, wΩ, kernel.mode_ws, kernel.ΔV, kernel.v,
+    )
+    return nothing
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Ray-Casting T_ij — public API (signatures unchanged)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 """
     ray_T_ij(ks, snapshot, space, boundary_condition;
@@ -205,7 +192,7 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
 end
 
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, ::Periodic,
+                  space::BoxSpace, bc::Periodic,
                   terms::Tuple,
                   weight::W,
                   quadrature::SphericalQuadratureScheme;
@@ -213,30 +200,19 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
     ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
     check_ks(terms, ks_f)
     Nk = length(ks_f)
-    accumulants = map(t -> allocate_accumulant(weight, t, Nk), terms)
 
-    isempty(snapshot.nucleations) && return accumulants
+    isempty(snapshot.nucleations) && return map(t -> _alloc_accumulant(weight, t, Nk), terms)
 
-    markers = get_markers(quadrature)
-    t_end = snapshot.t
-    blocker_nucleations = build_periodic_blockers(snapshot, space, v, t_end)
-    contributing_indices = contribution_indices(length(snapshot.nucleations), bubble_indices)
+    context = build_lightcone_context(snapshot, space, bc; v=v)
+    sources  = lightcone_sources(snapshot; bubble_indices=bubble_indices)
+    markers  = get_markers(quadrature)
 
-    blockers_soa = NucleationSoA(blocker_nucleations)
-    collision_ws = SourceCollisionWorkspace(length(blocker_nucleations))
     mode_ws = ModeWorkspace(weight, Nk)
-
-    for idx in contributing_indices
-        nuc = snapshot.nucleations[idx]
-
-        nucleation_ray_T_ij_contribution!(
-            accumulants, weight, terms, ks_f,
-            idx, nuc, blockers_soa, collision_ws, mode_ws, markers, t_end;
-            ΔV=ΔV, v=v,
-        )
+    kernels = map(terms) do term
+        FourierStressTensorKernel(term, weight, ks_f, mode_ws, ΔV, v)
     end
 
-    return accumulants
+    return integrate_lightcone_surfaces(kernels, sources, context, markers; τ_min=1.0e-12)
 end
 
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
@@ -244,10 +220,10 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   named_terms::Tuple{Vararg{Pair{Symbol,<:StressTensorTerm}}},
                   weight::W,
                   quadrature::SphericalQuadratureScheme;
-                  kwargs...) where {W<:TemporalWeight   }
+                  kwargs...) where {W<:TemporalWeight}
     names = map(first, named_terms)
     terms = map(last, named_terms)
-    accs = ray_T_ij(ks, snapshot, space, bc, terms, weight, quadrature; kwargs...)
+    accs  = ray_T_ij(ks, snapshot, space, bc, terms, weight, quadrature; kwargs...)
     return NamedTuple{names}(accs)
 end
 
