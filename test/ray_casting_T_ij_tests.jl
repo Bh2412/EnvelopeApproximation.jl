@@ -17,6 +17,10 @@ using Test
 using StaticArrays
 using LinearAlgebra
 using QuadGK
+using StableRNGs
+import EnvelopeApproximation.BubblesEvolution: sample_PT
+
+include("regression_helpers.jl")
 
 @testset "Ray Casting Stress Energy Tensor" begin
 
@@ -146,6 +150,41 @@ using QuadGK
         # Single bubble with no collisions: A_minus = conj(A_plus) because
         # the integrand for A− is the complex conjugate of A+ (α → −α reflects as well).
         @test isapprox(A_minus, conj.(A_plus), rtol=1e-6)
+    end
+
+    @testset "L=10 TotalStressTerm regression through outer API" begin
+        β = 1.0
+        Γ_0 = 1.0e-4
+        t_0 = 0.0
+        tvp = 1 - 1.0e-5
+        v_wall = 1.0
+        egp = ExponentialGrowthProcess(β, Γ_0, tvp; t_0=t_0, v_wall=v_wall)
+
+        L = 10.0 / β
+        space = BoxSpace(L, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+        snapshot = sample_PT(StableRNG(12312123), egp, space, bc; padding=0.0)
+
+        ks = collect(range(2π / L; step=2π / L, length=3))
+        strategy = RayCastingSphericalQuadrature(UniformSphericalCapScheme(6, 8))
+        result = TimeIntegratedTwoPointStressEnergyTensor(
+            ks, snapshot, space, bc, strategy, CosineWeight();
+            term=TotalStressTerm(), ΔV=1.0, bubble_indices=1:3,
+        )
+
+        fixture = load_regression_fixture("ray_casting_total_stress_L10.jld2")
+
+        @test fixture["api"] == "TimeIntegratedTwoPointStressEnergyTensor"
+        @test fixture["term"] == "TotalStressTerm"
+        @test fixture["weight"] == "CosineWeight"
+        @test fixture["seed"] == 12312123
+        @test fixture["L"] == L
+        @test fixture["ks"] == ks
+        @test length(snapshot.nucleations) == 40
+        @test snapshot.t ≈ 8.429639302129399
+        @test fixture["n_nucleations"] == length(snapshot.nucleations)
+        @test fixture["snapshot_t"] ≈ snapshot.t
+        test_regression_array(result, fixture; key="T", rtol=1.0e-12, atol=1.0e-12)
     end
 
     @testset "Generalized Ray-Casting API" begin
