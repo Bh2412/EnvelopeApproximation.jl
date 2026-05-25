@@ -9,7 +9,8 @@ using EnvelopeApproximation.Spaces: BoxSpace
 using EnvelopeApproximation.BoundaryConditions: Periodic
 using EnvelopeApproximation.EnvelopeAnalysis: append_periodic_bubbles!
 
-include("RayCastingStressEnergyTensor/CollisionSearch.jl")
+include("RayCastingLightConeSurface/CollisionSearch.jl")
+include("RayCastingLightConeSurface/SphericalQuadratureScheme.jl")
 
 export LightConeSource,
        LightConeSurfaceContext,
@@ -20,7 +21,11 @@ export LightConeSource,
        allocate_accumulant,
        prepare_source!,
        accumulate_ray!,
-       ray_stop_time
+       ray_stop_time,
+       SphericalQuadratureScheme,
+       SphericalQuadratureMarker,
+       UniformSphericalCapScheme,
+       get_markers
 
 # =============================================================================
 # 1. Source representation

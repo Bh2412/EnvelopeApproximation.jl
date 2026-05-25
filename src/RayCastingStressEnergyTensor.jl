@@ -32,7 +32,8 @@ using LinearAlgebra
 import ..RayCastingLightConeSurfaces: allocate_accumulant, prepare_source!, accumulate_ray!
 using ..RayCastingLightConeSurfaces:
     LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
-    collision_time
+    collision_time,
+    SphericalQuadratureScheme, SphericalQuadratureMarker, UniformSphericalCapScheme, get_markers
 
 abstract type StressTensorTerm end
 abstract type Accumulant{W<:TemporalWeight} end
@@ -50,7 +51,6 @@ struct ConstantAccumulant <: Accumulant{ConstantWeight}
     A::Matrix{ComplexF64}
 end
 
-include("RayCastingStressEnergyTensor/SphericalQuadratureScheme.jl")
 include("RayCastingStressEnergyTensor/I2Kernels.jl")
 include("RayCastingStressEnergyTensor/I3Kernels.jl")
 include("RayCastingStressEnergyTensor/ModeAccumulation.jl")
