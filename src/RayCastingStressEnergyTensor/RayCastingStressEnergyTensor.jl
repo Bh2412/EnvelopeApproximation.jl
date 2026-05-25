@@ -29,8 +29,8 @@ using EnvelopeApproximation.BoundaryConditions: Periodic
 using StaticArrays
 using LinearAlgebra
 
-import ..RayCastingLightConeSurfaces: allocate_accumulant, prepare_kernel!, accumulate_ray!
-using ..RayCastingLightConeSurfaces:
+import ..RayCastingLightConesSurface: allocate_accumulant, prepare_kernel!, accumulate_ray!
+using ..RayCastingLightConesSurface:
     LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
     collision_time,
     SphericalQuadratureScheme, SphericalQuadratureMarker, UniformSphericalCapScheme, get_markers
@@ -125,7 +125,7 @@ struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:Abst
     v::Float64
 end
 
-# --- extensions of the RayCastingLightConeSurfaces generic kernel interface ---
+# --- extensions of the RayCastingLightConesSurface generic kernel interface ---
 
 function allocate_accumulant(kernel::FourierStressTensorKernel)
     return _alloc_accumulant(kernel.weight, kernel.term, length(kernel.ks))

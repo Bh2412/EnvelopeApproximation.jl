@@ -1,15 +1,15 @@
 """
-Unit tests for RayCastingLightConeSurfaces: collision search and spherical quadrature.
+Unit tests for RayCastingLightConesSurface: collision search and spherical quadrature.
 """
 
 using EnvelopeApproximation
-using EnvelopeApproximation.RayCastingLightConeSurfaces
-import EnvelopeApproximation.RayCastingLightConeSurfaces: collision_time
+using EnvelopeApproximation.RayCastingLightConesSurface
+import EnvelopeApproximation.RayCastingLightConesSurface: collision_time
 using Test
 using StaticArrays
 using LinearAlgebra
 
-@testset "RayCastingLightConeSurfaces" begin
+@testset "RayCastingLightConesSurface" begin
 
     # ═════════════════════════════════════════════════════════════════════════════
     # Collision Time Computation
