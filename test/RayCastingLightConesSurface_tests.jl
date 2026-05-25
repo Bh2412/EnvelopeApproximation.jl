@@ -4,7 +4,11 @@ Unit tests for RayCastingLightConesSurface: collision search and spherical quadr
 
 using EnvelopeApproximation
 using EnvelopeApproximation.RayCastingLightConesSurface
-import EnvelopeApproximation.RayCastingLightConesSurface: collision_time
+import EnvelopeApproximation.RayCastingLightConesSurface: collision_time, prepare_source!
+using EnvelopeApproximation.BubbleBasics
+using EnvelopeApproximation.BoundaryConditions
+using EnvelopeApproximation.BubblesEvolution
+using EnvelopeApproximation.Spaces
 using Test
 using StaticArrays
 using LinearAlgebra
@@ -48,6 +52,53 @@ using LinearAlgebra
         center_l = SVector(5.0, 0.0, 0.0)
         τ3 = collision_time(center_i, center_l, SVector(1.0, 0.0, 0.0), 0.0, 1.0, v)
         @test τ3 === nothing || τ3 >= 1.0 - 1e-10
+    end
+
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Vacuum Boundary Conditions
+    # ═════════════════════════════════════════════════════════════════════════════
+
+    @testset "Vacuum boundary stop time" begin
+        v = 1.0
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))  # box [-5, 5]^3
+
+        # Source at origin, ray along +x: boundary at x=5, τ_boundary = 5/v
+        source = LightConeSource(1, 0.0, SVector(0.0, 0.0, 0.0))
+        n̂_px = SVector(1.0, 0.0, 0.0)
+        @test isapprox(boundary_stop_time(Vacuum(), space, source, n̂_px, v), 5.0, rtol=1e-12)
+
+        # Ray along -x: boundary at x=-5, τ_boundary = 5/v
+        n̂_mx = SVector(-1.0, 0.0, 0.0)
+        @test isapprox(boundary_stop_time(Vacuum(), space, source, n̂_mx, v), 5.0, rtol=1e-12)
+
+        # Source offset to (2,0,0): ray along +x hits x=5 in distance 3 → τ = 3/v
+        source_offset = LightConeSource(1, 0.0, SVector(2.0, 0.0, 0.0))
+        @test isapprox(boundary_stop_time(Vacuum(), space, source_offset, n̂_px, v), 3.0, rtol=1e-12)
+
+        # Periodic: always Inf
+        @test boundary_stop_time(Periodic(), space, source, n̂_px, v) == Inf
+    end
+
+    @testset "ray_stop_time: collision vs boundary in vacuum" begin
+        v = 1.0
+
+        # Source at (0,0,0) and blocker at (5,0,0), both nucleated at t=0.
+        # Collision time along n̂=(1,0,0): τ_collision = 2.5.
+        nuc1 = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+        nuc2 = (time=0.0, site=Point3(5.0, 0.0, 0.0))
+        snapshot = BubblesSnapShot([nuc1, nuc2], 1000.0)
+        source = LightConeSource(1, 0.0, SVector(0.0, 0.0, 0.0))
+        n̂ = SVector(1.0, 0.0, 0.0)
+
+        # Large box (L=100): boundary at x=50, τ_boundary=50. Collision (τ=2.5) wins.
+        ctx_large = build_lightcone_context(snapshot, BoxSpace(100.0, Point3(0.0, 0.0, 0.0)), Vacuum(); v=v)
+        prepare_source!(ctx_large, source)
+        @test isapprox(ray_stop_time(ctx_large, source, n̂), 2.5, rtol=1e-10)
+
+        # Small box (L=3): boundary at x=1.5, τ_boundary=1.5. Boundary wins over collision.
+        ctx_small = build_lightcone_context(snapshot, BoxSpace(3.0, Point3(0.0, 0.0, 0.0)), Vacuum(); v=v)
+        prepare_source!(ctx_small, source)
+        @test isapprox(ray_stop_time(ctx_small, source, n̂), 1.5, rtol=1e-10)
     end
 
     # ═════════════════════════════════════════════════════════════════════════════

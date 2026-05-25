@@ -6,7 +6,7 @@ using LinearAlgebra
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
-using EnvelopeApproximation.BoundaryConditions: Periodic
+using EnvelopeApproximation.BoundaryConditions: Periodic, Vacuum
 using EnvelopeApproximation.EnvelopeAnalysis: append_periodic_bubbles!
 
 include("CollisionSearch.jl")
@@ -22,6 +22,7 @@ export LightConeSource,
        prepare_kernel!,
        accumulate_ray!,
        ray_stop_time,
+       boundary_stop_time,
        SphericalQuadratureScheme,
        SphericalQuadratureMarker,
        UniformSphericalCapScheme,
@@ -100,18 +101,59 @@ function prepare_source!(
     return nothing
 end
 
+function boundary_stop_time(
+    ::Periodic,
+    ::BoxSpace,
+    ::LightConeSource,
+    ::SVector{3,Float64},
+    ::Float64,
+)::Float64
+    return Inf
+end
+
+function boundary_stop_time(
+    ::Vacuum,
+    space::BoxSpace,
+    source::LightConeSource,
+    n̂::SVector{3,Float64},
+    v::Float64,
+)::Float64
+    c = coordinates(space.center)
+    half_L = space.L / 2
+    x0 = source.center
+
+    τ_exit = Inf
+    @inbounds for a in 1:3
+        if n̂[a] > 0.0
+            τ_exit = min(τ_exit, (c[a] + half_L - x0[a]) / (v * n̂[a]))
+        elseif n̂[a] < 0.0
+            τ_exit = min(τ_exit, (c[a] - half_L - x0[a]) / (v * n̂[a]))
+        end
+    end
+
+    return max(τ_exit, 0.0)
+end
+
 function ray_stop_time(
     context::LightConeSurfaceContext,
     source::LightConeSource,
     n̂::SVector{3,Float64},
 )::Float64
-    return first_collision_time(
+    τ_collision = first_collision_time(
         context.workspace,
         source,
         n̂,
         context.t_end,
         context.v,
     )
+    τ_boundary = boundary_stop_time(
+        context.boundary_condition,
+        context.space,
+        source,
+        n̂,
+        context.v,
+    )
+    return min(τ_collision, τ_boundary)
 end
 
 # =============================================================================
@@ -178,6 +220,15 @@ end
 # =============================================================================
 # 6. Implementations of the geometric interface
 # =============================================================================
+
+function build_lightcone_blockers(
+    snapshot::BubblesSnapShot,
+    ::BoxSpace,
+    ::Vacuum;
+    v::Float64 = 1.0,
+)
+    return NucleationSoA(snapshot.nucleations)
+end
 
 function build_lightcone_blockers(
     snapshot::BubblesSnapShot,
