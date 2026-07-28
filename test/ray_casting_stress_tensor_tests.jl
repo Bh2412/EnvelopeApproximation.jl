@@ -24,6 +24,14 @@ include("regression_helpers.jl")
 
 @testset "Ray Casting Stress Tensor" begin
 
+    @testset "FourierStressTensorKernel constructor" begin
+        kernel = FourierStressTensorKernel(KineticTerm(), CosineWeight(), [0.5, 1.0])
+
+        @test kernel.mode_ws isa CosineModeWorkspace
+        @test kernel.ΔV == 1.0
+        @test kernel.v == 1.0
+    end
+
     # ═════════════════════════════════════════════════════════════════════════════
     # Test: I₃ Analytic Integral
     # ═════════════════════════════════════════════════════════════════════════════

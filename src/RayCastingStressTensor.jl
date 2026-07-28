@@ -19,9 +19,7 @@ using .StressTensor:
     TimeResolvedStressTensorAccumulant,
     FourierStressTensorKernel,
     TimeResolvedStressTensorKernel,
-    ModeWorkspace,
-    check_ks,
-    _alloc_accumulant
+    check_ks
 
 """
     ray_T_ij(ks, snapshot, space, boundary_condition;
@@ -66,19 +64,15 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   quadrature::SphericalQuadratureScheme;
                   ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
     ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    check_ks(terms, ks_f)
-    Nk = length(ks_f)
+    kernels = map(terms) do term
+        FourierStressTensorKernel(term, weight, ks_f; ΔV=ΔV, v=v)
+    end
 
-    isempty(snapshot.nucleations) && return map(t -> _alloc_accumulant(weight, t, Nk), terms)
+    isempty(snapshot.nucleations) && return map(allocate_accumulant, kernels)
 
     context = build_envelope_context(snapshot, space, bc; v=v)
     sources  = envelope_sources(snapshot; bubble_indices=bubble_indices)
     markers  = get_markers(quadrature)
-
-    mode_ws = ModeWorkspace(weight, Nk)
-    kernels = map(terms) do term
-        FourierStressTensorKernel(term, weight, ks_f, mode_ws, ΔV, v)
-    end
 
     return envelope_integral(kernels, sources, context, markers; τ_min=1.0e-12)
 end

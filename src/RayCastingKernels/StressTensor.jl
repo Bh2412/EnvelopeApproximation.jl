@@ -104,16 +104,10 @@ _alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
 # ═══════════════════════════════════════════════════════════════════════════════
 
 """
-    FourierStressTensorKernel{T,W}
+    FourierStressTensorKernel(term, weight, ks; ΔV=1.0, v=1.0)
 
 Kernel that accumulates Fourier-mode stress-tensor amplitudes inside the generic
 `envelope_integral` engine.
-
-Packages the physics parameters that used to live inside `ray_T_ij`:
-`term`, `weight`, `ks`, `mode_ws`, `ΔV`, `v`.
-
-All kernels built for the same call share a single `mode_ws` instance because
-they all write the same phases; sharing avoids redundant work.
 """
 struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector} <: Kernel
     term::T
@@ -122,6 +116,24 @@ struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:Abst
     mode_ws::ModeWorkspace{W}
     ΔV::Float64
     v::Float64
+end
+
+function FourierStressTensorKernel(
+    term::T,
+    weight::W,
+    ks::K;
+    ΔV::Real=1.0,
+    v::Real=1.0,
+) where {
+    T<:StressTensorTerm,
+    W<:TemporalWeight,
+    K<:AbstractVector{<:Real},
+}
+    check_ks(term, ks)
+    mode_ws = ModeWorkspace(weight, length(ks))
+    return FourierStressTensorKernel(
+        term, weight, ks, mode_ws, Float64(ΔV), Float64(v),
+    )
 end
 
 # --- extensions of the RayCastingEnvelopeIntegration generic kernel interface ---
