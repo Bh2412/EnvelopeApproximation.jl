@@ -3,7 +3,7 @@
 """
     TimeResolvedStressTensorAccumulant
 
-Accumulator returned by [`ray_T_ij_at_times`](@ref). `A` has axes
+Accumulant returned by [`ray_T_ij_at_times`](@ref). `A` has axes
 `(tensor_component, wave_number, time)`, where the tensor components are
 ordered `(11, 12, 13, 22, 23, 33)`.
 """
