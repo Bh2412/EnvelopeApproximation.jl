@@ -1,4 +1,4 @@
-module RayCastingLightConesSurface
+module RayCastingEnvelopeIntegration
 
 using StaticArrays
 using LinearAlgebra
@@ -237,4 +237,4 @@ function first_collision_time(
     return find_collision_time(n̂, workspace, source.time, t_end, v)
 end
 
-end # module RayCastingLightConesSurface
+end # module RayCastingEnvelopeIntegration

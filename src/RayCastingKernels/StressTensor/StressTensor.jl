@@ -1,5 +1,5 @@
 """
-    RayCastingStressEnergyTensor
+    StressTensor
 
 Ray-casting method for computing T_ij using deterministic spherical quadrature
 and analytic time integration via the I₃(α; a, b) formula.
@@ -20,7 +20,7 @@ is evaluated analytically:
 
 where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 """
-module RayCastingStressEnergyTensor
+module StressTensor
 
 import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
@@ -29,8 +29,8 @@ using EnvelopeApproximation.BoundaryConditions: Periodic
 using StaticArrays
 using LinearAlgebra
 
-import ..RayCastingLightConesSurface: allocate_accumulant, prepare_kernel!, accumulate_ray!
-using ..RayCastingLightConesSurface:
+import ..RayCastingEnvelopeIntegration: allocate_accumulant, prepare_kernel!, accumulate_ray!
+using ..RayCastingEnvelopeIntegration:
     LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
     collision_time,
     SphericalQuadratureScheme, SphericalQuadratureMarker, UniformSphericalCapScheme, get_markers
@@ -105,13 +105,13 @@ _alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
     ConstantAccumulant(zeros(ComplexF64, 6, Nk))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Fourier stress-energy kernel
+# Fourier stress-tensor kernel
 # ═══════════════════════════════════════════════════════════════════════════════
 
 """
     FourierStressTensorKernel{T,W}
 
-Kernel that accumulates Fourier-mode stress-energy amplitudes inside the generic
+Kernel that accumulates Fourier-mode stress-tensor amplitudes inside the generic
 `integrate_lightcone_surfaces` engine.
 
 Packages the physics parameters that used to live inside `ray_T_ij`:
@@ -129,7 +129,7 @@ struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:Abst
     v::Float64
 end
 
-# --- extensions of the RayCastingLightConesSurface generic kernel interface ---
+# --- extensions of the RayCastingEnvelopeIntegration generic kernel interface ---
 
 function allocate_accumulant(kernel::FourierStressTensorKernel)
     return _alloc_accumulant(kernel.weight, kernel.term, length(kernel.ks))
@@ -231,4 +231,4 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
     return NamedTuple{names}(accs)
 end
 
-end # module RayCastingStressEnergyTensor
+end # module StressTensor

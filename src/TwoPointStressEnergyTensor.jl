@@ -2,7 +2,7 @@ module TwoPointStressEnergyTensorModule
 
 import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
 using EnvelopeApproximation.StressEnergyTensorComponents
-using EnvelopeApproximation.RayCastingStressEnergyTensor: RayCastingSphericalQuadrature,
+using EnvelopeApproximation.StressTensor: RayCastingSphericalQuadrature,
     StressTensorTerm, KineticTerm, PotentialTerm,
     Accumulant, CosineAccumulant, ConstantAccumulant,
     amplitudes, ray_T_ij
@@ -16,7 +16,7 @@ export TwoPointStressEnergyTensor,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
     TimeIntegratedTwoPointStressEnergyTensor,
     TimeIntegratedTwoPointStressEnergyTensorPieces,
-    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor
+    RayCastingCosineTimeIntegratedTwoPointStressTensor
 
 abstract type TimeIntegrationStrategy end
 
@@ -777,13 +777,13 @@ function TimeIntegratedTwoPointStressEnergyTensor(
 end
 
 """
-    RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space,
+    RayCastingCosineTimeIntegratedTwoPointStressTensor(ωs, snapshot, space,
         boundary_condition, strategy; ΔV=1.0, bubble_indices=:)
 
 Convenience wrapper for `TimeIntegratedTwoPointStressEnergyTensor` with `CosineWeight`
 and `KineticTerm`. See that function for full documentation.
 """
-function RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
+function RayCastingCosineTimeIntegratedTwoPointStressTensor(
     ωs::AbstractVector{<:Real},
     snapshot::BubblesSnapShot,
     space::BoxSpace,
