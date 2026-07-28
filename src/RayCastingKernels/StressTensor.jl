@@ -30,7 +30,7 @@ using StaticArrays
 using LinearAlgebra
 
 using ..RayCastingEnvelopeIntegration:
-    LightConeSource, SphericalQuadratureScheme, UniformSphericalCapScheme
+    EnvelopeSource, SphericalQuadratureScheme, UniformSphericalCapScheme
 
 abstract type StressTensorTerm end
 abstract type Accumulant{W<:TemporalWeight} end
@@ -107,7 +107,7 @@ _alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
     FourierStressTensorKernel{T,W}
 
 Kernel that accumulates Fourier-mode stress-tensor amplitudes inside the generic
-`integrate_lightcone_surfaces` engine.
+`envelope_integral` engine.
 
 Packages the physics parameters that used to live inside `ray_T_ij`:
 `term`, `weight`, `ks`, `mode_ws`, `ΔV`, `v`.
@@ -130,7 +130,7 @@ function allocate_accumulant(kernel::FourierStressTensorKernel)
     return _alloc_accumulant(kernel.weight, kernel.term, length(kernel.ks))
 end
 
-function prepare_kernel!(kernel::FourierStressTensorKernel, source::LightConeSource)
+function prepare_kernel!(kernel::FourierStressTensorKernel, source::EnvelopeSource)
     prepare_source_modes!(kernel.mode_ws, kernel.weight, kernel.ks, source)
     return nothing
 end
@@ -138,7 +138,7 @@ end
 function accumulate_ray!(
     acc::Accumulant,
     kernel::FourierStressTensorKernel,
-    ::LightConeSource,
+    ::EnvelopeSource,
     n̂::SVector{3,Float64},
     wΩ::Float64,
     τ_stop::Float64,

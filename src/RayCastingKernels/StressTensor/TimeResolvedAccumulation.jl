@@ -100,7 +100,7 @@ end
 function accumulate_ray!(
     acc::TimeResolvedStressTensorAccumulant,
     kernel::TimeResolvedStressTensorKernel,
-    source::LightConeSource,
+    source::EnvelopeSource,
     n̂::SVector{3,Float64},
     wΩ::Float64,
     τ_stop::Float64,

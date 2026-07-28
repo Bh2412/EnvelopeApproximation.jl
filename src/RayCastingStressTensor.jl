@@ -4,9 +4,9 @@ using .BubblesEvolution: BubblesSnapShot
 using .Spaces: BoxSpace
 using .BoundaryConditions: Periodic
 using .RayCastingEnvelopeIntegration:
-    build_lightcone_context,
-    lightcone_sources,
-    integrate_lightcone_surfaces,
+    build_envelope_context,
+    envelope_sources,
+    envelope_integral,
     SphericalQuadratureScheme,
     UniformSphericalCapScheme,
     get_markers
@@ -71,8 +71,8 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
 
     isempty(snapshot.nucleations) && return map(t -> _alloc_accumulant(weight, t, Nk), terms)
 
-    context = build_lightcone_context(snapshot, space, bc; v=v)
-    sources  = lightcone_sources(snapshot; bubble_indices=bubble_indices)
+    context = build_envelope_context(snapshot, space, bc; v=v)
+    sources  = envelope_sources(snapshot; bubble_indices=bubble_indices)
     markers  = get_markers(quadrature)
 
     mode_ws = ModeWorkspace(weight, Nk)
@@ -80,7 +80,7 @@ function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
         FourierStressTensorKernel(term, weight, ks_f, mode_ws, ΔV, v)
     end
 
-    return integrate_lightcone_surfaces(kernels, sources, context, markers; τ_min=1.0e-12)
+    return envelope_integral(kernels, sources, context, markers; τ_min=1.0e-12)
 end
 
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
@@ -130,11 +130,11 @@ function ray_T_ij_at_times(
     kernel = TimeResolvedStressTensorKernel(term, times_f, ks_f, ΔV, v)
     isempty(snapshot.nucleations) && return allocate_accumulant(kernel)
 
-    context = build_lightcone_context(snapshot, space, bc; v=v)
-    sources = lightcone_sources(snapshot; bubble_indices=bubble_indices)
+    context = build_envelope_context(snapshot, space, bc; v=v)
+    sources = envelope_sources(snapshot; bubble_indices=bubble_indices)
     markers = get_markers(quadrature)
 
-    return only(integrate_lightcone_surfaces(
+    return only(envelope_integral(
         (kernel,), sources, context, markers; τ_min=1.0e-12,
     ))
 end
