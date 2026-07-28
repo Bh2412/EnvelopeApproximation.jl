@@ -272,6 +272,54 @@ include("regression_helpers.jl")
     end
 end
 
+@testset "Time-resolved ray-casting stress tensor" begin
+    nuc = (time=0.0, site=Point3(0.0, 0.0, 0.0))
+    snapshot = BubblesSnapShot([nuc], 1.0)
+    space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+    bc = Periodic()
+    scheme = UniformSphericalCapScheme(3, 6)
+    ks = [0.5, 1.0]
+    times = range(0.0, 1.0, length=2001)
+
+    kinetic = ray_T_ij_at_times(
+        times, ks, snapshot, space, bc;
+        term=KineticTerm(), quadrature=scheme, ΔV=1.0,
+    )
+    potential = ray_T_ij_at_times(
+        times, ks, snapshot, space, bc;
+        term=PotentialTerm(), quadrature=scheme, ΔV=1.0,
+    )
+    total = ray_T_ij_at_times(
+        times, ks, snapshot, space, bc;
+        term=TotalStressTerm(), quadrature=scheme, ΔV=1.0,
+    )
+
+    @test size(amplitudes(total)) == (6, length(ks), length(times))
+    @test amplitudes(total) ≈ amplitudes(kinetic) .+ amplitudes(potential)
+    @test iszero(amplitudes(total)[:, :, 1])
+
+    # The delta-time kernel integrates to the existing ConstantWeight kernel.
+    dt = step(times)
+    integrated = dt .* (
+        dropdims(sum(amplitudes(total); dims=3); dims=3) .-
+        0.5 .* amplitudes(total)[:, :, 1] .-
+        0.5 .* amplitudes(total)[:, :, end]
+    )
+    reference = amplitudes(ray_T_ij(
+        ks, snapshot, space, bc,
+        TotalStressTerm(), ConstantWeight(), scheme; ΔV=1.0,
+    ))
+    @test integrated ≈ reference rtol=2.0e-6 atol=2.0e-8
+
+    @test_throws ArgumentError ray_T_ij_at_times(
+        [1.0, 0.0], ks, snapshot, space, bc; quadrature=scheme,
+    )
+    @test_throws ArgumentError ray_T_ij_at_times(
+        times, [0.0], snapshot, space, bc;
+        term=PotentialTerm(), quadrature=scheme,
+    )
+end
+
 function total_piece(pieces::NamedTuple)
     first_outer = first(values(first(values(pieces))))
     total = zero(first_outer)

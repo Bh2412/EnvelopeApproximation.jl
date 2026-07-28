@@ -54,6 +54,7 @@ end
 include("I2Kernels.jl")
 include("I3Kernels.jl")
 include("ModeAccumulation.jl")
+include("TimeResolvedAccumulation.jl")
 include("Strategies.jl")
 
 
@@ -73,12 +74,15 @@ export SphericalQuadratureScheme,
        Accumulant,
        CosineAccumulant,
        ConstantAccumulant,
+       TimeResolvedStressTensorAccumulant,
        ModeWorkspace,
        CosineModeWorkspace,
        ConstantModeWorkspace,
        FourierStressTensorKernel,
+       TimeResolvedStressTensorKernel,
        amplitudes,
-       ray_T_ij
+       ray_T_ij,
+       ray_T_ij_at_times
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Accumulant helpers
