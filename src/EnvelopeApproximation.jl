@@ -26,7 +26,9 @@ include("RayCastingKernels/Kernels.jl")
 
 include("RayCastingEnvelopeIntegration/EnvelopeIntegration.jl")
 
-include("RayCastingKernels/StressTensor/StressTensor.jl")
+include("RayCastingKernels/StressTensor.jl")
+
+include("RayCastingStressTensor.jl")
 
 include("TwoPointStressEnergyTensor.jl")
 

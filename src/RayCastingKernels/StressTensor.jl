@@ -25,16 +25,12 @@ module StressTensor
 import EnvelopeApproximation:
     TemporalWeight, CosineWeight, ConstantWeight,
     Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!
-using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
-using EnvelopeApproximation.Spaces: BoxSpace
-using EnvelopeApproximation.BoundaryConditions: Periodic
+using EnvelopeApproximation.BubblesEvolution: Nucleation
 using StaticArrays
 using LinearAlgebra
 
 using ..RayCastingEnvelopeIntegration:
-    LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
-    collision_time,
-    SphericalQuadratureScheme, SphericalQuadratureMarker, UniformSphericalCapScheme, get_markers
+    LightConeSource, SphericalQuadratureScheme, UniformSphericalCapScheme
 
 abstract type StressTensorTerm end
 abstract type Accumulant{W<:TemporalWeight} end
@@ -52,11 +48,11 @@ struct ConstantAccumulant <: Accumulant{ConstantWeight}
     A::Matrix{ComplexF64}
 end
 
-include("I2Kernels.jl")
-include("I3Kernels.jl")
-include("ModeAccumulation.jl")
-include("TimeResolvedAccumulation.jl")
-include("Strategies.jl")
+include("StressTensor/I2Kernels.jl")
+include("StressTensor/I3Kernels.jl")
+include("StressTensor/ModeAccumulation.jl")
+include("StressTensor/TimeResolvedAccumulation.jl")
+include("StressTensor/Strategies.jl")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -81,9 +77,7 @@ export SphericalQuadratureScheme,
        ConstantModeWorkspace,
        FourierStressTensorKernel,
        TimeResolvedStressTensorKernel,
-       amplitudes,
-       ray_T_ij,
-       ray_T_ij_at_times
+       amplitudes
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Accumulant helpers
@@ -154,82 +148,6 @@ function accumulate_ray!(
         τ_stop, n̂, wΩ, kernel.mode_ws, kernel.ΔV, kernel.v,
     )
     return nothing
-end
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Ray-Casting T_ij — public API (signatures unchanged)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-"""
-    ray_T_ij(ks, snapshot, space, boundary_condition;
-             term=KineticTerm(), weight=CosineWeight(),
-             quadrature=UniformSphericalCapScheme(16, 32),
-             ΔV=1.0, v=1.0, bubble_indices=:)
-
-Compute ray-cast time-integrated stress-tensor amplitudes.
-
-- `term`: local contribution, e.g. `KineticTerm`, `PotentialTerm`, `TotalStressTerm`
-- `weight`: time weighting, e.g. `CosineWeight` or `ConstantWeight`
-- `quadrature`: ray directions
-
-Returns an `Accumulant`. Use `amplitudes(acc)` to access the stored arrays.
-"""
-function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, boundary_condition::Periodic;
-                  term::StressTensorTerm=KineticTerm(),
-                  weight::TemporalWeight=CosineWeight(),
-                  quadrature::SphericalQuadratureScheme=UniformSphericalCapScheme(16, 32),
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:)
-    return ray_T_ij(
-        ks, snapshot, space, boundary_condition,
-        term, weight, quadrature;
-        ΔV=ΔV, v=v, bubble_indices=bubble_indices,
-    )
-end
-
-function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, bc::Periodic,
-                  term::StressTensorTerm,
-                  weight::W,
-                  quadrature::SphericalQuadratureScheme;
-                  kwargs...) where {W<:TemporalWeight}
-    return only(ray_T_ij(ks, snapshot, space, bc, (term,), weight, quadrature; kwargs...))
-end
-
-function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, bc::Periodic,
-                  terms::Tuple,
-                  weight::W,
-                  quadrature::SphericalQuadratureScheme;
-                  ΔV::Float64=1.0, v::Float64=1., bubble_indices=:) where {W<:TemporalWeight}
-    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    check_ks(terms, ks_f)
-    Nk = length(ks_f)
-
-    isempty(snapshot.nucleations) && return map(t -> _alloc_accumulant(weight, t, Nk), terms)
-
-    context = build_lightcone_context(snapshot, space, bc; v=v)
-    sources  = lightcone_sources(snapshot; bubble_indices=bubble_indices)
-    markers  = get_markers(quadrature)
-
-    mode_ws = ModeWorkspace(weight, Nk)
-    kernels = map(terms) do term
-        FourierStressTensorKernel(term, weight, ks_f, mode_ws, ΔV, v)
-    end
-
-    return integrate_lightcone_surfaces(kernels, sources, context, markers; τ_min=1.0e-12)
-end
-
-function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
-                  space::BoxSpace, bc::Periodic,
-                  named_terms::Tuple{Vararg{Pair{Symbol,<:StressTensorTerm}}},
-                  weight::W,
-                  quadrature::SphericalQuadratureScheme;
-                  kwargs...) where {W<:TemporalWeight}
-    names = map(first, named_terms)
-    terms = map(last, named_terms)
-    accs  = ray_T_ij(ks, snapshot, space, bc, terms, weight, quadrature; kwargs...)
-    return NamedTuple{names}(accs)
 end
 
 end # module StressTensor

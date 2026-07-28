@@ -1,11 +1,11 @@
 module TwoPointStressEnergyTensorModule
 
-import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
+import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight, ray_T_ij
 using EnvelopeApproximation.StressEnergyTensorComponents
 using EnvelopeApproximation.StressTensor: RayCastingSphericalQuadrature,
     StressTensorTerm, KineticTerm, PotentialTerm,
     Accumulant, CosineAccumulant, ConstantAccumulant,
-    amplitudes, ray_T_ij
+    amplitudes
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
 using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
