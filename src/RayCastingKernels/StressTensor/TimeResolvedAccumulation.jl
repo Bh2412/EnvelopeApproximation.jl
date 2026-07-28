@@ -24,7 +24,7 @@ struct TimeResolvedStressTensorKernel{
     T<:StressTensorTerm,
     Times<:AbstractVector,
     K<:AbstractVector,
-}
+} <: Kernel
     term::T
     times::Times
     ks::K
@@ -100,7 +100,7 @@ end
 function accumulate_ray!(
     acc::TimeResolvedStressTensorAccumulant,
     kernel::TimeResolvedStressTensorKernel,
-    source::LightConeSource,
+    source::EnvelopeSource,
     n̂::SVector{3,Float64},
     wΩ::Float64,
     τ_stop::Float64,
@@ -127,48 +127,4 @@ function accumulate_ray!(
         end
     end
     return nothing
-end
-
-"""
-    ray_T_ij_at_times(times, ks, snapshot, space, boundary_condition;
-                      term=KineticTerm(),
-                      quadrature=UniformSphericalCapScheme(16, 32),
-                      ΔV=1.0, v=1.0, bubble_indices=:)
-
-Evaluate the ray-cast Fourier stress tensor `T̃ᵢⱼ(t, k)` at a sorted time grid.
-The returned [`TimeResolvedStressTensorAccumulant`](@ref) stores an array of
-shape `(6, length(ks), length(times))`; use [`amplitudes`](@ref) to access it.
-
-This is the delta-time kernel corresponding to the existing time-integrated
-kernel. Consequently, integrating its amplitudes over `times` reproduces
-`ray_T_ij(..., ConstantWeight(), ...)` (up to time-quadrature error).
-"""
-function ray_T_ij_at_times(
-    times::AbstractVector{<:Real},
-    ks::AbstractVector{<:Real},
-    snapshot::BubblesSnapShot,
-    space::BoxSpace,
-    bc::Periodic;
-    term::StressTensorTerm=KineticTerm(),
-    quadrature::SphericalQuadratureScheme=UniformSphericalCapScheme(16, 32),
-    ΔV::Float64=1.0,
-    v::Float64=1.0,
-    bubble_indices=:,
-)
-    issorted(times) || throw(ArgumentError("times must be sorted in nondecreasing order"))
-
-    times_f = collect(Float64, times)
-    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    check_ks(term, ks_f)
-
-    kernel = TimeResolvedStressTensorKernel(term, times_f, ks_f, ΔV, v)
-    isempty(snapshot.nucleations) && return allocate_accumulant(kernel)
-
-    context = build_lightcone_context(snapshot, space, bc; v=v)
-    sources = lightcone_sources(snapshot; bubble_indices=bubble_indices)
-    markers = get_markers(quadrature)
-
-    return only(integrate_lightcone_surfaces(
-        (kernel,), sources, context, markers; τ_min=1.0e-12,
-    ))
 end

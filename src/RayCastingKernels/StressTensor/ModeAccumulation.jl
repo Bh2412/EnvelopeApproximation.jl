@@ -101,7 +101,7 @@ function prepare_source_modes!(
     ws::CosineModeWorkspace,
     ::CosineWeight,
     ks::AbstractVector{<:Real},
-    source::LightConeSource,
+    source::EnvelopeSource,
 )
     resize!(ws, length(ks))
 
@@ -120,7 +120,7 @@ function prepare_source_modes!(
     ws::ConstantModeWorkspace,
     ::ConstantWeight,
     ks::AbstractVector{<:Real},
-    source::LightConeSource,
+    source::EnvelopeSource,
 )
     resize!(ws, length(ks))
 

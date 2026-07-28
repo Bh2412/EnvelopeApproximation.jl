@@ -3,14 +3,14 @@ Unit tests for ray-casting T_ij computation.
 """
 
 using EnvelopeApproximation
-using EnvelopeApproximation.RayCastingStressEnergyTensor
-import EnvelopeApproximation.RayCastingStressEnergyTensor: I3, I2, compute_sincos_grid!,
+using EnvelopeApproximation.StressTensor
+import EnvelopeApproximation.StressTensor: I3, I2, compute_sincos_grid!,
     KineticTerm, PotentialTerm, TotalStressTerm
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
-using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor,
+using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressTensor,
     TimeIntegratedTwoPointStressEnergyTensor,
     TimeIntegratedTwoPointStressEnergyTensorPieces
 using Test
@@ -22,7 +22,15 @@ import EnvelopeApproximation.BubblesEvolution: sample_PT
 
 include("regression_helpers.jl")
 
-@testset "Ray Casting Stress Energy Tensor" begin
+@testset "Ray Casting Stress Tensor" begin
+
+    @testset "FourierStressTensorKernel constructor" begin
+        kernel = FourierStressTensorKernel(KineticTerm(), CosineWeight(), [0.5, 1.0])
+
+        @test kernel.mode_ws isa CosineModeWorkspace
+        @test kernel.ΔV == 1.0
+        @test kernel.v == 1.0
+    end
 
     # ═════════════════════════════════════════════════════════════════════════════
     # Test: I₃ Analytic Integral
@@ -222,7 +230,7 @@ include("regression_helpers.jl")
         strategy = RayCastingSphericalQuadrature(scheme)
 
         ks = [0.5, 1.0]
-        result = RayCastingCosineTimeIntegratedTwoPointStressEnergyTensor(
+        result = RayCastingCosineTimeIntegratedTwoPointStressTensor(
             ks, snapshot, space, bc, strategy; ΔV=1.0
         )
 

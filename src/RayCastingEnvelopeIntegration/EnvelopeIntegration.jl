@@ -1,8 +1,10 @@
-module RayCastingLightConesSurface
+module RayCastingEnvelopeIntegration
 
 using StaticArrays
 using LinearAlgebra
 
+import EnvelopeApproximation:
+    Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!, finalize_accumulant!
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
@@ -12,15 +14,12 @@ using EnvelopeApproximation.EnvelopeAnalysis: append_periodic_bubbles!
 include("CollisionSearch.jl")
 include("SphericalQuadratureScheme.jl")
 
-export LightConeSource,
-       LightConeSurfaceContext,
-       lightcone_sources,
-       build_lightcone_context,
-       integrate_lightcone_surfaces!,
-       integrate_lightcone_surfaces,
-       allocate_accumulant,
-       prepare_kernel!,
-       accumulate_ray!,
+export EnvelopeSource,
+       EnvelopeContext,
+       envelope_sources,
+       build_envelope_context,
+       envelope_integral!,
+       envelope_integral,
        ray_stop_time,
        SphericalQuadratureScheme,
        SphericalQuadratureMarker,
@@ -31,17 +30,17 @@ export LightConeSource,
 # 1. Source representation
 # =============================================================================
 
-struct LightConeSource
+struct EnvelopeSource
     id::Int
     time::Float64
     center::SVector{3,Float64}
 end
 
-function lightcone_sources(snapshot::BubblesSnapShot; bubble_indices = :)
+function envelope_sources(snapshot::BubblesSnapShot; bubble_indices = :)
     inds = bubble_indices isa Colon ? eachindex(snapshot.nucleations) : bubble_indices
     return map(inds) do i
         nuc = snapshot.nucleations[i]
-        LightConeSource(
+        EnvelopeSource(
             Int(i),
             Float64(nuc.time),
             SVector{3,Float64}(coordinates(nuc.site)),
@@ -50,10 +49,10 @@ function lightcone_sources(snapshot::BubblesSnapShot; bubble_indices = :)
 end
 
 # =============================================================================
-# 2. Snapshot-derived light-cone context
+# 2. Snapshot-derived envelope context
 # =============================================================================
 
-struct LightConeSurfaceContext{Snapshot,Space,BC,Blockers,Workspace}
+struct EnvelopeContext{Snapshot,Space,BC,Blockers,Workspace}
     snapshot::Snapshot
     space::Space
     boundary_condition::BC
@@ -63,15 +62,15 @@ struct LightConeSurfaceContext{Snapshot,Space,BC,Blockers,Workspace}
     v::Float64
 end
 
-function build_lightcone_context(
+function build_envelope_context(
     snapshot::BubblesSnapShot,
     space::BoxSpace,
     boundary_condition;
     v::Float64 = 1.0,
 )
-    blockers = build_lightcone_blockers(snapshot, space, boundary_condition; v=v)
-    workspace = allocate_lightcone_workspace(blockers)
-    return LightConeSurfaceContext(
+    blockers = build_envelope_blockers(snapshot, space, boundary_condition; v=v)
+    workspace = allocate_envelope_workspace(blockers)
+    return EnvelopeContext(
         snapshot,
         space,
         boundary_condition,
@@ -87,8 +86,8 @@ end
 # =============================================================================
 
 function prepare_source!(
-    context::LightConeSurfaceContext,
-    source::LightConeSource,
+    context::EnvelopeContext,
+    source::EnvelopeSource,
 )
     prepare_source_collision!(
         context.workspace,
@@ -101,8 +100,8 @@ function prepare_source!(
 end
 
 function ray_stop_time(
-    context::LightConeSurfaceContext,
-    source::LightConeSource,
+    context::EnvelopeContext,
+    source::EnvelopeSource,
     n̂::SVector{3,Float64},
 )::Float64
     return first_collision_time(
@@ -115,26 +114,14 @@ function ray_stop_time(
 end
 
 # =============================================================================
-# 4. Kernel / accumulant interface
+# 4. Generic envelope integrator
 # =============================================================================
 
-function allocate_accumulant end
-
-prepare_kernel!(kernel, source::LightConeSource) = nothing
-
-function accumulate_ray! end
-
-finalize_accumulant!(acc, kernel) = acc
-
-# =============================================================================
-# 5. Generic light-cone surface integrator
-# =============================================================================
-
-function integrate_lightcone_surfaces!(
+function envelope_integral!(
     accs::Tuple,
-    kernels::Tuple,
+    kernels::Tuple{Vararg{Kernel}},
     sources,
-    context::LightConeSurfaceContext,
+    context::EnvelopeContext,
     markers;
     τ_min::Float64 = 0.0,
 )
@@ -164,22 +151,22 @@ function integrate_lightcone_surfaces!(
     return accs
 end
 
-function integrate_lightcone_surfaces(
-    kernels::Tuple,
+function envelope_integral(
+    kernels::Tuple{Vararg{Kernel}},
     sources,
-    context::LightConeSurfaceContext,
+    context::EnvelopeContext,
     markers;
     kwargs...,
 )
     accs = map(allocate_accumulant, kernels)
-    return integrate_lightcone_surfaces!(accs, kernels, sources, context, markers; kwargs...)
+    return envelope_integral!(accs, kernels, sources, context, markers; kwargs...)
 end
 
 # =============================================================================
-# 6. Implementations of the geometric interface
+# 5. Implementations of the geometric interface
 # =============================================================================
 
-function build_lightcone_blockers(
+function build_envelope_blockers(
     snapshot::BubblesSnapShot,
     space::BoxSpace,
     ::Periodic;
@@ -209,14 +196,14 @@ function build_lightcone_blockers(
     return NucleationSoA(nucleations)
 end
 
-function allocate_lightcone_workspace(blockers::NucleationSoA)
+function allocate_envelope_workspace(blockers::NucleationSoA)
     return SourceCollisionWorkspace(length(blockers.t))
 end
 
 function prepare_source_collision!(
     ws::SourceCollisionWorkspace,
     blockers::NucleationSoA,
-    source::LightConeSource,
+    source::EnvelopeSource,
     t_end::Float64,
     v::Float64,
 )
@@ -229,7 +216,7 @@ end
 
 function first_collision_time(
     workspace::SourceCollisionWorkspace,
-    source::LightConeSource,
+    source::EnvelopeSource,
     n̂::SVector{3,Float64},
     t_end::Float64,
     v::Float64,
@@ -237,4 +224,4 @@ function first_collision_time(
     return find_collision_time(n̂, workspace, source.time, t_end, v)
 end
 
-end # module RayCastingLightConesSurface
+end # module RayCastingEnvelopeIntegration
