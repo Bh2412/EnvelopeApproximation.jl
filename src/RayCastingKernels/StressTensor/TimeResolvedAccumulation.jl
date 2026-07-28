@@ -24,7 +24,7 @@ struct TimeResolvedStressTensorKernel{
     T<:StressTensorTerm,
     Times<:AbstractVector,
     K<:AbstractVector,
-}
+} <: Kernel
     term::T
     times::Times
     ks::K

@@ -3,6 +3,8 @@ module RayCastingEnvelopeIntegration
 using StaticArrays
 using LinearAlgebra
 
+import EnvelopeApproximation:
+    Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!, finalize_accumulant!
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
@@ -18,9 +20,6 @@ export LightConeSource,
        build_lightcone_context,
        integrate_lightcone_surfaces!,
        integrate_lightcone_surfaces,
-       allocate_accumulant,
-       prepare_kernel!,
-       accumulate_ray!,
        ray_stop_time,
        SphericalQuadratureScheme,
        SphericalQuadratureMarker,
@@ -115,24 +114,12 @@ function ray_stop_time(
 end
 
 # =============================================================================
-# 4. Kernel / accumulant interface
-# =============================================================================
-
-function allocate_accumulant end
-
-prepare_kernel!(kernel, source::LightConeSource) = nothing
-
-function accumulate_ray! end
-
-finalize_accumulant!(acc, kernel) = acc
-
-# =============================================================================
-# 5. Generic light-cone surface integrator
+# 4. Generic light-cone surface integrator
 # =============================================================================
 
 function integrate_lightcone_surfaces!(
     accs::Tuple,
-    kernels::Tuple,
+    kernels::Tuple{Vararg{Kernel}},
     sources,
     context::LightConeSurfaceContext,
     markers;
@@ -165,7 +152,7 @@ function integrate_lightcone_surfaces!(
 end
 
 function integrate_lightcone_surfaces(
-    kernels::Tuple,
+    kernels::Tuple{Vararg{Kernel}},
     sources,
     context::LightConeSurfaceContext,
     markers;
@@ -176,7 +163,7 @@ function integrate_lightcone_surfaces(
 end
 
 # =============================================================================
-# 6. Implementations of the geometric interface
+# 5. Implementations of the geometric interface
 # =============================================================================
 
 function build_lightcone_blockers(

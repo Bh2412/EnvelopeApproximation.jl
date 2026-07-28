@@ -22,14 +22,15 @@ where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 """
 module StressTensor
 
-import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight
+import EnvelopeApproximation:
+    TemporalWeight, CosineWeight, ConstantWeight,
+    Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, Nucleation
 using EnvelopeApproximation.Spaces: BoxSpace
 using EnvelopeApproximation.BoundaryConditions: Periodic
 using StaticArrays
 using LinearAlgebra
 
-import ..RayCastingEnvelopeIntegration: allocate_accumulant, prepare_kernel!, accumulate_ray!
 using ..RayCastingEnvelopeIntegration:
     LightConeSource, build_lightcone_context, lightcone_sources, integrate_lightcone_surfaces,
     collision_time,
@@ -120,7 +121,7 @@ Packages the physics parameters that used to live inside `ray_T_ij`:
 All kernels built for the same call share a single `mode_ws` instance because
 they all write the same phases; sharing avoids redundant work.
 """
-struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector}
+struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector} <: Kernel
     term::T
     weight::W
     ks::K
