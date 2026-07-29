@@ -56,7 +56,7 @@ For a live marker with angular weight `wΩ`, the contribution at time `t` is
 `wΩ * v³ * τ²`, where `τ = t - tₙ`. A marker contributes only while
 `0 < τ ≤ τ_stop`.
 """
-# Geometrically, TrueVacuumVolumeDerivative = TrueVacuumSurface * v.
+# Geometrically, TrueVacuumVolumeDerivative = S * v where S is the surface of the true-vacuum.
 struct TrueVacuumVolumeDerivative{Times<:AbstractVector{<:Real}} <: Kernel
     times::Times
     v::Float64
