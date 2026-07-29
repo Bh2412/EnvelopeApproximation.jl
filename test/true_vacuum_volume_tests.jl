@@ -9,9 +9,13 @@ using Test
 
 @testset "TrueVacuumVolume kernel" begin
     @test_throws ArgumentError TrueVacuumVolume([1.0, 0.0])
+    @test_throws ArgumentError TrueVacuumVolume([0.0, 1.0]; v=0.0)
 
     times = [-0.5, 0.0, 0.5, 1.0]
-    kernel = TrueVacuumVolume(times)
+    @test TrueVacuumVolume(times).v == 1.0
+
+    v = 0.5
+    kernel = TrueVacuumVolume(times; v=v)
     volumes = allocate_accumulant(kernel)
     source = EnvelopeSource(1, 0.0, SVector(0.0, 0.0, 0.0))
 
@@ -19,7 +23,12 @@ using Test
         volumes, kernel, source, SVector(1.0, 0.0, 0.0), 2.0, 0.75,
     )
 
-    @test volumes ≈ [0.0, 0.0, 2.0 * 0.5^3 / 3.0, 2.0 * 0.75^3 / 3.0]
+    @test volumes ≈ [
+        0.0,
+        0.0,
+        2.0 * (v * 0.5)^3 / 3.0,
+        2.0 * (v * 0.75)^3 / 3.0,
+    ]
 
     snapshot = BubblesSnapShot(
         [(time=0.0, site=Point3(0.0, 0.0, 0.0))],
