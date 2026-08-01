@@ -1,6 +1,7 @@
 module TwoPointStressEnergyTensorModule
 
-import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight, ray_T_ij
+import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight,
+    ComplexExponential, ray_T_ij
 using EnvelopeApproximation.StressEnergyTensorComponents
 using EnvelopeApproximation.StressTensor: RayCastingSphericalQuadrature,
     StressTensorTerm, KineticTerm, PotentialTerm,
@@ -12,7 +13,7 @@ using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
 using QuadGK
 
 export TwoPointStressEnergyTensor,
-    TemporalWeight, CosineWeight, ConstantWeight,
+    TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
     TimeIntegratedTwoPointStressEnergyTensor,
     TimeIntegratedTwoPointStressEnergyTensorPieces,

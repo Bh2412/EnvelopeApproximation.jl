@@ -23,7 +23,7 @@ where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 module StressTensor
 
 import EnvelopeApproximation:
-    TemporalWeight, CosineWeight, ConstantWeight,
+    TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential,
     Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!
 using EnvelopeApproximation.BubblesEvolution: Nucleation
 using StaticArrays
@@ -48,6 +48,10 @@ struct ConstantAccumulant <: Accumulant{ConstantWeight}
     A::Matrix{ComplexF64}
 end
 
+struct ComplexExponentialAccumulant{N} <: Accumulant{ComplexExponential{N}}
+    A::Array{ComplexF64,3}
+end
+
 include("StressTensor/I2Kernels.jl")
 include("StressTensor/I3Kernels.jl")
 include("StressTensor/ModeAccumulation.jl")
@@ -68,13 +72,16 @@ export SphericalQuadratureScheme,
        TemporalWeight,
        CosineWeight,
        ConstantWeight,
+       ComplexExponential,
        Accumulant,
        CosineAccumulant,
        ConstantAccumulant,
+       ComplexExponentialAccumulant,
        TimeResolvedStressTensorAccumulant,
        ModeWorkspace,
        CosineModeWorkspace,
        ConstantModeWorkspace,
+       ComplexExponentialModeWorkspace,
        FourierStressTensorKernel,
        TimeResolvedStressTensorKernel,
        amplitudes
@@ -85,6 +92,7 @@ export SphericalQuadratureScheme,
 
 amplitudes(acc::CosineAccumulant) = (acc.A_plus, acc.A_minus)
 amplitudes(acc::ConstantAccumulant) = acc.A
+amplitudes(acc::ComplexExponentialAccumulant) = acc.A
 
 check_ks(::KineticTerm, ks) = nothing
 function check_ks(::Union{PotentialTerm, TotalStressTerm}, ks)
@@ -99,6 +107,9 @@ _alloc_accumulant(::CosineWeight, ::StressTensorTerm, Nk::Int) =
 _alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
     ConstantAccumulant(zeros(ComplexF64, 6, Nk))
 
+_alloc_accumulant(::ComplexExponential{N}, ::StressTensorTerm, Nk::Int) where {N} =
+    ComplexExponentialAccumulant{N}(zeros(ComplexF64, 6, Nk, N))
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fourier stress-tensor kernel
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -109,7 +120,7 @@ _alloc_accumulant(::ConstantWeight, ::StressTensorTerm, Nk::Int) =
 Kernel that accumulates Fourier-mode stress-tensor amplitudes inside the generic
 `envelope_integral` engine.
 """
-struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector} <: Kernel
+struct FourierStressTensorKernel{T<:StressTensorTerm, W<:TemporalWeight, K<:AbstractVector{<:Real}} <: Kernel
     term::T
     weight::W
     ks::K
