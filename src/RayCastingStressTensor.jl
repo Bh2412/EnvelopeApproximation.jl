@@ -30,10 +30,14 @@ using .StressTensor:
 Compute ray-cast time-integrated stress-tensor amplitudes.
 
 - `term`: local contribution, e.g. `KineticTerm`, `PotentialTerm`, `TotalStressTerm`
-- `weight`: time weighting, e.g. `CosineWeight` or `ConstantWeight`
+- `weight`: time weighting, e.g. `CosineWeight`, `ConstantWeight`, or
+  `ComplexExponential(ωs)`
 - `quadrature`: ray directions
 
 Returns an `Accumulant`. Use `amplitudes(acc)` to access the stored arrays.
+For `ComplexExponential(ωs)`, the amplitude shape is
+`(6, length(ks), length(ωs))`, ordered as tensor component, spatial mode, and
+temporal frequency.
 """
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   space::BoxSpace, boundary_condition::Periodic;

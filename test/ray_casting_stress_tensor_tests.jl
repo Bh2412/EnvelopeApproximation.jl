@@ -5,7 +5,7 @@ Unit tests for ray-casting T_ij computation.
 using EnvelopeApproximation
 using EnvelopeApproximation.StressTensor
 import EnvelopeApproximation.StressTensor: I3, I2, compute_sincos_grid!,
-    KineticTerm, PotentialTerm, TotalStressTerm
+    prepare_source_modes!, KineticTerm, PotentialTerm, TotalStressTerm
 using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
@@ -30,6 +30,20 @@ include("regression_helpers.jl")
         @test kernel.mode_ws isa CosineModeWorkspace
         @test kernel.ΔV == 1.0
         @test kernel.v == 1.0
+
+        weight = ComplexExponential([0, 0.5, -1.0])
+        complex_kernel = FourierStressTensorKernel(KineticTerm(), weight, [0.5, 1.0])
+
+        @test weight isa ComplexExponential{3}
+        @test weight.ωs == [0.0, 0.5, -1.0]
+        @test complex_kernel.mode_ws isa ComplexExponentialModeWorkspace{3}
+        @test size(complex_kernel.mode_ws.phase) == (2, 3)
+
+        source = (time=0.2, site=Point3(0.0, 0.0, 0.3))
+        prepare_source_modes!(complex_kernel.mode_ws, weight, [0.5, 1.0], source)
+        expected_phase = [cis(ω * source.time - k * source.site.coordinates[3])
+                          for k in [0.5, 1.0], ω in weight.ωs]
+        @test complex_kernel.mode_ws.phase ≈ expected_phase
     end
 
     # ═════════════════════════════════════════════════════════════════════════════
@@ -213,6 +227,46 @@ include("regression_helpers.jl")
                 end
             end
         end
+    end
+
+    @testset "Complex-exponential temporal transform" begin
+        nuc1 = (time=0.1, site=Point3(0.0, 0.0, 0.25))
+        nuc2 = (time=0.3, site=Point3(1.0, 0.0, -0.4))
+        snapshot = BubblesSnapShot([nuc1, nuc2], 1.5)
+        space = BoxSpace(10.0, Point3(0.0, 0.0, 0.0))
+        bc = Periodic()
+        scheme = UniformSphericalCapScheme(4, 8)
+
+        ks = [0.5, 1.0]
+        temporal_frequencies = [0.0; ks; -ks]
+        weight = ComplexExponential(temporal_frequencies)
+
+        for term in (KineticTerm(), PotentialTerm(), TotalStressTerm())
+            A = amplitudes(ray_T_ij(
+                ks, snapshot, space, bc, term, weight, scheme; ΔV=1.0,
+            ))
+            A_constant = amplitudes(ray_T_ij(
+                ks, snapshot, space, bc, term, ConstantWeight(), scheme; ΔV=1.0,
+            ))
+            A_plus, A_minus = amplitudes(ray_T_ij(
+                ks, snapshot, space, bc, term, CosineWeight(), scheme; ΔV=1.0,
+            ))
+
+            @test size(A) == (6, length(ks), length(temporal_frequencies))
+            @test A[:, :, 1] ≈ A_constant
+            for q in eachindex(ks)
+                @test A[:, q, 1 + q] ≈ A_plus[:, q]
+                @test A[:, q, 1 + length(ks) + q] ≈ A_minus[:, q]
+            end
+        end
+
+        empty_snapshot = BubblesSnapShot(typeof(nuc1)[], 1.5)
+        empty_A = amplitudes(ray_T_ij(
+            ks, empty_snapshot, space, bc,
+            KineticTerm(), weight, scheme; ΔV=1.0,
+        ))
+        @test size(empty_A) == (6, length(ks), length(temporal_frequencies))
+        @test iszero(empty_A)
     end
 
     # ═════════════════════════════════════════════════════════════════════════════
