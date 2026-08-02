@@ -55,6 +55,9 @@ end
 include("StressTensor/I2Kernels.jl")
 include("StressTensor/I3Kernels.jl")
 include("StressTensor/ModeAccumulation.jl")
+include("StressTensor/Cosine.jl")
+include("StressTensor/Constant.jl")
+include("StressTensor/ComplexExponential.jl")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
