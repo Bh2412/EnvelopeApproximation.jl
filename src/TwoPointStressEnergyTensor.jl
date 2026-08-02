@@ -3,10 +3,10 @@ module TwoPointStressEnergyTensorModule
 import EnvelopeApproximation: TemporalWeight, CosineWeight, ConstantWeight,
     ComplexExponential, ray_T_ij
 using EnvelopeApproximation.StressEnergyTensorComponents
-using EnvelopeApproximation.StressTensor: RayCastingSphericalQuadrature,
-    StressTensorTerm, KineticTerm, PotentialTerm,
+using EnvelopeApproximation.StressTensor: StressTensorTerm, KineticTerm, PotentialTerm,
     Accumulant, CosineAccumulant, ConstantAccumulant,
     amplitudes
+using EnvelopeApproximation.RayCastingEnvelopeIntegration: SphericalQuadratureScheme
 using EnvelopeApproximation.BubblesEvolution: BubblesSnapShot, current_bubbles
 using EnvelopeApproximation.Spaces: AbstractSpace, BoxSpace, volume
 using EnvelopeApproximation.BoundaryConditions: BoundaryCondition, Periodic
@@ -15,6 +15,7 @@ using QuadGK
 export TwoPointStressEnergyTensor,
     TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential,
     TimeIntegrationStrategy, QuadGKIntegration, UniformGridIntegration,
+    RayCastingSphericalQuadrature,
     TimeIntegratedTwoPointStressEnergyTensor,
     TimeIntegratedTwoPointStressEnergyTensorPieces,
     RayCastingCosineTimeIntegratedTwoPointStressTensor
@@ -683,6 +684,19 @@ function TimeIntegratedTwoPointStressEnergyTensor(
 end
 
 # ── RayCastingSphericalQuadrature ────────────────────────────────────────────
+
+"""
+    RayCastingSphericalQuadrature
+
+Select ray casting as the spatial integration strategy for the time-integrated
+two-point stress-energy tensor API.
+
+# Fields
+- `quadrature::SphericalQuadratureScheme`: spherical quadrature generator
+"""
+struct RayCastingSphericalQuadrature
+    quadrature::SphericalQuadratureScheme
+end
 
 """
     TimeIntegratedTwoPointStressEnergyTensor(ωs, snapshot, space, boundary_condition,

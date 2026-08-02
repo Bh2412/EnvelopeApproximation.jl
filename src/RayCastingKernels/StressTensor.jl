@@ -56,14 +56,12 @@ include("StressTensor/I2Kernels.jl")
 include("StressTensor/I3Kernels.jl")
 include("StressTensor/ModeAccumulation.jl")
 include("StressTensor/TimeResolvedAccumulation.jl")
-include("StressTensor/Strategies.jl")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exports
 # ═══════════════════════════════════════════════════════════════════════════════
 export SphericalQuadratureScheme,
-       RayCastingSphericalQuadrature,
        UniformSphericalCapScheme,
        StressTensorTerm,
        KineticTerm,

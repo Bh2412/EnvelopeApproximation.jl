@@ -11,6 +11,7 @@ using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
 using EnvelopeApproximation.TwoPointStressEnergyTensorModule: RayCastingCosineTimeIntegratedTwoPointStressTensor,
+    RayCastingSphericalQuadrature,
     TimeIntegratedTwoPointStressEnergyTensor,
     TimeIntegratedTwoPointStressEnergyTensorPieces
 using Test
