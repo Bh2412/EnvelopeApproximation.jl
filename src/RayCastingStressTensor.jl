@@ -19,7 +19,7 @@ using .StressTensor:
     TimeResolvedStressTensorAccumulant,
     FourierStressTensorKernel,
     TimeResolvedStressTensorKernel,
-    check_ks
+    DiracDelta
 
 """
     ray_T_ij(ks, snapshot, space, boundary_condition;
@@ -30,14 +30,15 @@ using .StressTensor:
 Compute ray-cast time-integrated stress-tensor amplitudes.
 
 - `term`: local contribution, e.g. `KineticTerm`, `PotentialTerm`, `TotalStressTerm`
-- `weight`: time weighting, e.g. `CosineWeight`, `ConstantWeight`, or
-  `ComplexExponential(ωs)`
+- `weight`: time weighting, e.g. `CosineWeight`, `ConstantWeight`,
+  `ComplexExponential(ωs)`, or `DiracDelta(times)`
 - `quadrature`: ray directions
 
 Returns an `Accumulant`. Use `amplitudes(acc)` to access the stored arrays.
 For `ComplexExponential(ωs)`, the amplitude shape is
 `(6, length(ks), length(ωs))`, ordered as tensor component, spatial mode, and
 temporal frequency.
+For `DiracDelta(times)`, the final axis instead contains the prescribed times.
 """
 function ray_T_ij(ks::AbstractVector{<:Real}, snapshot::BubblesSnapShot,
                   space::BoxSpace, boundary_condition::Periodic;
@@ -121,20 +122,11 @@ function ray_T_ij_at_times(
 )
     issorted(times) || throw(ArgumentError("times must be sorted in nondecreasing order"))
 
-    times_f = collect(Float64, times)
-    ks_f = ks isa AbstractRange ? ks : collect(Float64, ks)
-    check_ks(term, ks_f)
-
-    kernel = TimeResolvedStressTensorKernel(term, times_f, ks_f, ΔV, v)
-    isempty(snapshot.nucleations) && return allocate_accumulant(kernel)
-
-    context = build_envelope_context(snapshot, space, bc; v=v)
-    sources = envelope_sources(snapshot; bubble_indices=bubble_indices)
-    markers = get_markers(quadrature)
-
-    return only(envelope_integral(
-        (kernel,), sources, context, markers; τ_min=1.0e-12,
-    ))
+    return ray_T_ij(
+        ks, snapshot, space, bc,
+        term, DiracDelta(collect(Float64, times)), quadrature;
+        ΔV=ΔV, v=v, bubble_indices=bubble_indices,
+    )
 end
 
 export ray_T_ij, ray_T_ij_at_times

@@ -45,6 +45,12 @@ include("regression_helpers.jl")
         expected_phase = [cis(ω * source.time - k * source.site.coordinates[3])
                           for k in [0.5, 1.0], ω in weight.ωs]
         @test complex_kernel.mode_ws.phase ≈ expected_phase
+
+        time_kernel = FourierStressTensorKernel(
+            KineticTerm(), DiracDelta([0.1, 0.2]), [0.5, 1.0],
+        )
+        @test time_kernel isa TimeResolvedStressTensorKernel
+        @test time_kernel.mode_ws isa DiracDeltaModeWorkspace
     end
 
     # ═════════════════════════════════════════════════════════════════════════════

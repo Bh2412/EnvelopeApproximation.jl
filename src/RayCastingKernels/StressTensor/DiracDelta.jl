@@ -7,34 +7,46 @@ Accumulant returned by [`ray_T_ij_at_times`](@ref). `A` has axes
 `(tensor_component, wave_number, time)`, where the tensor components are
 ordered `(11, 12, 13, 22, 23, 33)`.
 """
-struct TimeResolvedStressTensorAccumulant
+struct TimeResolvedStressTensorAccumulant{
+    Times<:AbstractVector{<:Real},
+} <: Accumulant{DiracDelta{Times}}
     A::Array{ComplexF64,3}
 end
 
 amplitudes(acc::TimeResolvedStressTensorAccumulant) = acc.A
 
 """
-    TimeResolvedStressTensorKernel(term, times, ks, ΔV, v)
+    TimeResolvedStressTensorKernel
 
-Kernel for evaluating the Fourier-space stress tensor at the times in `times`.
-For a ray nucleated at `tₙ`, only samples satisfying
-`0 < t - tₙ ≤ τ_stop` contribute.
+Alias for a [`FourierStressTensorKernel`](@ref) whose temporal weight is a
+[`DiracDelta`](@ref).
 """
-struct TimeResolvedStressTensorKernel{
-    T<:StressTensorTerm,
-    Times<:AbstractVector,
-    K<:AbstractVector,
-} <: Kernel
-    term::T
-    times::Times
-    ks::K
-    ΔV::Float64
-    v::Float64
-end
+const TimeResolvedStressTensorKernel = FourierStressTensorKernel{T,W,K} where {
+    T,
+    W<:DiracDelta,
+    K,
+}
 
-function allocate_accumulant(kernel::TimeResolvedStressTensorKernel)
-    return TimeResolvedStressTensorAccumulant(
-        zeros(ComplexF64, 6, length(kernel.ks), length(kernel.times)),
+struct DiracDeltaModeWorkspace{Times<:AbstractVector{<:Real}} <:
+       ModeWorkspace{DiracDelta{Times}} end
+
+ModeWorkspace(::DiracDelta{Times}, ::Int) where {Times} =
+    DiracDeltaModeWorkspace{Times}()
+
+prepare_source_modes!(
+    ::DiracDeltaModeWorkspace,
+    ::DiracDelta,
+    ::AbstractVector{<:Real},
+    source,
+) = nothing
+
+function _alloc_accumulant(
+    weight::DiracDelta{Times},
+    ::StressTensorTerm,
+    Nk::Int,
+) where {Times}
+    return TimeResolvedStressTensorAccumulant{Times}(
+        zeros(ComplexF64, 6, Nk, length(weight.times)),
     )
 end
 
@@ -98,14 +110,18 @@ end
 end
 
 function accumulate_ray!(
-    acc::TimeResolvedStressTensorAccumulant,
-    kernel::TimeResolvedStressTensorKernel,
+    acc::TimeResolvedStressTensorAccumulant{Times},
+    kernel::FourierStressTensorKernel{T,DiracDelta{Times},K},
     source::EnvelopeSource,
     n̂::SVector{3,Float64},
     wΩ::Float64,
     τ_stop::Float64,
-)
-    times = kernel.times
+) where {
+    T<:StressTensorTerm,
+    Times<:AbstractVector{<:Real},
+    K<:AbstractVector{<:Real},
+}
+    times = kernel.weight.times
     first_time = searchsortedlast(times, source.time) + 1
     last_time = searchsortedlast(times, source.time + τ_stop)
     first_time > last_time && return nothing

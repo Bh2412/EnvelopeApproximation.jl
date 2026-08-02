@@ -5,6 +5,16 @@ struct CosineWeight <: TemporalWeight end
 struct ConstantWeight <: TemporalWeight end
 
 """
+    DiracDelta(times)
+
+Temporal weight that evaluates the stress tensor at each prescribed time in
+`times`.
+"""
+struct DiracDelta{Times<:AbstractVector{<:Real}} <: TemporalWeight
+    times::Times
+end
+
+"""
     ComplexExponential(ωs)
 
 Temporal weight `exp(iωt)` evaluated at each frequency in the fixed vector
@@ -21,4 +31,5 @@ ComplexExponential(ωs::AbstractVector{<:Real}) =
 ComplexExponential(ωs::NTuple{N,<:Real}) where {N} =
     ComplexExponential(SVector{N,Float64}(ωs))
 
-export TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential
+export TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential,
+       DiracDelta

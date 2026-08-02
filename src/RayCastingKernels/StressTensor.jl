@@ -23,7 +23,7 @@ where I₃ is the closed-form integral of τ³ exp(iατ) from a to b.
 module StressTensor
 
 import EnvelopeApproximation:
-    TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential,
+    TemporalWeight, CosineWeight, ConstantWeight, ComplexExponential, DiracDelta,
     Kernel, allocate_accumulant, prepare_kernel!, accumulate_ray!
 using EnvelopeApproximation.BubblesEvolution: Nucleation
 using StaticArrays
@@ -55,7 +55,6 @@ end
 include("StressTensor/I2Kernels.jl")
 include("StressTensor/I3Kernels.jl")
 include("StressTensor/ModeAccumulation.jl")
-include("StressTensor/TimeResolvedAccumulation.jl")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -71,6 +70,7 @@ export SphericalQuadratureScheme,
        CosineWeight,
        ConstantWeight,
        ComplexExponential,
+       DiracDelta,
        Accumulant,
        CosineAccumulant,
        ConstantAccumulant,
@@ -80,6 +80,7 @@ export SphericalQuadratureScheme,
        CosineModeWorkspace,
        ConstantModeWorkspace,
        ComplexExponentialModeWorkspace,
+       DiracDeltaModeWorkspace,
        FourierStressTensorKernel,
        TimeResolvedStressTensorKernel,
        amplitudes
@@ -170,5 +171,7 @@ function accumulate_ray!(
     )
     return nothing
 end
+
+include("StressTensor/DiracDelta.jl")
 
 end # module StressTensor
