@@ -20,7 +20,7 @@ jobs:
           version: '1.10'
 
       # Caching helps speed up subsequent runs
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - uses: Swatinem/rust-cache@v2
 
       - name: Build and Test
