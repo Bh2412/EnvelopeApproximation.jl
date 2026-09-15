@@ -6,6 +6,7 @@
 *.dat
 *.zip
 runs/**/Results_*
+runs/**
 
 # Plots/Images (Unless they are documentation)
 *.png
@@ -584,3 +585,9 @@ scripts/verifying_nucleation_process/variance_to_mean_ratio.jl
 scripts/verifying_nucleation_process/false_vacuum_probability/false_vacuum_probability.jl
 scripts/verifying_nucleation_process/false_vacuum_probability/twopoint_false_vauum_probability.jl
 notes/NonLinearMC/NonLinearMonteCarlo.tex
+CLAUDE.md
+plotter_agents_instructions.md
+ProjectOutlineForAgents.md
+RunExampleForAgents.md
+SkeletalCodingAgent.md
+plotting/Manifest.toml
