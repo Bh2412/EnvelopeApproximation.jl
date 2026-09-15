@@ -8,6 +8,7 @@ using EnvelopeApproximation.BubbleBasics
 using EnvelopeApproximation.BubblesEvolution
 using EnvelopeApproximation.Spaces
 using EnvelopeApproximation.BoundaryConditions
+using EnvelopeApproximation.StressTensor
 using EnvelopeApproximation.StressEnergyTensorComponents
 using EnvelopeApproximation.TwoPointStressEnergyTensorModule
 using EnvelopeApproximation.QuadGKCFT: VectorQuadGKPlan
@@ -94,6 +95,27 @@ function NumericTwoPointTij(k̂::AbstractVector{T}, ks::AbstractVector{<:Real},
     return stack(D * result_rotated[:, :, ki] * Dt for ki in axes(result_rotated, 3))
 end
 
+function RayNumericTwoPointTij(k̂::AbstractVector{T}, ks::AbstractVector{<:Real},
+                                r1::T, r2::T, d::T,
+                                quadrature::SphericalQuadratureScheme,
+                                ρ_vac::T=one(T), V::T=one(T))::Array{ComplexF64, 3} where T<:Real
+    R    = align_ẑ(Vec3(Float64.(k̂)))
+    t    = max(Float64(r1), Float64(r2))
+    nuc1 = (time = t - Float64(r1), site = Point3(0., 0., -Float64(d) / 2))
+    nuc2 = (time = t - Float64(r2), site = Point3(0., 0.,  Float64(d) / 2))
+    snapshot = R * BubblesSnapShot(Nucleation[nuc1, nuc2], t)
+    space    = BoxSpace(cbrt(Float64(V)))
+    weight   = DiracDelta([t])
+    Tij_rotated = amplitudes(ray_T_ij(
+        collect(Float64, ks), snapshot, space, Periodic(),
+        TotalStressTerm(), weight, quadrature; ΔV=Float64(ρ_vac),
+    ))[:, :, 1]
+
+    D = symmetric_tensor_inverse_rotation(R)
+    Tij = D * Tij_rotated
+    return stack(Tij[:, ki] * Tij[:, ki]' / V for ki in axes(Tij, 2))
+end
+
 # --- Tests ---
 
 @testset "Analytic two-bubble solution (unequal sizes)" begin
@@ -110,10 +132,15 @@ end
 
     threshold = 1e-14
     reltol    = 1e-5
+    ray_reltol = 3.5e-3
+    ray_quadrature = UniformSphericalCapScheme(720, 1440)
 
     for (cξ, k̂) in zip(cos_ξs, k̂s)
         @testset "cos(ξ) = $(round(cξ, digits=5))" begin
             numeric  = NumericTwoPointTij(k̂, ks, r1, r2, d, ρ_vac, V)
+            ray_numeric = RayNumericTwoPointTij(
+                k̂, ks, r1, r2, d, ray_quadrature, ρ_vac, V,
+            )
             analytic = [AnalyticTwoPointTij(k .* k̂, r1, r2, d, ρ_vac, V) for k in ks]
 
             for ki in eachindex(ks)
@@ -124,6 +151,13 @@ end
                     for i in CartesianIndices(A)
                 )
                 @test max_rel < reltol
+
+                R = ray_numeric[:, :, ki]
+                ray_max_rel = maximum(
+                    abs(A[i]) > threshold ? abs(R[i] - A[i]) / abs(A[i]) : 0.0
+                    for i in CartesianIndices(A)
+                )
+                @test ray_max_rel < ray_reltol
             end
         end
     end
